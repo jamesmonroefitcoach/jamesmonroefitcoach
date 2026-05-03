@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Monroe Fit Coach — "old-gym editorial" theme.
+ * Cream paper, ink black, rust accent. Condensed display headings (Oswald),
+ * humanist body (Inter). Print views must read like floor printouts.
+ */
+
+:root {
+  color-scheme: light;
+  --bg: #f5efe4;          /* cream paper */
+  --paper: #fbf7ef;       /* slightly lighter card */
+  --ink: #171311;         /* near-black, warm */
+  --muted: #7a6f63;
+  --line: #d8cdb8;
+  --rust: #a83d2b;        /* primary accent */
+  --clay: #c9613e;        /* secondary */
+  --sage: #5a6b4a;        /* "ok" / paid */
+  --red: #c0392b;
+  --amber: #d97706;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body), "Inter", "Helvetica Neue", system-ui, sans-serif;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading), "Oswald", "Arial Narrow", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+h1 { font-size: 2.25rem; text-transform: uppercase; letter-spacing: 0.04em; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+a { color: var(--rust); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* App shell */
+.app-shell { min-height: 100vh; display: flex; }
+.app-main { flex: 1; min-width: 0; }
+
+.shell {
+  width: min(1180px, 100% - 2rem);
+  margin: 0 auto;
+  padding: 1.5rem 0 3rem;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: #181513;
+  border-right: 1px solid #2a2522;
+  padding: 1rem 0.85rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.sidebar-brand {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f5efe4;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.25rem 0.5rem 0.75rem;
+  border-bottom: 1px solid #2a2522;
+}
+.sidebar-brand .accent { color: var(--clay); }
+.sidebar-section { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid #2a2522; }
+.sidebar-header {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #6b6157;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0 0.5rem 0.3rem;
+}
+.sidebar-link {
+  display: block;
+  padding: 0.45rem 0.55rem;
+  color: #d4c9bb;
+  font-size: 0.88rem;
+  border-radius: 3px;
+  text-decoration: none;
+}
+.sidebar-link:hover { background: #2a2522; color: #f5efe4; }
+.sidebar-link.active { background: var(--rust); color: #fff; }
+.sidebar-foot {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid #2a2522;
+  color: #8a7e72;
+  font-size: 0.75rem;
+}
+
+/* Cards */
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1.1rem 1.2rem;
+}
+.card + .card { margin-top: 1rem; }
+
+/* Stat tiles */
+.stat {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1rem 1.1rem;
+}
+.stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.stat-value {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 2.1rem;
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+.stat-sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.15rem; }
+
+/* Buttons */
+.btn {
+  display: inline-block;
+  padding: 0.55rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.btn:hover { background: var(--ink); color: var(--paper); }
+.btn-primary { background: var(--rust); border-color: var(--rust); color: #fff; }
+.btn-primary:hover { background: #8c2d1f; border-color: #8c2d1f; color: #fff; }
+.btn-ghost { background: transparent; border-color: var(--line); }
+.btn-ghost:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* Inputs */
+.input, .select, .textarea {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+.input:focus, .select:focus, .textarea:focus {
+  outline: 2px solid var(--rust);
+  outline-offset: -1px;
+}
+
+/* Tables */
+.table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.table th, .table td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--line); }
+.table th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 700;
+  background: rgba(0,0,0,0.02);
+}
+.table tr:hover td { background: rgba(168, 61, 43, 0.04); }
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.badge-rust { background: var(--rust); border-color: var(--rust); color: #fff; }
+.badge-sage { background: var(--sage); border-color: var(--sage); color: #fff; }
+.badge-amber { background: var(--amber); border-color: var(--amber); color: #fff; }
+.badge-red { background: var(--red); border-color: var(--red); color: #fff; }
+
+.meta { color: var(--muted); font-size: 0.85rem; }
+
+.divider { border: 0; border-top: 1px solid var(--line); margin: 1.25rem 0; }
+
+/* Day card (program/session) */
+.day-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--rust);
+  border-radius: 3px;
+  padding: 0.9rem 1rem;
+}
+
+/* Print — used for floor printouts of programs */
+@media print {
+  .sidebar, .no-print { display: none !important; }
+  body { background: #fff; }
+  .app-main { padding: 0; }
+  .card, .day-card, .stat { border: 1px solid #000; box-shadow: none; }
+  .btn { display: none !important; }
+}
