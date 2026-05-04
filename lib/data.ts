@@ -29,7 +29,7 @@ const DEMO_CLIENTS: ClientRow[] = [
 export async function listClients(coachId?: string): Promise<ClientRow[]> {
   if (!hasSupabaseEnv()) return DEMO_CLIENTS;
   const supabase = await createSupabaseServer();
-  let query = supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select(`
       id, full_name, email,
@@ -40,7 +40,6 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
       balance:client_balance!client_balance_client_id_fkey ( balance_owed )
     `)
     .eq("role", "client");
-  const { data, error } = await query;
   if (error || !data) return DEMO_CLIENTS;
 
   const rows: ClientRow[] = data
@@ -78,8 +77,8 @@ export async function getClient(id: string): Promise<ClientRow | null> {
 // ─── Appointments ─────────────────────────────────────────────────────
 export type AppointmentRow = {
   id: string;
-  client_id: string;
-  client_name: string;
+  client_id: string | null;
+  client_name: string | null;
   starts_at: string;
   ends_at: string;
   status: "scheduled" | "completed" | "no_show" | "cancelled" | "change_requested";
@@ -87,73 +86,133 @@ export type AppointmentRow = {
   paid: boolean;
   notes: string | null;
   change_count: number;
+  session_type: "session" | "personal";
+  personal_label: string | null;
+  is_blocking: boolean;
+  session_program_id?: string | null;
+  program_status: "programmed" | "needs_programming" | "n/a";  // n/a for personal blocks
 };
 
 function demoAppointments(): AppointmentRow[] {
-  const today = new Date();
-  const start = new Date(today);
-  start.setHours(0, 0, 0, 0);
-  // back up to Monday
-  const day = start.getDay();
-  const diff = (day + 6) % 7;
-  start.setDate(start.getDate() - diff);
-
-  const rows: AppointmentRow[] = [];
+  const now = new Date();
+  const start = startOfWeek(now);
   const slots = [
-    { d: 0, h: 7, c: "demo-client-acacia", n: "Acacia Chan", r: 70 },
-    { d: 0, h: 9, c: "demo-client-jen", n: "Jen Loving", r: 65 },
-    { d: 1, h: 6, c: "demo-client-david", n: "David Syndicongo", r: 65 },
-    { d: 1, h: 17, c: "demo-client-abbey", n: "Abbey Archer", r: 100 },
-    { d: 2, h: 8, c: "demo-client-rowland", n: "Rowland Bella", r: 80 },
-    { d: 3, h: 7, c: "demo-client-acacia", n: "Acacia Chan", r: 70 },
-    { d: 4, h: 9, c: "demo-client-jen", n: "Jen Loving", r: 65 },
-    { d: 5, h: 8, c: "demo-client-abbey", n: "Abbey Archer", r: 100 }
+    { d: 0, h: 7, c: "demo-client-acacia", n: "Acacia Chan", r: 70, st: "completed", paid: true },
+    { d: 0, h: 9, c: "demo-client-jen", n: "Jen Loving", r: 65, st: "completed", paid: false },
+    { d: 1, h: 6, c: "demo-client-david", n: "David Syndicongo", r: 65, st: "completed", paid: true },
+    { d: 1, h: 17, c: "demo-client-abbey", n: "Abbey Archer", r: 100, st: "scheduled", paid: false },
+    { d: 2, h: 8, c: "demo-client-rowland", n: "Rowland Bella", r: 80, st: "scheduled", paid: false, changes: 2 },
+    { d: 2, h: 12, c: null, n: null, r: null, st: "scheduled", paid: false, personal: "Lunch + admin" },
+    { d: 3, h: 7, c: "demo-client-acacia", n: "Acacia Chan", r: 70, st: "scheduled", paid: false },
+    { d: 3, h: 10, c: "demo-client-david", n: "David Syndicongo", r: 65, st: "cancelled", paid: false },
+    { d: 4, h: 9, c: "demo-client-jen", n: "Jen Loving", r: 65, st: "scheduled", paid: false },
+    { d: 4, h: 9, c: "demo-client-acacia", n: "Acacia Chan", r: 70, st: "scheduled", paid: false }, // overlap with cancelled — actually new block
+    { d: 5, h: 8, c: "demo-client-abbey", n: "Abbey Archer", r: 100, st: "scheduled", paid: false }
   ];
-  slots.forEach((s, i) => {
+  // Demo "programmed" lookup — Acacia & Jen have current programs, others don't.
+  const programmed = new Set(["demo-client-acacia", "demo-client-jen", "demo-client-abbey"]);
+  return slots.map((s, i) => {
     const startsAt = new Date(start);
     startsAt.setDate(start.getDate() + s.d);
     startsAt.setHours(s.h, 0, 0, 0);
     const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
-    rows.push({
+    const isPersonal = !!(s as any).personal;
+    return {
       id: `demo-appt-${i}`,
       client_id: s.c,
       client_name: s.n,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
-      status: "scheduled",
+      status: s.st as AppointmentRow["status"],
       rate: s.r,
-      paid: i % 3 === 0,
+      paid: s.paid,
       notes: null,
-      change_count: i === 2 ? 2 : 0
-    });
+      change_count: (s as any).changes ?? 0,
+      session_type: isPersonal ? "personal" : "session",
+      personal_label: (s as any).personal ?? null,
+      is_blocking: isPersonal,
+      program_status: isPersonal ? "n/a" : (s.c && programmed.has(s.c) ? "programmed" : "needs_programming")
+    };
   });
-  return rows;
 }
 
 export async function listAppointmentsForWeek(coachId: string, weekStart?: Date): Promise<AppointmentRow[]> {
-  if (!hasSupabaseEnv()) return demoAppointments();
+  if (!hasSupabaseEnv()) {
+    const start = weekStart ?? startOfWeek(new Date());
+    return demoAppointments().filter((a) => {
+      const t = new Date(a.starts_at).getTime();
+      return t >= start.getTime() && t < start.getTime() + 7 * 86400000;
+    });
+  }
   const supabase = await createSupabaseServer();
   const start = weekStart ?? startOfWeek(new Date());
   const end = new Date(start);
   end.setDate(start.getDate() + 7);
-
   const { data, error } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id")
     .eq("coach_id", coachId)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString())
     .order("starts_at", { ascending: true });
-  if (error || !data) return demoAppointments();
+  if (error || !data) return [];
   return data as AppointmentRow[];
 }
 
+export async function listAppointmentsForMonth(coachId: string, monthStart: Date): Promise<AppointmentRow[]> {
+  const start = new Date(monthStart);
+  start.setDate(1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setMonth(start.getMonth() + 1);
+  if (!hasSupabaseEnv()) {
+    return demoAppointments().filter((a) => {
+      const t = new Date(a.starts_at).getTime();
+      return t >= start.getTime() && t < end.getTime();
+    });
+  }
+  const supabase = await createSupabaseServer();
+  const { data } = await supabase
+    .from("appointments_with_names")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id")
+    .eq("coach_id", coachId)
+    .gte("starts_at", start.toISOString())
+    .lt("starts_at", end.toISOString());
+  return (data ?? []) as AppointmentRow[];
+}
+
 export async function listAppointmentsForClient(clientId: string): Promise<AppointmentRow[]> {
-  if (!hasSupabaseEnv()) return demoAppointments().filter((a) => a.client_id === clientId);
+  if (!hasSupabaseEnv()) {
+    // demo: pull from week list, plus inject a guaranteed-future appt if none
+    const all = demoAppointments().filter((a) => a.client_id === clientId);
+    const upcoming = all.filter((a) => new Date(a.starts_at) >= new Date());
+    if (upcoming.length === 0) {
+      const t = new Date();
+      t.setDate(t.getDate() + 2);
+      t.setHours(9, 0, 0, 0);
+      all.push({
+        id: `demo-future-${clientId}`,
+        client_id: clientId,
+        client_name: null,
+        starts_at: t.toISOString(),
+        ends_at: new Date(t.getTime() + 60 * 60000).toISOString(),
+        status: "scheduled",
+        rate: 70,
+        paid: false,
+        notes: null,
+        change_count: 0,
+        session_type: "session",
+        personal_label: null,
+        is_blocking: false,
+        program_status: "programmed"
+      });
+    }
+    return all;
+  }
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id")
     .eq("client_id", clientId)
     .order("starts_at", { ascending: true });
   if (error || !data) return [];
@@ -169,7 +228,6 @@ export function startOfWeek(d: Date): Date {
   return start;
 }
 
-// ─── Open requests ────────────────────────────────────────────────────
 export async function countOpenRequests(coachId: string): Promise<number> {
   if (!hasSupabaseEnv()) return 3;
   const supabase = await createSupabaseServer();

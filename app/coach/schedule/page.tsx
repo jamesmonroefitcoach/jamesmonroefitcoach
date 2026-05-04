@@ -1,15 +1,22 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listAppointmentsForWeek, startOfWeek } from "@/lib/data";
-import ScheduleGrid from "./schedule-grid";
+import { listAppointmentsForWeek, listAppointmentsForMonth, listClients, startOfWeek } from "@/lib/data";
+import ScheduleView from "./schedule-view";
 
-export default async function SchedulePage() {
+export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ week?: string; month?: string; view?: string }> }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== "coach") redirect("/");
 
-  const weekStart = startOfWeek(new Date());
-  const appts = await listAppointmentsForWeek(user.id, weekStart);
+  const sp = await searchParams;
+  const weekStart = sp.week ? new Date(sp.week) : startOfWeek(new Date());
+  const monthStart = sp.month ? new Date(sp.month) : new Date();
+
+  const [weekAppts, monthAppts, clients] = await Promise.all([
+    listAppointmentsForWeek(user.id, weekStart),
+    listAppointmentsForMonth(user.id, monthStart),
+    listClients(user.id)
+  ]);
 
   return (
     <main className="shell">
@@ -17,11 +24,18 @@ export default async function SchedulePage() {
         <div>
           <span className="badge">Coach</span>
           <h1 style={{ marginTop: "0.5rem" }}>Schedule</h1>
-          <p className="meta">Drag blocks to reschedule. Each move bumps the change counter on that appointment.</p>
+          <p className="meta">Click an open block to add a session. Click an existing event to edit, cancel, mark no-show, or move.</p>
         </div>
       </header>
       <hr className="divider" />
-      <ScheduleGrid weekStart={weekStart.toISOString()} initialAppts={appts} />
+      <ScheduleView
+        weekStart={weekStart.toISOString()}
+        monthStart={monthStart.toISOString()}
+        initialView={sp.view === "month" ? "month" : "week"}
+        weekAppts={weekAppts}
+        monthAppts={monthAppts}
+        clients={clients}
+      />
     </main>
   );
 }

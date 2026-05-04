@@ -39,6 +39,9 @@ export default async function LoginPage() {
         </p>
         <hr className="divider" />
         <LoginForm profiles={profiles} />
+        <p className="meta" style={{ marginTop: "1rem", fontSize: "0.82rem", textAlign: "center" }}>
+          New here? <a href="/signup">Request an account →</a>
+        </p>
       </section>
     </main>
   );

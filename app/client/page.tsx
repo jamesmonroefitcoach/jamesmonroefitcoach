@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForClient, getClient } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
+import ClientUpcoming from "./client-upcoming";
 
 export default async function ClientHome() {
   const user = await getSessionUser();
@@ -46,33 +47,7 @@ export default async function ClientHome() {
 
       <hr className="divider" />
 
-      <section className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2>Upcoming sessions</h2>
-          <Link href="/client/check-ins" className="meta">Check-in →</Link>
-        </div>
-        <hr className="divider" />
-        {upcoming.length === 0 ? (
-          <p className="meta">No upcoming sessions yet. James will publish your week soon.</p>
-        ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-            {upcoming.map((a) => (
-              <li key={a.id} className="day-card">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <strong>{new Date(a.starts_at).toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</strong>
-                    <p className="meta" style={{ margin: "0.25rem 0 0" }}>Hyde Park Gym · 60 min</p>
-                  </div>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button className="btn btn-ghost" style={{ padding: "0.4rem 0.7rem", fontSize: "0.75rem" }}>Request change</button>
-                    <Link className="btn" href="/client/program" style={{ padding: "0.4rem 0.7rem", fontSize: "0.75rem" }}>See program</Link>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <ClientUpcoming initial={upcoming} />
     </main>
   );
 }

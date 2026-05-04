@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { getClient, listAppointmentsForClient } from "@/lib/data";
+import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, type Category } from "@/lib/programs";
 import { fmtMoney, fmtDate } from "@/lib/format";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -15,6 +16,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const appts = await listAppointmentsForClient(id);
   const past = appts.filter((a) => new Date(a.starts_at) < new Date());
   const upcoming = appts.filter((a) => new Date(a.starts_at) >= new Date());
+  const programs = pastProgramsForClient(id);
+  const currentProgram = programs.find((p) => p.is_current) ?? null;
 
   return (
     <main className="shell">
@@ -80,6 +83,61 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <p className="meta">No check-ins submitted yet. Cadence: every 14 days.</p>
           <Link className="btn btn-ghost" href={`/coach/clients/${client.id}/check-ins`}>Open check-in log →</Link>
         </div>
+      </section>
+
+      <hr className="divider" />
+
+      <section className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2>Programs</h2>
+          <Link className="btn btn-primary" href={`/coach/build-program?client=${client.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.75rem" }}>+ New program</Link>
+        </div>
+        <hr className="divider" />
+        {currentProgram ? (
+          <div className="day-card" style={{ marginBottom: "0.75rem", borderLeftColor: isExpiringSoon(currentProgram) ? "var(--red)" : "var(--rust)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div>
+                <span className="badge badge-rust">current</span>
+                <strong style={{ marginLeft: "0.5rem" }}>{currentProgram.name}</strong>
+                {isExpiringSoon(currentProgram) ? <span className="badge badge-red" style={{ marginLeft: "0.5rem" }}>expiring soon</span> : null}
+                <div className="meta" style={{ marginTop: "0.25rem" }}>
+                  {fmtDate(currentProgram.starts_on)} → {fmtDate(currentProgram.ends_on)} · {currentProgram.duration_weeks ?? "—"} wk · {currentProgram.day_count} days
+                </div>
+                <div className="meta" style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>
+                  {Object.entries(currentProgram.category_counts)
+                    .map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`)
+                    .join(" · ")}
+                </div>
+              </div>
+              <Link className="btn btn-ghost" href={`/coach/build-program?client=${client.id}`} style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }}>edit</Link>
+            </div>
+          </div>
+        ) : (
+          <p className="meta">No active program. <Link href={`/coach/build-program?client=${client.id}`}>Build one →</Link></p>
+        )}
+        {programs.filter((p) => !p.is_current).length > 0 ? (
+          <>
+            <h3 style={{ marginTop: "0.75rem", fontSize: "0.75rem" }}>Past programs</h3>
+            <table className="table">
+              <thead>
+                <tr><th>Program</th><th>Window</th><th>Time frame</th><th>Days</th><th>Mix</th></tr>
+              </thead>
+              <tbody>
+                {programs.filter((p) => !p.is_current).map((p) => (
+                  <tr key={p.id}>
+                    <td><strong>{p.name}</strong></td>
+                    <td className="meta">{fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}</td>
+                    <td>{p.duration_weeks ?? "—"} wk</td>
+                    <td>{p.day_count}</td>
+                    <td className="meta" style={{ fontSize: "0.78rem" }}>
+                      {Object.entries(p.category_counts).map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`).join(" · ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
       </section>
 
       <hr className="divider" />
