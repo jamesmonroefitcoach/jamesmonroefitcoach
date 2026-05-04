@@ -1,16 +1,15 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
-import { saveAppointment, deleteAppointment } from "./actions";
+import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries } from "./actions";
 
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 6); // 6a–7p
+const HOUR_HEIGHT = 56; // px per hour cell
+const HOURS = Array.from({ length: 14 }, (_, i) => i + 6); // 6a–7p (start hours)
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 type View = "week" | "month";
-
-type Block = AppointmentRow & { day: number; hour: number };
 
 function startOfWeekLocal(d: Date): Date {
   const s = new Date(d);
@@ -19,28 +18,26 @@ function startOfWeekLocal(d: Date): Date {
   return s;
 }
 
-function toBlock(a: AppointmentRow): Block {
-  const start = new Date(a.starts_at);
-  return { ...a, day: (start.getDay() + 6) % 7, hour: start.getHours() };
-}
-
 function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function dayIndex(d: Date): number { return (d.getDay() + 6) % 7; }
+function minutesFromTop(d: Date): number { return (d.getHours() - HOURS[0]) * 60 + d.getMinutes(); }
+
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
-  scheduled:        { bg: "#5b6d7a", fg: "#fff" }, // neutral slate
-  completed:        { bg: "#5a6b4a", fg: "#fff" }, // sage
-  cancelled:        { bg: "#c0392b", fg: "#fff" }, // red
-  no_show:          { bg: "#7a3a55", fg: "#fff" }, // muted plum
-  change_requested: { bg: "#d97706", fg: "#fff" }  // amber
+  scheduled:        { bg: "#5b6d7a", fg: "#fff" },
+  completed:        { bg: "#5a6b4a", fg: "#fff" },
+  cancelled:        { bg: "#c0392b", fg: "#fff" },
+  no_show:          { bg: "#7a3a55", fg: "#fff" },
+  change_requested: { bg: "#d97706", fg: "#fff" }
 };
 
 const PERSONAL_COLOR = { bg: "#3a342f", fg: "#f5efe4" };
 
 // ─── side-panel form state ──────────────────────────────────────────
 type Draft = {
-  appt_id?: string; // present when editing
+  appt_id?: string;
   starts_at: string;
   ends_at: string;
   session_type: "session" | "personal";
@@ -53,6 +50,11 @@ type Draft = {
   session_program_id: string;
   program_status: "programmed" | "needs_programming" | "n/a";
   change_count: number;
+  series_id?: string | null;
+  // repeat config (only used when creating new)
+  repeat_enabled: boolean;
+  repeat_cadence: 1 | 2;
+  repeat_count: number;
 };
 
 function newDraft(starts_at: Date, ends_at: Date): Draft {
@@ -68,7 +70,10 @@ function newDraft(starts_at: Date, ends_at: Date): Draft {
     notes: "",
     session_program_id: "",
     program_status: "needs_programming",
-    change_count: 0
+    change_count: 0,
+    repeat_enabled: false,
+    repeat_cadence: 1,
+    repeat_count: 8
   };
 }
 
@@ -86,8 +91,44 @@ function fromAppt(a: AppointmentRow): Draft {
     notes: a.notes ?? "",
     session_program_id: a.session_program_id ?? "",
     program_status: a.program_status,
-    change_count: a.change_count
+    change_count: a.change_count,
+    series_id: a.series_id ?? null,
+    repeat_enabled: false,
+    repeat_cadence: 1,
+    repeat_count: 8
   };
+}
+
+// ─── overlap layout: lane assignment for side-by-side rendering ─────
+type Laid = AppointmentRow & { lane: number; lanes: number };
+function layOutDay(events: AppointmentRow[]): Laid[] {
+  const sorted = [...events].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const lanes: { end: number }[] = [];
+  const placed: Laid[] = [];
+  for (const ev of sorted) {
+    const startMs = new Date(ev.starts_at).getTime();
+    const endMs = new Date(ev.ends_at).getTime();
+    let lane = lanes.findIndex((l) => l.end <= startMs);
+    if (lane === -1) {
+      lane = lanes.length;
+      lanes.push({ end: endMs });
+    } else {
+      lanes[lane].end = endMs;
+    }
+    placed.push({ ...ev, lane, lanes: 0 });
+  }
+  // resolve "lanes" — for each event, max(lane+1) of all events overlapping it
+  return placed.map((p) => {
+    const ps = new Date(p.starts_at).getTime();
+    const pe = new Date(p.ends_at).getTime();
+    let maxLane = p.lane;
+    placed.forEach((q) => {
+      const qs = new Date(q.starts_at).getTime();
+      const qe = new Date(q.ends_at).getTime();
+      if (qs < pe && qe > ps) maxLane = Math.max(maxLane, q.lane);
+    });
+    return { ...p, lanes: maxLane + 1 };
+  });
 }
 
 export default function ScheduleView({
@@ -118,18 +159,14 @@ export default function ScheduleView({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [savePending, startSave] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  // when week shifts, refilter from passed-in week (initial server-side load)
-  const blocks: Block[] = useMemo(() => appts.map(toBlock), [appts]);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   const today = new Date();
 
-  // ─── week navigation ────────────────────────────────────────────
   function shiftWeek(deltaDays: number) {
     const next = new Date(ws);
     next.setDate(next.getDate() + deltaDays);
     setWs(next);
-    // keep current appts filtered to new week
     setAppts((cur) => cur.filter((a) => {
       const t = new Date(a.starts_at).getTime();
       return t >= next.getTime() && t < next.getTime() + 7 * 86400000;
@@ -137,11 +174,8 @@ export default function ScheduleView({
   }
   function jumpToDate(iso: string) {
     if (!iso) return;
-    const d = startOfWeekLocal(new Date(iso));
-    setWs(d);
+    setWs(startOfWeekLocal(new Date(iso)));
   }
-
-  // ─── month navigation ───────────────────────────────────────────
   function shiftMonth(delta: number) {
     const next = new Date(ms);
     next.setMonth(next.getMonth() + delta);
@@ -152,20 +186,19 @@ export default function ScheduleView({
     }));
   }
 
-  // ─── daily revenue (week view) ──────────────────────────────────
+  // Daily totals exclude personal blocks; cancellations stay in for visibility but not in revenue.
   const dayTotals = useMemo(() => {
     return DAYS.map((_, idx) => {
-      const list = blocks.filter((b) => b.day === idx && b.session_type === "session");
+      const list = appts.filter((a) => dayIndex(new Date(a.starts_at)) === idx && a.session_type === "session");
       return {
-        revenue: list.reduce((acc, b) => acc + (b.rate ?? 0), 0),
+        revenue: list.reduce((acc, b) => acc + (b.status !== "cancelled" ? (b.rate ?? 0) : 0), 0),
         count: list.filter((b) => b.status !== "cancelled").length
       };
     });
-  }, [blocks]);
+  }, [appts]);
 
   const weekRevenue = dayTotals.reduce((acc, d) => acc + d.revenue, 0);
 
-  // ─── click handlers ─────────────────────────────────────────────
   function openCreate(day: number, hour: number) {
     const d = new Date(ws);
     d.setDate(d.getDate() + day);
@@ -174,17 +207,12 @@ export default function ScheduleView({
     e.setHours(hour + 1);
     setDraft(newDraft(d, e));
   }
-  function openEdit(b: Block) {
-    setDraft(fromAppt(b));
-  }
-  function close() {
-    setDraft(null);
-  }
+  function openEdit(a: AppointmentRow) { setDraft(fromAppt(a)); }
+  function close() { setDraft(null); setSaveError(null); }
 
   function applyLocalSave() {
     if (!draft) return;
     if (draft.appt_id) {
-      // edit: detect time change → bump change_count
       setAppts((cur) =>
         cur.map((a) => {
           if (a.id !== draft.appt_id) return a;
@@ -210,7 +238,7 @@ export default function ScheduleView({
       );
     } else {
       const id = `local-${Date.now()}`;
-      const newRow: AppointmentRow = {
+      setAppts((cur) => [...cur, {
         id,
         client_id: draft.session_type === "personal" ? null : draft.client_id || null,
         client_name: draft.session_type === "personal" ? null : clients.find((c) => c.id === draft.client_id)?.full_name ?? null,
@@ -226,8 +254,7 @@ export default function ScheduleView({
         is_blocking: draft.session_type === "personal",
         session_program_id: draft.session_program_id || null,
         program_status: draft.session_type === "personal" ? "n/a" : draft.program_status
-      };
-      setAppts((cur) => [...cur, newRow]);
+      }]);
     }
   }
 
@@ -247,10 +274,14 @@ export default function ScheduleView({
         status: draft.status,
         notes: draft.notes || null,
         session_program_id: draft.session_program_id || null,
-        program_status: draft.program_status
+        program_status: draft.program_status,
+        repeat: !draft.appt_id && draft.repeat_enabled ? {
+          enabled: true,
+          cadence_weeks: draft.repeat_cadence,
+          occurrences: Math.max(1, draft.repeat_count)
+        } : undefined
       });
       if (!res.ok) {
-        // Fallback: keep change local-only when Supabase isn't configured
         if (res.error.startsWith("Supabase not configured")) {
           applyLocalSave();
           close();
@@ -279,18 +310,92 @@ export default function ScheduleView({
     });
   }
 
+  function cancelDraftSeries() {
+    if (!draft?.series_id) return;
+    const seriesId = draft.series_id;
+    const fromDate = draft.starts_at;
+    setSaveError(null);
+    startSave(async () => {
+      const res = await cancelSeries(seriesId, { fromDate });
+      if (!res.ok && !res.error.startsWith("Supabase not configured")) {
+        setSaveError(res.error);
+        return;
+      }
+      setAppts((cur) =>
+        cur.map((a) =>
+          a.series_id === seriesId && a.starts_at >= fromDate ? { ...a, status: "cancelled" } : a
+        )
+      );
+      close();
+    });
+  }
+
+  function approveCR(id: string) {
+    setSaveError(null);
+    startSave(async () => {
+      const res = await approveChangeRequest(id);
+      if (!res.ok && !res.error.startsWith("Supabase not configured")) {
+        setSaveError(res.error);
+        return;
+      }
+      setAppts((cur) =>
+        cur.map((a) =>
+          a.id !== id ? a : a.requested_starts_at
+            ? { ...a, status: "scheduled", starts_at: a.requested_starts_at, ends_at: a.requested_ends_at!, change_count: a.change_count + 1, requested_starts_at: null, requested_ends_at: null, requested_reason: null }
+            : { ...a, status: "scheduled" }
+        )
+      );
+    });
+  }
+  function denyCR(id: string) {
+    setSaveError(null);
+    startSave(async () => {
+      const res = await denyChangeRequest(id);
+      if (!res.ok && !res.error.startsWith("Supabase not configured")) {
+        setSaveError(res.error);
+        return;
+      }
+      setAppts((cur) =>
+        cur.map((a) =>
+          a.id === id ? { ...a, status: "scheduled", requested_starts_at: null, requested_ends_at: null, requested_reason: null } : a
+        )
+      );
+    });
+  }
+
   function quickStatus(status: AppointmentRow["status"]) {
     if (!draft) return;
     setDraft({ ...draft, status });
   }
 
-  // ─── month view data ────────────────────────────────────────────
+  // ─── DRAG & DROP ─────────────────────────────────────────────────
+  function onCellDrop(day: number, hour: number) {
+    if (!dragId) return;
+    setAppts((cur) =>
+      cur.map((a) => {
+        if (a.id !== dragId) return a;
+        const oldStart = new Date(a.starts_at);
+        const oldEnd = new Date(a.ends_at);
+        const durationMs = oldEnd.getTime() - oldStart.getTime();
+        const newStart = new Date(ws);
+        newStart.setDate(newStart.getDate() + day);
+        newStart.setHours(hour, 0, 0, 0);
+        if (newStart.getTime() === oldStart.getTime()) return a;
+        const newEnd = new Date(newStart.getTime() + durationMs);
+        return { ...a, starts_at: newStart.toISOString(), ends_at: newEnd.toISOString(), change_count: a.change_count + 1 };
+      })
+    );
+    setDragId(null);
+  }
+
+  // ─── month view aggregation ─────────────────────────────────────
   const monthBlocks = useMemo(() => {
     const byDay: Record<string, AppointmentRow[]> = {};
     monthCache.forEach((a) => {
       const k = new Date(a.starts_at).toISOString().slice(0, 10);
       (byDay[k] ??= []).push(a);
     });
+    Object.values(byDay).forEach((list) => list.sort((a, b) => a.starts_at.localeCompare(b.starts_at)));
     return byDay;
   }, [monthCache]);
 
@@ -308,9 +413,7 @@ export default function ScheduleView({
   }, [ms]);
 
   const monthTotals = useMemo(() => {
-    let completed = 0;
-    let scheduled = 0;
-    let unpaid = 0;
+    let completed = 0, scheduled = 0, unpaid = 0;
     monthCache.forEach((a) => {
       if (a.session_type !== "session") return;
       if (a.status === "completed") {
@@ -320,10 +423,12 @@ export default function ScheduleView({
         scheduled += a.rate ?? 0;
       }
     });
-    return { completed, scheduled, unpaid, all: completed + scheduled };
+    return { completed, scheduled, unpaid };
   }, [monthCache]);
 
-  // ─── render ────────────────────────────────────────────────────
+  // Hide the original block while editing (we render a ghost in its place)
+  const editingId = draft?.appt_id;
+
   return (
     <div style={{ position: "relative" }}>
       <div className="card no-print" style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -376,8 +481,7 @@ export default function ScheduleView({
                   padding: "0.55rem 0.4rem",
                   borderBottom: "1px solid var(--line)",
                   borderLeft: "1px solid var(--line)",
-                  background: isToday ? "rgba(168,61,43,0.08)" : "rgba(0,0,0,0.02)",
-                  position: "relative"
+                  background: isToday ? "rgba(168,61,43,0.08)" : "rgba(0,0,0,0.02)"
                 }}>
                   <div style={{ fontWeight: 700, fontSize: "0.85rem", color: isToday ? "var(--rust)" : undefined }}>
                     {d}{isToday ? " · today" : ""}
@@ -390,76 +494,191 @@ export default function ScheduleView({
               );
             })}
 
-            {/* hour rows */}
-            {HOURS.map((h) => (
-              <div key={`row-${h}`} style={{ display: "contents" }}>
-                <div className="meta" style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", textAlign: "right", borderBottom: "1px solid var(--line)" }}>
+            {/* time gutter */}
+            <div style={{ display: "grid", gridTemplateRows: `repeat(${HOURS.length}, ${HOUR_HEIGHT}px)` }}>
+              {HOURS.map((h) => (
+                <div key={h} className="meta" style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", textAlign: "right", borderBottom: "1px solid var(--line)" }}>
                   {h % 12 === 0 ? 12 : h % 12}{h < 12 ? "a" : "p"}
                 </div>
-                {DAYS.map((_, dayIdx) => {
-                  const cellDate = new Date(ws);
-                  cellDate.setDate(ws.getDate() + dayIdx);
-                  const isToday = sameDay(cellDate, today);
-                  const events = blocks.filter((b) => b.day === dayIdx && b.hour === h);
-                  return (
+              ))}
+            </div>
+
+            {/* day columns with absolute-positioned events */}
+            {DAYS.map((_, dayIdx) => {
+              const cellDate = new Date(ws);
+              cellDate.setDate(ws.getDate() + dayIdx);
+              const isToday = sameDay(cellDate, today);
+
+              // Hide change-requested rows from the regular layout pass; they render as
+              // a light-grey dashed ghost at the requested time below.
+              const dayEvents = appts.filter((a) => dayIndex(new Date(a.starts_at)) === dayIdx && a.status !== "change_requested");
+              const laid = layOutDay(dayEvents);
+
+              // Ghost block while editing/creating
+              const showGhost = draft && (
+                draft.appt_id
+                  ? laid.some((e) => e.id === draft.appt_id) === false ? false : dayIndex(new Date(draft.starts_at)) === dayIdx
+                  : dayIndex(new Date(draft.starts_at)) === dayIdx
+              );
+              const ghost = showGhost ? {
+                top: minutesFromTop(new Date(draft.starts_at)),
+                height: Math.max(20, (new Date(draft.ends_at).getTime() - new Date(draft.starts_at).getTime()) / 60000)
+              } : null;
+
+              return (
+                <div
+                  key={dayIdx}
+                  style={{
+                    position: "relative",
+                    borderLeft: "1px solid var(--line)",
+                    background: isToday ? "rgba(168,61,43,0.04)" : undefined,
+                    height: HOUR_HEIGHT * HOURS.length,
+                    overflow: "hidden"
+                  }}
+                  onClick={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    const h = HOURS[0] + Math.floor(y / HOUR_HEIGHT);
+                    openCreate(dayIdx, Math.max(HOURS[0], Math.min(HOURS[HOURS.length - 1], h)));
+                  }}
+                >
+                  {/* hour gridlines */}
+                  {HOURS.map((h, i) => (
                     <div
-                      key={`${h}-${dayIdx}`}
+                      key={h}
+                      onDragOver={(e) => { if (dragId) e.preventDefault(); }}
+                      onDrop={() => onCellDrop(dayIdx, h)}
+                      style={{
+                        position: "absolute",
+                        top: i * HOUR_HEIGHT,
+                        left: 0,
+                        right: 0,
+                        height: HOUR_HEIGHT,
+                        borderBottom: "1px solid var(--line)",
+                        cursor: "pointer"
+                      }}
                       onClick={(e) => {
+                        e.stopPropagation();
+                        // only respond if click is on the gridline itself, not on an event
                         if (e.target === e.currentTarget) openCreate(dayIdx, h);
                       }}
-                      style={{
-                        minHeight: 56,
-                        borderLeft: "1px solid var(--line)",
-                        borderBottom: "1px solid var(--line)",
-                        padding: 3,
-                        background: isToday ? "rgba(168,61,43,0.04)" : undefined,
-                        cursor: "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 3
-                      }}
-                    >
-                      {events.map((b) => {
-                        const colors = b.session_type === "personal" ? PERSONAL_COLOR : STATUS_COLORS[b.status];
-                        const cancelled = b.status === "cancelled";
-                        return (
-                          <div
-                            key={b.id}
-                            onClick={(e) => { e.stopPropagation(); openEdit(b); }}
-                            title={`${b.client_name ?? b.personal_label ?? "—"} — ${b.status}${b.change_count > 0 ? ` (Moved ${b.change_count}×)` : ""}`}
-                            style={{
-                              background: colors.bg,
-                              color: colors.fg,
-                              padding: "0.25rem 0.4rem",
-                              borderRadius: 3,
-                              fontSize: "0.74rem",
-                              border: cancelled ? "1px dashed rgba(255,255,255,0.5)" : "none",
-                              opacity: cancelled ? 0.85 : 1,
-                              boxShadow: "0 1px 0 rgba(0,0,0,0.15)"
-                            }}
-                          >
-                            <div style={{ fontWeight: 700, textDecoration: cancelled ? "line-through" : "none" }}>
-                              {b.session_type === "personal" ? `⛔ ${b.personal_label ?? "Personal"}` : (b.client_name ?? "Client")}
-                            </div>
-                            <div style={{ opacity: 0.9, display: "flex", justifyContent: "space-between", gap: 4 }}>
-                              <span>
-                                {b.session_type === "session" ? `$${b.rate ?? "—"}` : ""}
-                                {b.change_count > 0 ? <span style={{ marginLeft: 6 }}>Moved {b.change_count}×</span> : null}
-                              </span>
-                              {b.session_type === "session" ? (
-                                <span style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                  {b.program_status === "programmed" ? "✓ prog" : b.program_status === "needs_programming" ? "● need prog" : ""}
-                                </span>
-                              ) : null}
-                            </div>
+                    />
+                  ))}
+
+                  {/* WIP ghost */}
+                  {ghost ? (
+                    <div style={{
+                      position: "absolute",
+                      top: ghost.top,
+                      left: 4,
+                      right: 4,
+                      height: ghost.height,
+                      background: "rgba(120,120,120,0.18)",
+                      border: "1px dashed rgba(80,80,80,0.6)",
+                      borderRadius: 3,
+                      pointerEvents: "none",
+                      zIndex: 1
+                    }} />
+                  ) : null}
+
+                  {/* change-request ghosts: light grey dashed outline; only Approve/Deny actions, no edit-panel */}
+                  {appts
+                    .filter((a) => a.status === "change_requested" && a.requested_starts_at && dayIndex(new Date(a.requested_starts_at)) === dayIdx)
+                    .map((cr) => {
+                      const ps = new Date(cr.requested_starts_at!);
+                      const pe = new Date(cr.requested_ends_at ?? cr.ends_at);
+                      const top = minutesFromTop(ps);
+                      const heightPx = Math.max(36, (pe.getTime() - ps.getTime()) / 60000);
+                      return (
+                        <div
+                          key={`cr-${cr.id}`}
+                          onClick={(ev) => ev.stopPropagation()}
+                          title={cr.requested_reason ?? "Change requested"}
+                          style={{
+                            position: "absolute",
+                            top, left: 4, right: 4, height: heightPx - 2,
+                            background: "rgba(200, 200, 200, 0.22)",
+                            color: "#3a342f",
+                            border: "1.5px dashed rgba(80,80,80,0.6)",
+                            borderRadius: 3,
+                            padding: "0.25rem 0.4rem",
+                            fontSize: "0.72rem",
+                            zIndex: 3,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                            cursor: "default"
+                          }}
+                        >
+                          <div style={{ fontWeight: 700 }}>↻ {cr.client_name ?? "Client"} requested</div>
+                          <div style={{ fontSize: "0.66rem", opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cr.requested_reason ?? "(no note)"}</div>
+                          <div className="no-print" style={{ display: "flex", gap: 4, marginTop: "auto" }}>
+                            <button onClick={(ev) => { ev.stopPropagation(); approveCR(cr.id); }} style={{ flex: 1, fontSize: "0.62rem", padding: "0.2rem 0.3rem", background: "var(--sage)", color: "#fff", border: "none", borderRadius: 2, cursor: "pointer", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>Approve</button>
+                            <button onClick={(ev) => { ev.stopPropagation(); denyCR(cr.id); }} style={{ flex: 1, fontSize: "0.62rem", padding: "0.2rem 0.3rem", background: "var(--red)", color: "#fff", border: "none", borderRadius: 2, cursor: "pointer", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>Deny</button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                        </div>
+                      );
+                    })}
+
+                  {/* events */}
+                  {laid.map((e) => {
+                    if (editingId === e.id) return null; // hidden while editing — ghost shows position
+                    const start = new Date(e.starts_at);
+                    const end = new Date(e.ends_at);
+                    const top = minutesFromTop(start);
+                    const heightPx = Math.max(20, (end.getTime() - start.getTime()) / 60000);
+                    const widthPct = 100 / e.lanes;
+                    const leftPct = e.lane * widthPct;
+                    const colors = e.session_type === "personal" ? PERSONAL_COLOR : STATUS_COLORS[e.status];
+                    const cancelled = e.status === "cancelled";
+                    return (
+                      <div
+                        key={e.id}
+                        draggable
+                        onDragStart={() => setDragId(e.id)}
+                        onDragEnd={() => setDragId(null)}
+                        onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}
+                        title={`${e.client_name ?? e.personal_label ?? "—"} — ${e.status}${e.change_count > 0 ? ` (Moved ${e.change_count}×)` : ""}`}
+                        style={{
+                          position: "absolute",
+                          top,
+                          left: `calc(${leftPct}% + 2px)`,
+                          width: `calc(${widthPct}% - 4px)`,
+                          height: heightPx - 2,
+                          background: colors.bg,
+                          color: colors.fg,
+                          padding: "0.25rem 0.4rem",
+                          borderRadius: 3,
+                          fontSize: "0.74rem",
+                          border: cancelled ? "1px dashed rgba(255,255,255,0.5)" : "none",
+                          opacity: cancelled ? 0.85 : 1,
+                          boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
+                          cursor: "grab",
+                          overflow: "hidden",
+                          zIndex: 2
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, textDecoration: cancelled ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {e.session_type === "personal" ? `⛔ ${e.personal_label ?? "Personal"}` : (e.client_name ?? "Client")}
+                        </div>
+                        <div style={{ opacity: 0.9, display: "flex", justifyContent: "space-between", gap: 4, fontSize: "0.7rem" }}>
+                          <span>
+                            {e.session_type === "session" ? `$${e.rate ?? "—"}` : ""}
+                            {e.change_count > 0 ? <span style={{ marginLeft: 6 }}>Moved {e.change_count}×</span> : null}
+                          </span>
+                          {e.session_type === "session" ? (
+                            <span style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                              {e.program_status === "programmed" ? "✓ prog" : "● need"}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -472,7 +691,7 @@ export default function ScheduleView({
               <div key={d} style={{ textAlign: "center", padding: "0.5rem 0", borderBottom: "1px solid var(--line)", borderLeft: "1px solid var(--line)", background: "rgba(0,0,0,0.02)", fontWeight: 700, fontSize: "0.8rem" }}>{d}</div>
             ))}
             {monthDays.map((date, i) => {
-              if (!date) return <div key={`pad-${i}`} style={{ minHeight: 96, borderLeft: "1px solid var(--line)", borderBottom: "1px solid var(--line)", background: "rgba(0,0,0,0.015)" }} />;
+              if (!date) return <div key={`pad-${i}`} style={{ minHeight: 116, borderLeft: "1px solid var(--line)", borderBottom: "1px solid var(--line)", background: "rgba(0,0,0,0.015)" }} />;
               const k = date.toISOString().slice(0, 10);
               const list = (monthBlocks[k] ?? []).filter((a) => a.session_type === "session");
               const completed = list.filter((a) => a.status === "completed");
@@ -481,10 +700,6 @@ export default function ScheduleView({
               const totalDollars = list.reduce((acc, a) => acc + (a.rate ?? 0), 0);
               const isToday = sameDay(date, today);
 
-              // Color rule:
-              // - days with completed-but-unpaid -> red
-              // - days fully completed (and paid) -> green
-              // - future days with sessions scheduled -> blue
               let bg: string | undefined = undefined;
               let fg: string | undefined = undefined;
               if (unpaidCompleted.length > 0) { bg = "rgba(192,57,43,0.12)"; fg = "var(--red)"; }
@@ -493,7 +708,7 @@ export default function ScheduleView({
 
               return (
                 <div key={k} style={{
-                  minHeight: 96,
+                  minHeight: 116,
                   borderLeft: "1px solid var(--line)",
                   borderBottom: "1px solid var(--line)",
                   padding: "0.4rem",
@@ -504,9 +719,19 @@ export default function ScheduleView({
                     <strong style={{ fontSize: "0.85rem", color: isToday ? "var(--rust)" : undefined }}>{date.getDate()}</strong>
                     <span style={{ fontSize: "0.7rem", fontWeight: 600 }}>{list.length} · {fmtMoney(totalDollars)}</span>
                   </div>
-                  {unpaidCompleted.length > 0 ? <div className="meta" style={{ fontSize: "0.68rem", marginTop: 4, color: "var(--red)" }}>{unpaidCompleted.length} unpaid</div> : null}
-                  {completed.length > 0 && unpaidCompleted.length === 0 ? <div className="meta" style={{ fontSize: "0.68rem", marginTop: 4, color: "var(--sage)" }}>{completed.length} done</div> : null}
-                  {upcoming.length > 0 && unpaidCompleted.length === 0 && completed.length === 0 ? <div className="meta" style={{ fontSize: "0.68rem", marginTop: 4 }}>{upcoming.length} scheduled</div> : null}
+                  {list.length > 0 ? (
+                    <ul style={{ listStyle: "none", margin: "0.3rem 0 0", padding: 0, fontSize: "0.7rem", lineHeight: 1.25, color: "var(--muted)" }}>
+                      {list.slice(0, 4).map((a) => (
+                        <li key={a.id} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                            {new Date(a.starts_at).toLocaleTimeString("en-US", { hour: "numeric" }).replace(" ", "")}
+                          </span>
+                          {" "}{a.client_name ?? "—"}
+                        </li>
+                      ))}
+                      {list.length > 4 ? <li style={{ fontStyle: "italic" }}>+{list.length - 4} more</li> : null}
+                    </ul>
+                  ) : null}
                 </div>
               );
             })}
@@ -597,9 +822,7 @@ export default function ScheduleView({
                   </select>
                   <p className="meta" style={{ fontSize: "0.74rem", marginTop: "0.3rem" }}>
                     {draft.client_id ? (
-                      <>
-                        Pull from program: <Link href={`/coach/build-program?client=${draft.client_id}`}>build / view →</Link>
-                      </>
+                      <>Pull from program: <Link href={`/coach/build-program?client=${draft.client_id}`}>build / view →</Link></>
                     ) : "Pick a client to link an existing program."}
                   </p>
                 </div>
@@ -634,7 +857,44 @@ export default function ScheduleView({
                 <input className="input" type="datetime-local" value={toLocalInput(draft.starts_at)} onChange={(e) => setDraft({ ...draft, starts_at: fromLocalInput(e.target.value) })} />
                 <input className="input" type="datetime-local" value={toLocalInput(draft.ends_at)} onChange={(e) => setDraft({ ...draft, ends_at: fromLocalInput(e.target.value) })} />
               </div>
+              <p className="meta" style={{ fontSize: "0.72rem", marginTop: "0.3rem" }}>Adjust either side — the calendar block resizes as you type.</p>
             </div>
+
+            {!draft.appt_id && draft.session_type === "session" ? (
+              <div style={{ background: "rgba(0,0,0,0.025)", padding: "0.6rem 0.7rem", borderRadius: 3, border: "1px solid var(--line)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.85rem" }}>
+                  <input type="checkbox" checked={draft.repeat_enabled} onChange={(e) => setDraft({ ...draft, repeat_enabled: e.target.checked })} />
+                  <strong>Repeat for…</strong>
+                </label>
+                {draft.repeat_enabled ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" }}>
+                    <div>
+                      <label className="stat-label">Cadence</label>
+                      <select className="select" value={draft.repeat_cadence} onChange={(e) => setDraft({ ...draft, repeat_cadence: Number(e.target.value) as 1 | 2 })} style={{ marginTop: "0.25rem" }}>
+                        <option value={1}>Weekly</option>
+                        <option value={2}>Every other week</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="stat-label">Occurrences</label>
+                      <input className="input" type="number" min={2} max={52} value={draft.repeat_count} onChange={(e) => setDraft({ ...draft, repeat_count: Number(e.target.value) || 0 })} style={{ marginTop: "0.25rem" }} />
+                    </div>
+                    <p className="meta" style={{ fontSize: "0.72rem", gridColumn: "1 / span 2", margin: 0 }}>
+                      Creates {Math.max(1, draft.repeat_count)} sessions starting {new Date(draft.starts_at).toLocaleDateString()}, every {draft.repeat_cadence === 1 ? "week" : "other week"}. Cancel any one without affecting the rest, or use "Cancel series" later to drop the lot.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {draft.appt_id && draft.series_id ? (
+              <div style={{ background: "rgba(0,0,0,0.025)", padding: "0.55rem 0.7rem", borderRadius: 3, border: "1px solid var(--line)", fontSize: "0.82rem" }}>
+                <strong>Part of a series.</strong> "Delete" removes only this session. To cancel this and all future sessions in the series:
+                <div style={{ marginTop: "0.4rem" }}>
+                  <button className="btn btn-ghost" style={{ padding: "0.3rem 0.55rem", fontSize: "0.72rem", color: "var(--red)" }} onClick={cancelDraftSeries} disabled={savePending}>Cancel series from this date forward</button>
+                </div>
+              </div>
+            ) : null}
 
             {saveError ? <p style={{ color: "var(--red)", fontSize: "0.82rem", margin: 0 }}>{saveError}</p> : null}
             <div style={{ marginTop: "auto", display: "flex", gap: "0.5rem", justifyContent: "space-between", borderTop: "1px solid var(--line)", paddingTop: "0.85rem" }}>
@@ -655,7 +915,6 @@ export default function ScheduleView({
   );
 }
 
-// ── helpers ────────────────────────────────────────────────────────
 function toLocalInput(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => `${n}`.padStart(2, "0");

@@ -11,6 +11,7 @@ const COACH_NAV: NavLink[] = [
   { href: "/coach/clients", label: "Clients" },
   { href: "/coach/build-program", label: "Build Program" },
   { href: "/coach/schedule", label: "Schedule" },
+  { href: "/coach/availability", label: "Availability" },
   { href: "/coach/appointments", label: "Appointments" },
   { href: "/coach/messages", label: "Messages" }
 ];

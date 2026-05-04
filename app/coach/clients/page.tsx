@@ -20,7 +20,7 @@ export default async function ClientsPage() {
           <h1 style={{ marginTop: "0.5rem" }}>Roster</h1>
           <p className="meta">{clients.length} active clients</p>
         </div>
-        <Link className="btn btn-primary" href="/admin">Add client →</Link>
+        <Link className="btn btn-primary" href="/signup">+ Add client</Link>
       </header>
 
       <hr className="divider" />
@@ -33,9 +33,10 @@ export default async function ClientsPage() {
               <th>Goal</th>
               <th>Cadence</th>
               <th>Rate</th>
-              <th>Test rate</th>
               <th>Monthly</th>
               <th>Member since</th>
+              <th>Last session</th>
+              <th>Total sessions</th>
               <th>Last program</th>
               <th>Time frame</th>
               <th>Owed</th>
@@ -52,9 +53,10 @@ export default async function ClientsPage() {
                   <td className="meta">{c.goals ?? "—"}</td>
                   <td>{c.regular_frequency ?? "—"}</td>
                   <td>{fmtMoney(c.session_rate)}</td>
-                  <td style={{ color: c.test_rate && c.session_rate && c.test_rate > c.session_rate ? "var(--rust)" : undefined }}>{fmtMoney(c.test_rate)}</td>
                   <td>{fmtMoney(c.monthly_revenue)}</td>
                   <td>{fmtDate(c.member_since)}</td>
+                  <td>{c.last_session_at ? fmtDate(c.last_session_at) : <span className="meta">—</span>}</td>
+                  <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.total_sessions}</td>
                   <td>
                     {prog ? (
                       <>

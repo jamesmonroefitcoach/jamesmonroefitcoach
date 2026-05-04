@@ -16,14 +16,16 @@ export type ClientRow = {
   member_since: string | null;
   status: string | null;
   balance_owed: number;
+  last_session_at: string | null;
+  total_sessions: number;
 };
 
 const DEMO_CLIENTS: ClientRow[] = [
-  { id: "demo-client-abbey", full_name: "Abbey Archer", email: null, age_category: "22", goals: "Form & knowledge", regular_frequency: "1", session_rate: 100, test_rate: 100, monthly_revenue: 200, current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0 },
-  { id: "demo-client-acacia", full_name: "Acacia Chan", email: null, age_category: "30", goals: "Weight Loss, muscle, posture", regular_frequency: "2", session_rate: 70, test_rate: 100, monthly_revenue: 280, current_weight_lb: 198, goal_weight_lb: 150, tier: "tier_2", member_since: "2025-03-01", status: "current", balance_owed: 280 },
-  { id: "demo-client-david", full_name: "David Syndicongo", email: null, age_category: "32", goals: "Weight loss, muscle, posture", regular_frequency: "1", session_rate: 65, test_rate: 100, monthly_revenue: 260, current_weight_lb: 229, goal_weight_lb: 180, tier: "tier_2", member_since: "2024-10-01", status: "current", balance_owed: 0 },
-  { id: "demo-client-jen", full_name: "Jen Loving", email: null, age_category: "48", goals: "Body Recomp – 1 Pull Up", regular_frequency: "2", session_rate: 65, test_rate: 100, monthly_revenue: 1040, current_weight_lb: null, goal_weight_lb: 145, tier: "tier_1", member_since: "2025-11-01", status: "current", balance_owed: 0 },
-  { id: "demo-client-rowland", full_name: "Rowland Bella", email: null, age_category: "24", goals: "100 LB weight loss", regular_frequency: "2", session_rate: null, test_rate: 100, monthly_revenue: null, current_weight_lb: 294, goal_weight_lb: 280, tier: "tier_3", member_since: "2025-07-01", status: "current", balance_owed: 0 }
+  { id: "demo-client-abbey", full_name: "Abbey Archer", email: null, age_category: "22", goals: "Form & knowledge", regular_frequency: "1", session_rate: 100, test_rate: 100, monthly_revenue: 200, current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0, last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), total_sessions: 4 },
+  { id: "demo-client-acacia", full_name: "Acacia Chan", email: null, age_category: "30", goals: "Weight Loss, muscle, posture", regular_frequency: "2", session_rate: 70, test_rate: 100, monthly_revenue: 280, current_weight_lb: 198, goal_weight_lb: 150, tier: "tier_2", member_since: "2025-03-01", status: "current", balance_owed: 280, last_session_at: new Date(Date.now() - 2 * 86400000).toISOString(), total_sessions: 96 },
+  { id: "demo-client-david", full_name: "David Syndicongo", email: null, age_category: "32", goals: "Weight loss, muscle, posture", regular_frequency: "1", session_rate: 65, test_rate: 100, monthly_revenue: 260, current_weight_lb: 229, goal_weight_lb: 180, tier: "tier_2", member_since: "2024-10-01", status: "current", balance_owed: 0, last_session_at: new Date(Date.now() - 6 * 86400000).toISOString(), total_sessions: 71 },
+  { id: "demo-client-jen", full_name: "Jen Loving", email: null, age_category: "48", goals: "Body Recomp – 1 Pull Up", regular_frequency: "2", session_rate: 65, test_rate: 100, monthly_revenue: 1040, current_weight_lb: null, goal_weight_lb: 145, tier: "tier_1", member_since: "2025-11-01", status: "current", balance_owed: 0, last_session_at: new Date(Date.now() - 1 * 86400000).toISOString(), total_sessions: 48 },
+  { id: "demo-client-rowland", full_name: "Rowland Bella", email: null, age_category: "24", goals: "100 LB weight loss", regular_frequency: "2", session_rate: null, test_rate: 100, monthly_revenue: null, current_weight_lb: 294, goal_weight_lb: 280, tier: "tier_3", member_since: "2025-07-01", status: "current", balance_owed: 0, last_session_at: new Date(Date.now() - 9 * 86400000).toISOString(), total_sessions: 32 }
 ];
 
 export async function listClients(coachId?: string): Promise<ClientRow[]> {
@@ -42,7 +44,7 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
     .eq("role", "client");
   if (error || !data) return DEMO_CLIENTS;
 
-  const rows: ClientRow[] = data
+  const baseRows: (ClientRow | null)[] = data
     .map((p: any) => {
       const d = Array.isArray(p.details) ? p.details[0] : p.details;
       const b = Array.isArray(p.balance) ? p.balance[0] : p.balance;
@@ -62,10 +64,36 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         tier: d?.tier ?? null,
         member_since: d?.member_since ?? null,
         status: d?.status ?? null,
-        balance_owed: Number(b?.balance_owed ?? 0)
-      };
-    })
-    .filter((r): r is ClientRow => r !== null);
+        balance_owed: Number(b?.balance_owed ?? 0),
+        last_session_at: null,
+        total_sessions: 0
+      } satisfies ClientRow;
+    });
+  const rows = baseRows.filter((r): r is ClientRow => r !== null);
+  // Pull session stats per client (only completed sessions count toward total)
+  if (rows.length) {
+    const ids = rows.map((r) => r.id);
+    const { data: stats } = await supabase
+      .from("appointments")
+      .select("client_id, starts_at, status")
+      .in("client_id", ids)
+      .eq("status", "completed");
+    if (stats) {
+      const byClient: Record<string, { total: number; last: string | null }> = {};
+      stats.forEach((s: any) => {
+        const cur = (byClient[s.client_id] ??= { total: 0, last: null });
+        cur.total += 1;
+        if (!cur.last || s.starts_at > cur.last) cur.last = s.starts_at;
+      });
+      rows.forEach((r) => {
+        const s = byClient[r.id];
+        if (s) {
+          r.total_sessions = s.total;
+          r.last_session_at = s.last;
+        }
+      });
+    }
+  }
   return rows;
 }
 
@@ -91,6 +119,10 @@ export type AppointmentRow = {
   is_blocking: boolean;
   session_program_id?: string | null;
   program_status: "programmed" | "needs_programming" | "n/a";  // n/a for personal blocks
+  series_id?: string | null;
+  requested_starts_at?: string | null;
+  requested_ends_at?: string | null;
+  requested_reason?: string | null;
 };
 
 function demoAppointments(): AppointmentRow[] {
@@ -111,7 +143,7 @@ function demoAppointments(): AppointmentRow[] {
   ];
   // Demo "programmed" lookup — Acacia & Jen have current programs, others don't.
   const programmed = new Set(["demo-client-acacia", "demo-client-jen", "demo-client-abbey"]);
-  return slots.map((s, i) => {
+  const rows = slots.map((s, i) => {
     const startsAt = new Date(start);
     startsAt.setDate(start.getDate() + s.d);
     startsAt.setHours(s.h, 0, 0, 0);
@@ -131,9 +163,31 @@ function demoAppointments(): AppointmentRow[] {
       session_type: isPersonal ? "personal" : "session",
       personal_label: (s as any).personal ?? null,
       is_blocking: isPersonal,
-      program_status: isPersonal ? "n/a" : (s.c && programmed.has(s.c) ? "programmed" : "needs_programming")
-    };
+      program_status: isPersonal ? "n/a" : (s.c && programmed.has(s.c) ? "programmed" : "needs_programming"),
+      series_id: null,
+      requested_starts_at: null,
+      requested_ends_at: null,
+      requested_reason: null
+    } as AppointmentRow;
   });
+
+  // Demo: a couple of change-requests to populate James's schedule with light grey blocks
+  // Find a David scheduled session and turn one into a change request proposing a different day/time
+  const acaciaIdx = rows.findIndex((a) => a.client_id === "demo-client-acacia" && a.status === "scheduled");
+  if (acaciaIdx >= 0) {
+    const r = rows[acaciaIdx];
+    const proposed = new Date(r.starts_at);
+    proposed.setDate(proposed.getDate() + 1);
+    proposed.setHours(8, 0, 0, 0);
+    rows[acaciaIdx] = {
+      ...r,
+      status: "change_requested",
+      requested_starts_at: proposed.toISOString(),
+      requested_ends_at: new Date(proposed.getTime() + 60 * 60 * 1000).toISOString(),
+      requested_reason: "Tuesday won't work — could we do Wednesday 8a?"
+    };
+  }
+  return rows;
 }
 
 export async function listAppointmentsForWeek(coachId: string, weekStart?: Date): Promise<AppointmentRow[]> {
@@ -150,7 +204,7 @@ export async function listAppointmentsForWeek(coachId: string, weekStart?: Date)
   end.setDate(start.getDate() + 7);
   const { data, error } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
     .eq("coach_id", coachId)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString())
@@ -174,7 +228,7 @@ export async function listAppointmentsForMonth(coachId: string, monthStart: Date
   const supabase = await createSupabaseServer();
   const { data } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
     .eq("coach_id", coachId)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString());
@@ -212,7 +266,7 @@ export async function listAppointmentsForClient(clientId: string): Promise<Appoi
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
     .eq("client_id", clientId)
     .order("starts_at", { ascending: true });
   if (error || !data) return [];

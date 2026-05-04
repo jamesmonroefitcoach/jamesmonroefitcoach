@@ -2,8 +2,43 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { getClient, listAppointmentsForClient } from "@/lib/data";
-import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, type Category } from "@/lib/programs";
+import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, PROGRAM_KIND_LABEL, type Category, type PastProgramFull } from "@/lib/programs";
 import { fmtMoney, fmtDate } from "@/lib/format";
+
+function ProgramCard({ label, prog, clientId }: { label: string; prog: PastProgramFull | null; clientId: string }) {
+  if (!prog) {
+    return (
+      <div className="card" style={{ padding: "0.85rem" }}>
+        <span className="badge">{label}</span>
+        <p className="meta" style={{ marginTop: "0.5rem" }}>No active {label.toLowerCase()} program. <Link href={`/coach/build-program?client=${clientId}`}>Build one →</Link></p>
+      </div>
+    );
+  }
+  const expiring = isExpiringSoon(prog);
+  return (
+    <div className="day-card" style={{ borderLeftColor: expiring ? "var(--red)" : "var(--rust)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span className="badge badge-rust">{label}</span>
+          <strong style={{ marginLeft: "0.5rem" }}>{prog.name}</strong>
+          {expiring ? <span className="badge badge-red" style={{ marginLeft: "0.5rem" }}>expiring soon</span> : null}
+          <div className="meta" style={{ marginTop: "0.25rem" }}>
+            {fmtDate(prog.starts_on)} → {fmtDate(prog.ends_on)} · {prog.duration_weeks ?? "—"} wk · {prog.day_count} {prog.program_kind === "in_gym" ? "training days" : "block"}
+          </div>
+          {prog.program_kind === "at_home" && prog.at_home_cadence ? (
+            <div className="meta" style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>Cadence: {prog.at_home_cadence}</div>
+          ) : null}
+          <div className="meta" style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>
+            {Object.entries(prog.category_counts)
+              .map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`)
+              .join(" · ")}
+          </div>
+        </div>
+        <Link className="btn btn-ghost" href={`/coach/build-program?client=${clientId}`} style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }}>edit</Link>
+      </div>
+    </div>
+  );
+}
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
@@ -17,7 +52,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const past = appts.filter((a) => new Date(a.starts_at) < new Date());
   const upcoming = appts.filter((a) => new Date(a.starts_at) >= new Date());
   const programs = pastProgramsForClient(id);
-  const currentProgram = programs.find((p) => p.is_current) ?? null;
+  const currentInGym = programs.find((p) => p.is_current && p.program_kind === "in_gym") ?? null;
+  const currentAtHome = programs.find((p) => p.is_current && p.program_kind === "at_home") ?? null;
+  const pastList = programs.filter((p) => !p.is_current);
 
   return (
     <main className="shell">
@@ -93,39 +130,24 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <Link className="btn btn-primary" href={`/coach/build-program?client=${client.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.75rem" }}>+ New program</Link>
         </div>
         <hr className="divider" />
-        {currentProgram ? (
-          <div className="day-card" style={{ marginBottom: "0.75rem", borderLeftColor: isExpiringSoon(currentProgram) ? "var(--red)" : "var(--rust)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-              <div>
-                <span className="badge badge-rust">current</span>
-                <strong style={{ marginLeft: "0.5rem" }}>{currentProgram.name}</strong>
-                {isExpiringSoon(currentProgram) ? <span className="badge badge-red" style={{ marginLeft: "0.5rem" }}>expiring soon</span> : null}
-                <div className="meta" style={{ marginTop: "0.25rem" }}>
-                  {fmtDate(currentProgram.starts_on)} → {fmtDate(currentProgram.ends_on)} · {currentProgram.duration_weeks ?? "—"} wk · {currentProgram.day_count} days
-                </div>
-                <div className="meta" style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>
-                  {Object.entries(currentProgram.category_counts)
-                    .map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`)
-                    .join(" · ")}
-                </div>
-              </div>
-              <Link className="btn btn-ghost" href={`/coach/build-program?client=${client.id}`} style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }}>edit</Link>
-            </div>
-          </div>
-        ) : (
-          <p className="meta">No active program. <Link href={`/coach/build-program?client=${client.id}`}>Build one →</Link></p>
-        )}
-        {programs.filter((p) => !p.is_current).length > 0 ? (
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+          <ProgramCard label="In-gym" prog={currentInGym} clientId={client.id} />
+          <ProgramCard label="At-home" prog={currentAtHome} clientId={client.id} />
+        </div>
+
+        {pastList.length > 0 ? (
           <>
-            <h3 style={{ marginTop: "0.75rem", fontSize: "0.75rem" }}>Past programs</h3>
+            <h3 style={{ marginTop: "1rem", fontSize: "0.75rem" }}>Past programs</h3>
             <table className="table">
               <thead>
-                <tr><th>Program</th><th>Window</th><th>Time frame</th><th>Days</th><th>Mix</th></tr>
+                <tr><th>Program</th><th>Type</th><th>Window</th><th>Time frame</th><th>Days</th><th>Mix</th></tr>
               </thead>
               <tbody>
-                {programs.filter((p) => !p.is_current).map((p) => (
+                {pastList.map((p) => (
                   <tr key={p.id}>
                     <td><strong>{p.name}</strong></td>
+                    <td className="meta" style={{ fontSize: "0.78rem" }}>{PROGRAM_KIND_LABEL[p.program_kind]}</td>
                     <td className="meta">{fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}</td>
                     <td>{p.duration_weeks ?? "—"} wk</td>
                     <td>{p.day_count}</td>

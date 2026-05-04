@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
-import type { Category } from "@/lib/programs";
+import type { Category, ProgramKind } from "@/lib/programs";
 
 export type SaveProgramItem = {
   movement_id?: string;     // existing movement
@@ -33,6 +33,8 @@ export type SaveProgramInput = {
   based_on_program_id?: string | null;
   publish: boolean;
   days: SaveProgramDay[];
+  program_kind: ProgramKind;
+  at_home_cadence?: string | null;
 };
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
@@ -61,7 +63,9 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
         duration_weeks: input.duration_weeks,
         based_on_program_id: input.based_on_program_id ?? null,
         is_published: input.publish,
-        is_current: input.publish
+        is_current: input.publish,
+        program_kind: input.program_kind,
+        at_home_cadence: input.at_home_cadence ?? null
       })
       .eq("id", programId);
     if (error) return { ok: false, error: error.message };
@@ -73,12 +77,14 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
     await supabase.from("program_days").delete().eq("program_id", programId);
   } else {
     if (input.publish) {
-      // unset previous "current" flag for this client
+      // Only unset previous "current" of the *same kind* — a client can have an
+      // in-gym current AND an at-home current simultaneously.
       await supabase
         .from("programs")
         .update({ is_current: false })
         .eq("client_id", input.client_id)
-        .eq("is_current", true);
+        .eq("is_current", true)
+        .eq("program_kind", input.program_kind);
     }
     const { data, error } = await supabase
       .from("programs")
@@ -91,7 +97,9 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
         duration_weeks: input.duration_weeks,
         based_on_program_id: input.based_on_program_id ?? null,
         is_published: input.publish,
-        is_current: input.publish
+        is_current: input.publish,
+        program_kind: input.program_kind,
+        at_home_cadence: input.at_home_cadence ?? null
       })
       .select("id")
       .single();

@@ -52,6 +52,13 @@ export const MOVEMENT_LIBRARY: Movement[] = [
 ];
 
 // ─── Past programs (demo) ────────────────────────────────────────────
+export type ProgramKind = "in_gym" | "at_home";
+
+export const PROGRAM_KIND_LABEL: Record<ProgramKind, string> = {
+  in_gym: "In-gym (James-led)",
+  at_home: "At-home (client follows)"
+};
+
 export type PastProgramSummary = {
   id: string;
   client_id: string;
@@ -62,6 +69,8 @@ export type PastProgramSummary = {
   is_current: boolean;
   day_count: number;
   category_counts: Partial<Record<Category, number>>;
+  program_kind: ProgramKind;
+  at_home_cadence?: string | null;
 };
 
 export type PastProgramDay = {
@@ -83,6 +92,7 @@ const DEMO_PAST_PROGRAMS: PastProgramFull[] = [
     is_current: true,
     day_count: 3,
     category_counts: { squat: 1, push: 2, pull: 2, hinge: 1, core: 2 },
+    program_kind: "in_gym",
     days: [
       {
         day_number: 1,
@@ -125,6 +135,7 @@ const DEMO_PAST_PROGRAMS: PastProgramFull[] = [
     is_current: false,
     day_count: 3,
     category_counts: { squat: 2, push: 2, pull: 2, hinge: 1, core: 2 },
+    program_kind: "in_gym",
     days: [
       {
         day_number: 1,
@@ -155,6 +166,7 @@ const DEMO_PAST_PROGRAMS: PastProgramFull[] = [
     is_current: true,
     day_count: 2,
     category_counts: { pull: 3, push: 1, core: 2 },
+    program_kind: "in_gym",
     days: [
       { day_number: 1, title: "Day 1 — Pull focus", items: [
         { name: "Chin-up", category: "pull", sets: 5, reps: "1-3", exertion: "RPE 8" },
@@ -176,6 +188,7 @@ const DEMO_PAST_PROGRAMS: PastProgramFull[] = [
     is_current: true,
     day_count: 2,
     category_counts: { squat: 1, push: 1, pull: 1, mobility: 1 },
+    program_kind: "in_gym",
     days: [
       { day_number: 1, title: "Day 1 — Form A", items: [
         { name: "Goblet Squat", category: "squat", sets: 3, reps: "8", exertion: "light" },
@@ -186,6 +199,45 @@ const DEMO_PAST_PROGRAMS: PastProgramFull[] = [
         { name: "World's Greatest Stretch", category: "mobility", sets: 2, reps: "5/side", exertion: "easy" }
       ]}
     ]
+  },
+  {
+    id: "prog-acacia-athome",
+    client_id: "demo-client-acacia",
+    name: "Off-day Mobility & Walks",
+    starts_on: "2026-04-06",
+    ends_on: "2026-05-31",
+    duration_weeks: 8,
+    is_current: true,
+    day_count: 1,
+    category_counts: { mobility: 2, cardio: 1, core: 1 },
+    program_kind: "at_home",
+    at_home_cadence: "On non-gym days",
+    days: [
+      { day_number: 1, title: "Anytime — 25 min", items: [
+        { name: "World's Greatest Stretch", category: "mobility", sets: 2, reps: "5/side", exertion: "easy" },
+        { name: "Cat-Cow", category: "mobility", sets: 2, reps: "10", exertion: "easy" },
+        { name: "Walk", category: "cardio", sets: 1, reps: "20 min", exertion: "easy" },
+        { name: "Plank", category: "core", sets: 3, reps: "30s", exertion: "moderate" }
+      ]}
+    ]
+  },
+  {
+    id: "prog-jen-athome",
+    client_id: "demo-client-jen",
+    name: "Pull-up Practice (at home)",
+    starts_on: "2026-04-13",
+    ends_on: "2026-06-08",
+    duration_weeks: 8,
+    is_current: true,
+    day_count: 1,
+    category_counts: { pull: 2 },
+    program_kind: "at_home",
+    at_home_cadence: "3x/week between sessions",
+    days: [
+      { day_number: 1, title: "Pull-up greasing", items: [
+        { name: "Chin-up", category: "pull", sets: 5, reps: "1 (slow negative)", exertion: "very hard" }
+      ]}
+    ]
   }
 ];
 
@@ -193,8 +245,13 @@ export function pastProgramsForClient(clientId: string): PastProgramFull[] {
   return DEMO_PAST_PROGRAMS.filter((p) => p.client_id === clientId).sort((a, b) => (b.starts_on > a.starts_on ? 1 : -1));
 }
 
+export function currentProgramsForClient(clientId: string): PastProgramFull[] {
+  return DEMO_PAST_PROGRAMS.filter((p) => p.client_id === clientId && p.is_current);
+}
+
 export function currentProgramForClient(clientId: string): PastProgramFull | null {
-  return DEMO_PAST_PROGRAMS.find((p) => p.client_id === clientId && p.is_current) ?? null;
+  // Returns the in-gym current program by default (back-compat).
+  return DEMO_PAST_PROGRAMS.find((p) => p.client_id === clientId && p.is_current && p.program_kind === "in_gym") ?? null;
 }
 
 export function isExpiringSoon(p: PastProgramSummary): boolean {
