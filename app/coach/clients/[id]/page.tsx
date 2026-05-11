@@ -1,9 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
-import { getClient, listAppointmentsForClient } from "@/lib/data";
+import { getClient, listAppointmentsForClient, getClientReminderPrefs } from "@/lib/data";
 import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, PROGRAM_KIND_LABEL, type Category, type PastProgramFull } from "@/lib/programs";
 import { fmtMoney, fmtDate } from "@/lib/format";
+import ClientSettings from "./client-settings";
 
 function ProgramCard({ label, prog, clientId }: { label: string; prog: PastProgramFull | null; clientId: string }) {
   if (!prog) {
@@ -22,12 +23,16 @@ function ProgramCard({ label, prog, clientId }: { label: string; prog: PastProgr
           <span className="badge badge-rust">{label}</span>
           <strong style={{ marginLeft: "0.5rem" }}>{prog.name}</strong>
           {expiring ? <span className="badge badge-red" style={{ marginLeft: "0.5rem" }}>expiring soon</span> : null}
-          <div className="meta" style={{ marginTop: "0.25rem" }}>
-            {fmtDate(prog.starts_on)} → {fmtDate(prog.ends_on)} · {prog.duration_weeks ?? "—"} wk · {prog.day_count} {prog.program_kind === "in_gym" ? "training days" : "block"}
-          </div>
-          {prog.program_kind === "at_home" && prog.at_home_cadence ? (
-            <div className="meta" style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>Cadence: {prog.at_home_cadence}</div>
-          ) : null}
+          {prog.program_kind === "at_home" ? (
+            <div className="meta" style={{ marginTop: "0.25rem" }}>
+              {fmtDate(prog.starts_on)} → {fmtDate(prog.ends_on)} · {prog.duration_weeks ?? "—"} wk
+              {prog.at_home_cadence ? ` · ${prog.at_home_cadence}` : ""}
+            </div>
+          ) : (
+            <div className="meta" style={{ marginTop: "0.25rem" }}>
+              {prog.day_count} training day{prog.day_count !== 1 ? "s" : ""} · scheduled on calendar
+            </div>
+          )}
           <div className="meta" style={{ fontSize: "0.78rem", marginTop: "0.2rem" }}>
             {Object.entries(prog.category_counts)
               .map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`)
@@ -46,7 +51,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   if (user.role !== "coach" && user.role !== "admin") redirect("/");
 
   const { id } = await params;
-  const client = await getClient(id);
+  const [client, reminderPrefs] = await Promise.all([
+    getClient(id),
+    getClientReminderPrefs(id),
+  ]);
   if (!client) notFound();
   const appts = await listAppointmentsForClient(id);
   const past = appts.filter((a) => new Date(a.starts_at) < new Date());
@@ -67,6 +75,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             {client.tier?.replace("_", " ") ?? "—"}
             {client.member_since ? ` · member since ${fmtDate(client.member_since)}` : ""}
             {client.email ? ` · ${client.email}` : ""}
+            {client.lifecycle !== "active" && (
+              <span style={{
+                marginLeft: "0.5rem",
+                background: client.lifecycle === "paused" ? "#e8f0fe" : "#fce8e8",
+                color: client.lifecycle === "paused" ? "#1a56db" : "var(--red)",
+                borderRadius: 4, padding: "0.1rem 0.4rem", fontSize: "0.75rem", fontWeight: 700
+              }}>{client.lifecycle}</span>
+            )}
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -102,25 +118,22 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <hr className="divider" />
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-        <div className="card">
-          <h2>Goals & profile</h2>
-          <hr className="divider" />
-          <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.4rem 1rem", margin: 0 }}>
-            <dt className="meta">Goals</dt><dd>{client.goals ?? "—"}</dd>
-            <dt className="meta">Age</dt><dd>{client.age_category ?? "—"}</dd>
-            <dt className="meta">Status</dt><dd>{client.status ?? "—"}</dd>
-            <dt className="meta">Frequency</dt><dd>{client.regular_frequency ?? "—"}</dd>
-          </dl>
-        </div>
-
-        <div className="card">
-          <h2>Check-ins</h2>
-          <hr className="divider" />
-          <p className="meta">No check-ins submitted yet. Cadence: every 14 days.</p>
-          <Link className="btn btn-ghost" href={`/coach/clients/${client.id}/check-ins`}>Open check-in log →</Link>
-        </div>
-      </section>
+      <div className="card">
+        <h2>Goals & profile</h2>
+        <hr className="divider" />
+        <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.4rem 1rem", margin: 0 }}>
+          <dt className="meta">Goals</dt><dd>{client.goals ?? "—"}</dd>
+          <dt className="meta">Age</dt><dd>{client.age_category ?? "—"}</dd>
+          <dt className="meta">Status</dt><dd>{client.status ?? "—"}</dd>
+          <dt className="meta">Frequency</dt><dd>{client.regular_frequency ?? "—"}</dd>
+          {client.injuries && (
+            <>
+              <dt className="meta">Injuries</dt>
+              <dd style={{ color: "var(--red)", fontSize: "0.84rem", fontWeight: 500 }}>{client.injuries}</dd>
+            </>
+          )}
+        </dl>
+      </div>
 
       <hr className="divider" />
 
@@ -132,8 +145,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <hr className="divider" />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
-          <ProgramCard label="In-gym" prog={currentInGym} clientId={client.id} />
-          <ProgramCard label="At-home" prog={currentAtHome} clientId={client.id} />
+          <ProgramCard label="Sessions" prog={currentInGym} clientId={client.id} />
+          <ProgramCard label="Program" prog={currentAtHome} clientId={client.id} />
         </div>
 
         {pastList.length > 0 ? (
@@ -141,15 +154,18 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             <h3 style={{ marginTop: "1rem", fontSize: "0.75rem" }}>Past programs</h3>
             <table className="table">
               <thead>
-                <tr><th>Program</th><th>Type</th><th>Window</th><th>Time frame</th><th>Days</th><th>Mix</th></tr>
+                <tr><th>Program</th><th>Type</th><th>Window</th><th>Days</th><th>Mix</th></tr>
               </thead>
               <tbody>
                 {pastList.map((p) => (
                   <tr key={p.id}>
                     <td><strong>{p.name}</strong></td>
                     <td className="meta" style={{ fontSize: "0.78rem" }}>{PROGRAM_KIND_LABEL[p.program_kind]}</td>
-                    <td className="meta">{fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}</td>
-                    <td>{p.duration_weeks ?? "—"} wk</td>
+                    <td className="meta">
+                      {p.program_kind === "at_home"
+                        ? `${fmtDate(p.starts_on)} → ${fmtDate(p.ends_on)}`
+                        : <span style={{ fontStyle: "italic" }}>on schedule</span>}
+                    </td>
                     <td>{p.day_count}</td>
                     <td className="meta" style={{ fontSize: "0.78rem" }}>
                       {Object.entries(p.category_counts).map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`).join(" · ")}
@@ -160,6 +176,18 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </table>
           </>
         ) : null}
+      </section>
+
+      <hr className="divider" />
+
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginBottom: "1.5rem" }}>
+        <ClientSettings client={client} reminderPrefs={reminderPrefs} />
+        <div className="card">
+          <h2>Check-ins</h2>
+          <hr className="divider" />
+          <p className="meta">No check-ins submitted yet. Cadence: every 14 days.</p>
+          <Link className="btn btn-ghost" href={`/coach/clients/${client.id}/check-ins`}>Open check-in log →</Link>
+        </div>
       </section>
 
       <hr className="divider" />

@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
+import { listAppointmentsForClient } from "@/lib/data";
 import type { Category, ProgramKind } from "@/lib/programs";
 
 export type SaveProgramItem = {
@@ -162,6 +163,30 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
   revalidatePath("/coach/build-program");
   if (!programId) return { ok: false, error: "program id missing after save" };
   return { ok: true, data: { id: programId } };
+}
+
+export type ApptOption = {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  program_status: string;
+};
+
+export async function getClientAppointments(clientId: string): Promise<ApptOption[]> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return [];
+  const appts = await listAppointmentsForClient(clientId);
+  const now = new Date().toISOString();
+  return appts
+    .filter((a) => a.session_type === "session" && (a.status === "scheduled" || a.status === "change_requested") && a.starts_at >= now)
+    .map((a) => ({
+      id: a.id,
+      starts_at: a.starts_at,
+      ends_at: a.ends_at,
+      status: a.status,
+      program_status: a.program_status ?? "needs_programming"
+    }));
 }
 
 // Client-side movement logging (per set). Used during/after a session.

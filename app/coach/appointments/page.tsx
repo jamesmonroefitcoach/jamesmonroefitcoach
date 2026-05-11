@@ -1,23 +1,23 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listAppointmentsForWeek, listAppointmentsForMonth, startOfWeek } from "@/lib/data";
+import { listAppointmentsForWeek, listAppointmentsForMonth, startOfWeek, listChangeRequestHistory } from "@/lib/data";
 import AppointmentsClient from "./appointments-client";
 
-export default async function AppointmentsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function AppointmentsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== "coach") redirect("/");
 
-  // Pull a generous window: current month + previous month + this week, dedupe.
   const weekStart = startOfWeek(new Date());
   const thisMonth = new Date();
   const prevMonth = new Date();
   prevMonth.setMonth(prevMonth.getMonth() - 1);
 
-  const [week, monthA, monthB] = await Promise.all([
+  const [week, monthA, monthB, history] = await Promise.all([
     listAppointmentsForWeek(user.id, weekStart),
     listAppointmentsForMonth(user.id, prevMonth),
-    listAppointmentsForMonth(user.id, thisMonth)
+    listAppointmentsForMonth(user.id, thisMonth),
+    listChangeRequestHistory(user.id),
   ]);
 
   const seen = new Set<string>();
@@ -27,7 +27,6 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
     return true;
   });
 
-  const sp = await searchParams;
   return (
     <main className="shell">
       <header>
@@ -36,7 +35,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
         <p className="meta">Approve change requests, mark completed/no-show, and review history.</p>
       </header>
       <hr className="divider" />
-      <AppointmentsClient initial={all} initialTab={(sp.tab === "future" || sp.tab === "past" || sp.tab === "requests") ? sp.tab : "requests"} />
+      <AppointmentsClient initial={all} history={history} />
     </main>
   );
 }

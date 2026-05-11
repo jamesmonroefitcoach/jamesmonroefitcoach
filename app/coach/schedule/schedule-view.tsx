@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
 import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries } from "./actions";
+import { CANCEL_REASONS, CANCEL_REASON_LABELS } from "@/lib/cancel-reasons";
 
 const HOUR_HEIGHT = 56; // px per hour cell
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 6); // 6a–7p (start hours)
@@ -24,6 +25,8 @@ function sameDay(a: Date, b: Date): boolean {
 
 function dayIndex(d: Date): number { return (d.getDay() + 6) % 7; }
 function minutesFromTop(d: Date): number { return (d.getHours() - HOURS[0]) * 60 + d.getMinutes(); }
+function minToPx(min: number): number { return min * HOUR_HEIGHT / 60; }
+function pxFromTop(d: Date): number { return minToPx(minutesFromTop(d)); }
 
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
   scheduled:        { bg: "#5b6d7a", fg: "#fff" },
@@ -49,6 +52,8 @@ type Draft = {
   notes: string;
   session_program_id: string;
   program_status: "programmed" | "needs_programming" | "n/a";
+  cancel_reason: string;
+  cancel_reason_other: string;
   change_count: number;
   series_id?: string | null;
   // repeat config (only used when creating new)
@@ -70,6 +75,8 @@ function newDraft(starts_at: Date, ends_at: Date): Draft {
     notes: "",
     session_program_id: "",
     program_status: "needs_programming",
+    cancel_reason: "",
+    cancel_reason_other: "",
     change_count: 0,
     repeat_enabled: false,
     repeat_cadence: 1,
@@ -91,6 +98,8 @@ function fromAppt(a: AppointmentRow): Draft {
     notes: a.notes ?? "",
     session_program_id: a.session_program_id ?? "",
     program_status: a.program_status,
+    cancel_reason: (a as any).cancel_reason ?? "",
+    cancel_reason_other: (a as any).cancel_reason_other ?? "",
     change_count: a.change_count,
     series_id: a.series_id ?? null,
     repeat_enabled: false,
@@ -209,6 +218,17 @@ export default function ScheduleView({
   }
   function openEdit(a: AppointmentRow) { setDraft(fromAppt(a)); }
   function close() { setDraft(null); setSaveError(null); }
+  function openNewBooking() {
+    const now = new Date();
+    // Default to the next full hour, clamped to 7am–6pm, on today (or Monday of current week)
+    const base = sameDay(now, today) ? new Date(now) : new Date(ws);
+    base.setMinutes(0, 0, 0);
+    if (sameDay(now, today)) base.setHours(Math.min(18, Math.max(7, now.getHours() + 1)));
+    else base.setHours(9, 0, 0, 0);
+    const end = new Date(base);
+    end.setHours(end.getHours() + 1);
+    setDraft(newDraft(base, end));
+  }
 
   function applyLocalSave() {
     if (!draft) return;
@@ -275,6 +295,8 @@ export default function ScheduleView({
         notes: draft.notes || null,
         session_program_id: draft.session_program_id || null,
         program_status: draft.program_status,
+        cancel_reason: draft.cancel_reason ? (draft.cancel_reason as any) : null,
+        cancel_reason_other: draft.cancel_reason === "other" ? draft.cancel_reason_other || null : null,
         repeat: !draft.appt_id && draft.repeat_enabled ? {
           enabled: true,
           cadence_weeks: draft.repeat_cadence,
@@ -426,12 +448,32 @@ export default function ScheduleView({
     return { completed, scheduled, unpaid };
   }, [monthCache]);
 
+  // Active clients with no session in the currently-displayed week
+  const noSessionClients = useMemo(() => {
+    const sessionClientIds = new Set(
+      appts
+        .filter((a) => a.status !== "cancelled" && a.status !== "no_show" && a.session_type === "session" && a.client_id)
+        .map((a) => a.client_id!)
+    );
+    return clients.filter((c) => c.lifecycle === "active" && !sessionClientIds.has(c.id));
+  }, [clients, appts]);
+
   // Hide the original block while editing (we render a ghost in its place)
   const editingId = draft?.appt_id;
 
   return (
     <div style={{ position: "relative" }}>
       <div className="card no-print" style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+        <button
+          className="btn btn-primary"
+          onClick={openNewBooking}
+          style={{ padding: "0.4rem 0.9rem", fontSize: "0.82rem", fontWeight: 600 }}
+        >
+          + New Booking
+        </button>
+
+        <div style={{ width: 1, height: 20, background: "var(--line)", margin: "0 0.1rem" }} />
+
         <div style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 4, overflow: "hidden" }}>
           <button onClick={() => setView("week")} className="btn" style={{ borderRadius: 0, borderColor: "transparent", background: view === "week" ? "var(--ink)" : "transparent", color: view === "week" ? "var(--paper)" : undefined, padding: "0.4rem 0.9rem" }}>Week</button>
           <button onClick={() => setView("month")} className="btn" style={{ borderRadius: 0, borderColor: "transparent", background: view === "month" ? "var(--ink)" : "transparent", color: view === "month" ? "var(--paper)" : undefined, padding: "0.4rem 0.9rem" }}>Month</button>
@@ -464,6 +506,48 @@ export default function ScheduleView({
           </>
         )}
       </div>
+
+      {/* ─── Active clients session status this week ─── */}
+      {view === "week" && (
+        <div style={{
+          marginTop: "1rem",
+          padding: "0.55rem 0.85rem",
+          background: noSessionClients.length === 0 ? "rgba(90,107,74,0.07)" : "rgba(0,0,0,0.025)",
+          border: `1px solid ${noSessionClients.length === 0 ? "var(--sage)" : "var(--line)"}`,
+          borderRadius: 4,
+          display: "flex",
+          alignItems: "baseline",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+        }}>
+          {noSessionClients.length === 0 ? (
+            <span style={{ fontSize: "0.76rem", color: "var(--sage)", fontWeight: 600 }}>
+              All active clients are scheduled this week 🙂
+            </span>
+          ) : (
+            <>
+              <span style={{
+                fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: "0.08em", color: "var(--muted)", flexShrink: 0,
+              }}>
+                No session this week
+              </span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                {noSessionClients.map((c) => (
+                  <Link key={c.id} href={`/coach/clients/${c.id}`} style={{
+                    fontSize: "0.76rem", padding: "0.18rem 0.5rem",
+                    borderRadius: 3, border: "1px solid var(--line)",
+                    background: "var(--paper)", color: "var(--ink)",
+                    textDecoration: "none",
+                  }}>
+                    {c.full_name}
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ─── WEEK VIEW ─── */}
       {view === "week" ? (
@@ -509,9 +593,9 @@ export default function ScheduleView({
               cellDate.setDate(ws.getDate() + dayIdx);
               const isToday = sameDay(cellDate, today);
 
-              // Hide change-requested rows from the regular layout pass; they render as
-              // a light-grey dashed ghost at the requested time below.
-              const dayEvents = appts.filter((a) => dayIndex(new Date(a.starts_at)) === dayIdx && a.status !== "change_requested");
+              // Include change_requested events at their original time (amber block);
+              // a separate dashed ghost renders at the requested time below.
+              const dayEvents = appts.filter((a) => dayIndex(new Date(a.starts_at)) === dayIdx);
               const laid = layOutDay(dayEvents);
 
               // Ghost block while editing/creating
@@ -521,8 +605,8 @@ export default function ScheduleView({
                   : dayIndex(new Date(draft.starts_at)) === dayIdx
               );
               const ghost = showGhost ? {
-                top: minutesFromTop(new Date(draft.starts_at)),
-                height: Math.max(20, (new Date(draft.ends_at).getTime() - new Date(draft.starts_at).getTime()) / 60000)
+                top: pxFromTop(new Date(draft.starts_at)),
+                height: Math.max(20, minToPx((new Date(draft.ends_at).getTime() - new Date(draft.starts_at).getTime()) / 60000))
               } : null;
 
               return (
@@ -588,8 +672,8 @@ export default function ScheduleView({
                     .map((cr) => {
                       const ps = new Date(cr.requested_starts_at!);
                       const pe = new Date(cr.requested_ends_at ?? cr.ends_at);
-                      const top = minutesFromTop(ps);
-                      const heightPx = Math.max(36, (pe.getTime() - ps.getTime()) / 60000);
+                      const top = pxFromTop(ps);
+                      const heightPx = Math.max(36, minToPx((pe.getTime() - ps.getTime()) / 60000));
                       return (
                         <div
                           key={`cr-${cr.id}`}
@@ -626,8 +710,8 @@ export default function ScheduleView({
                     if (editingId === e.id) return null; // hidden while editing — ghost shows position
                     const start = new Date(e.starts_at);
                     const end = new Date(e.ends_at);
-                    const top = minutesFromTop(start);
-                    const heightPx = Math.max(20, (end.getTime() - start.getTime()) / 60000);
+                    const top = pxFromTop(start);
+                    const heightPx = Math.max(20, minToPx((end.getTime() - start.getTime()) / 60000));
                     const widthPct = 100 / e.lanes;
                     const leftPct = e.lane * widthPct;
                     const colors = e.session_type === "personal" ? PERSONAL_COLOR : STATUS_COLORS[e.status];
@@ -660,6 +744,7 @@ export default function ScheduleView({
                         }}
                       >
                         <div style={{ fontWeight: 700, textDecoration: cancelled ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {e.status === "change_requested" && <span style={{ marginRight: 3 }}>↻</span>}
                           {e.session_type === "personal" ? `⛔ ${e.personal_label ?? "Personal"}` : (e.client_name ?? "Client")}
                         </div>
                         <div style={{ opacity: 0.9, display: "flex", justifyContent: "space-between", gap: 4, fontSize: "0.7rem" }}>
@@ -815,16 +900,23 @@ export default function ScheduleView({
                 </div>
 
                 <div>
-                  <label className="stat-label">Programming for this session</label>
-                  <select className="select" value={draft.program_status} onChange={(e) => setDraft({ ...draft, program_status: e.target.value as Draft["program_status"] })} style={{ marginTop: "0.3rem" }}>
-                    <option value="needs_programming">Needs programming</option>
-                    <option value="programmed">Programmed</option>
-                  </select>
-                  <p className="meta" style={{ fontSize: "0.74rem", marginTop: "0.3rem" }}>
+                  <label className="stat-label">Session programming</label>
+                  <div style={{ marginTop: "0.4rem" }}>
                     {draft.client_id ? (
-                      <>Pull from program: <Link href={`/coach/build-program?client=${draft.client_id}`}>build / view →</Link></>
-                    ) : "Pick a client to link an existing program."}
-                  </p>
+                      <Link
+                        href={`/coach/build-program?tab=session&appt=${draft.appt_id ?? ""}&client=${draft.client_id}&starts=${encodeURIComponent(draft.starts_at)}`}
+                        className="btn btn-primary"
+                        style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem", display: "inline-block" }}
+                      >
+                        {draft.program_status === "programmed" ? "Edit session program →" : "Add session program →"}
+                      </Link>
+                    ) : (
+                      <span className="meta" style={{ fontSize: "0.78rem" }}>Pick a client to program this session.</span>
+                    )}
+                    {draft.program_status === "programmed" && (
+                      <span className="badge badge-sage" style={{ marginLeft: "0.5rem", fontSize: "0.7rem" }}>programmed</span>
+                    )}
+                  </div>
                 </div>
               </>
             )}
@@ -845,6 +937,32 @@ export default function ScheduleView({
                 ))}
               </div>
             </div>
+
+            {(draft.status === "cancelled" || draft.status === "no_show") && (
+              <div>
+                <label className="stat-label">Cancellation reason</label>
+                <select
+                  className="select"
+                  value={draft.cancel_reason}
+                  onChange={(e) => setDraft({ ...draft, cancel_reason: e.target.value, cancel_reason_other: "" })}
+                  style={{ marginTop: "0.3rem" }}
+                >
+                  <option value="">— select reason —</option>
+                  {CANCEL_REASONS.map((r) => (
+                    <option key={r} value={r}>{CANCEL_REASON_LABELS[r]}</option>
+                  ))}
+                </select>
+                {draft.cancel_reason === "other" && (
+                  <input
+                    className="input"
+                    placeholder="Specify reason…"
+                    value={draft.cancel_reason_other}
+                    onChange={(e) => setDraft({ ...draft, cancel_reason_other: e.target.value })}
+                    style={{ marginTop: "0.4rem" }}
+                  />
+                )}
+              </div>
+            )}
 
             <div>
               <label className="stat-label">Notes</label>

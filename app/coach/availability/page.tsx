@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listClients } from "@/lib/data";
+import { listClients, listAppointmentsForWeek, startOfWeek } from "@/lib/data";
 import { listSlotOffers } from "./data";
 import AvailabilityClient from "./availability-client";
 
@@ -9,9 +9,10 @@ export default async function AvailabilityPage() {
   if (!user) redirect("/login");
   if (user.role !== "coach") redirect("/");
 
-  const [clients, offers] = await Promise.all([
+  const [clients, offers, weekAppts] = await Promise.all([
     listClients(user.id),
-    listSlotOffers(user.id)
+    listSlotOffers(user.id),
+    listAppointmentsForWeek(user.id, startOfWeek(new Date()))
   ]);
 
   return (
@@ -24,7 +25,7 @@ export default async function AvailabilityPage() {
         </div>
       </header>
       <hr className="divider" />
-      <AvailabilityClient clients={clients} initialOffers={offers} />
+      <AvailabilityClient clients={clients} initialOffers={offers} weekAppointments={weekAppts} />
     </main>
   );
 }

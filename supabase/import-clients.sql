@@ -53,7 +53,23 @@ insert into _stg_clients values
 ('Current','Rexton Loving','15','Medium','Sport track and field conditioning ','Oct 2024','high','low','high','male ','2','NA','','','','','$100','','','',''),
 ('Current','Rowland Bella','24','High','100 LB weight loss ','July 2025','High','Low','High ','Female','2','na','433','294','280','','$100','','','',''),
 ('Current','Jen Rowland','50','High','100 LB weight loss','July 2025','High','Low','High','Female','Na','Na','','','','','$100','','','',''),
-('Current','Rowland Ragnar','50','High','100 LB weight loss','July 2025','High','Low','High','Male','Na','$80','','','','$640','$100','$20','','','');
+('Current','Rowland Ragnar','50','High','100 LB weight loss','July 2025','High','Low','High','Male','Na','$80','','','','$640','$100','$20','','',''),
+('Current','Sairam Jaisankar','35','Medium','47 LB weight gain, muscle','2024','Medium','High','High','Male','1','$65','','','','$260','$100','$35','','',''),
+('Current','Samantha Saenz','30','Medium','Body recomp and lose 10 minimum','2024','Medium','Medium','Medium','Female','1','$65','','','','$260','$100','$35','','',''),
+('Current','Seamus Ley','25','Low','General fitness','2024','Medium','Medium','Medium','Male','1','$65','','','','$260','$100','$35','','','Oct 5th 2025'),
+('Current','Tom Brown','35','Medium','Lose 20 LBS, prep for boxing','2024','Medium','Medium','High','Male','1','$65','','','','$260','$100','$35','','',''),
+('Current','Tyler Thomas','30','Medium','Lose 20 LBS','2024','Medium','Medium','Medium','Male','1','$65','','','','$260','$100','$35','','',''),
+('Current','William Archer','35','Medium','Strength and fitness','2024','Medium','Medium','Medium','Male','1','$65','','','','$260','$100','$35','','',''),
+('Current','William Watkins','35','Medium','Lose 15 LBS, gain muscle','2024','Medium','Medium','High','Male','1','$65','','','','$260','$100','$35','','',''),
+('Current','Sabine','40','High','Repair hip and combat atrophy','2024','High','High','High','Female','1','$65','','','','$260','$100','$35','','',''),
+-- ─── Potential clients ────────────────────────────────────────────────
+('Potential','Theo Stout','','High','Lose 100 lbs','','','','','Male','','$65','','','','','$100','','','',''),
+('Potential','Nick Daniels','','Medium','Body recomp','','','','','Male','','$65','','','','','$100','','','',''),
+('Potential','Brandy Lee','','Medium','Core development','','','','','Female','','$65','','','','','$100','','','',''),
+('Potential','Pedro Padilla','','Medium','Fire academy training','','','','','Male','','$65','','','','','$100','','','',''),
+('Potential','Zach Selman','','Medium','','','','','','Male','','$65','','','','','$100','','','',''),
+('Potential','Marek Loving','','Low','Confidence, general fitness','','','','','Male','','$65','','','','','$100','','','',''),
+('Potential','Henry Wong','','Low','General fitness','','','','','Male','','$65','','','','','$100','','','','');
 -- ↑↑↑ paste any new rows here as more clients sign up ↑↑↑
 
 -- ─── 3. helper: strip $ and commas, then cast to numeric ──────────────

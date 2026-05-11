@@ -17,13 +17,16 @@ End-to-end: from empty Supabase + Vercel accounts to a working site at `monroefi
 In Supabase Dashboard → **SQL Editor** → New query, run these in order:
 
 ```
-1. supabase/schema.sql               (core tables + James/Ryan seeded)
-2. supabase/migrations/0002_program_and_schedule.sql   (exertion, duration, daily totals)
-3. supabase/migrations/0003_storage.sql                (progress-photos bucket)
-4. supabase/import-clients.sql       (loads the 19 clients from your sheet)
+1. supabase/schema.sql                                        (core tables + James/Ryan seeded)
+2. supabase/migrations/0002_program_and_schedule.sql          (exertion, duration, daily totals)
+3. supabase/migrations/0003_storage.sql                       (progress-photos bucket)
+4. supabase/migrations/0004_recurring_and_requests.sql        (recurring appointments, change-request history)
+5. supabase/migrations/0005_program_kind.sql                  (in_gym vs at_home program types)
+6. supabase/migrations/0006_equipment_exertion_prospects_reminders.sql  (equipment lists, prospect lifecycle, reminders)
+7. supabase/import-clients.sql                                (loads all ~35 clients + prospects from your sheet)
 ```
 
-After step 4 you should see a row like `total_clients: 19, total_monthly_revenue: ~6,400`.
+After step 7 you should see a row like `total_clients: 27, total_monthly_revenue: ~8,000`.
 
 ### 1c. Storage
 
@@ -50,19 +53,43 @@ The app **renders fine without Supabase** (demo data fallbacks). With env set, i
 
 ### 1e. Re-running the client import as the sheet grows
 
-When James adds new clients to the Google Sheet, paste the new rows into `supabase/import-clients.sql` (in the `INSERT INTO _stg_clients VALUES (...)` block) and re-run. The script is idempotent — existing clients are updated, new ones inserted.
+When James adds new clients to the Numbers/Google Sheet, paste new rows into `supabase/import-clients.sql` (in the `INSERT INTO _stg_clients VALUES (...)` block) and re-run. The script is idempotent — existing clients are updated, new ones inserted.
+
+**Columns in order:** `client_status, full_name, age_category, dire_need, priorities, trained_since, accountability, education, commitment, gender, regular_frequency, session_rate, starting_weight, current_weight, goal_weight, monthly_dollars, test_rate, net_increase, net_increase_month, gut_feel, time_window`
+
+**Client status values:** `Current` → maps to `'current'` in DB; `Potential` → `'potential'`
+
+**Rates guide:** Most in-gym clients are `$65`/session. Premium clients (Abbey, Elizabeth) are `$100`. Acacia, Katherine Sheppard, Keaton are `$70`. Rowland family package is separate (`$80` for Ragnar).
 
 ---
 
 ## 2. GitHub
 
+### 2a. Create the repository (first time only)
+
+1. Go to https://github.com/new
+2. Owner: your account (or an org like `jamesmonroefitcoach`) · Repo name: `monroe-fit-coach`
+3. **Private** (you don't want clients seeing source)
+4. Skip the README — the repo has content already
+5. Click **Create repository** and copy the HTTPS URL (e.g. `https://github.com/jamesmonroefitcoach/monroe-fit-coach.git`)
+
+### 2b. Push the code
+
 ```bash
 cd "/Users/ryanmecca/Monroe Fit Coach"
-git remote add origin https://github.com/jamesmonroefitcoach/jamesmonroefitcoach.git
+git remote add origin https://github.com/jamesmonroefitcoach/monroe-fit-coach.git
 git push -u origin main
 ```
 
-If the repo URL has a different spelling, swap it in.
+If the remote URL differs, swap it in above. All future pushes are just `git push`.
+
+### 2c. Ongoing workflow
+
+```bash
+git add -p                      # stage changes interactively
+git commit -m "what changed"
+git push                        # triggers Vercel redeploy automatically
+```
 
 ---
 
@@ -111,9 +138,9 @@ Every git push to `main` ships to production. Pushes to other branches get a pre
 
 Sanity checklist:
 
-- [ ] `https://monroefitcoach.com/login` loads, shows James + 19 clients in the picker
+- [ ] `https://monroefitcoach.com/login` loads, shows James + all clients in the picker
 - [ ] Pick James → coach dashboard shows hours / $ / clients / open requests
-- [ ] `/coach/clients` lists 19 with last-program + expiring flags
+- [ ] `/coach/clients` lists all current clients with last-program + expiring flags
 - [ ] `/coach/build-program` lets you pick a client, add days, search the library, and Publish (writes a `programs` row + `program_days` + `program_movements`)
 - [ ] `/coach/schedule` — click a blank cell to schedule, click an event to edit/cancel/delete; toggle Month view
 - [ ] `/coach/messages` — pick a thread and send; "+ Announce" broadcasts to a tier or all

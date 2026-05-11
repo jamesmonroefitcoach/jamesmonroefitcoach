@@ -10,9 +10,12 @@ export type Movement = {
   category: Category;
   subcategory?: string;
   muscles?: string[];
-  equipment?: string;
+  equipment?: string;            // legacy single string (back-compat)
+  equipment_list?: string[];      // multi-select equipment values
+  equipment_specifics?: string;   // free-text e.g. "preacher curl machine"
   demo_url?: string;
   cues?: string;
+  is_core?: boolean;
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -29,35 +32,187 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 export const MOVEMENT_LIBRARY: Movement[] = [
-  { id: "m1", name: "Goblet Squat", category: "squat", muscles: ["quads", "glutes"], equipment: "DB/KB", cues: "Knees track over toes; chest tall" },
-  { id: "m2", name: "Romanian Deadlift", category: "hinge", muscles: ["hamstrings", "glutes"], equipment: "Barbell", cues: "Hinge from hips; soft knees" },
-  { id: "m3", name: "DB Bench Press", category: "push", muscles: ["pec_major", "triceps", "front_delt"], equipment: "DB" },
-  { id: "m4", name: "Chin-up", category: "pull", muscles: ["lats", "biceps"], equipment: "Bar" },
-  { id: "m5", name: "Hollow Hold", category: "core", muscles: ["abs"], equipment: "—" },
-  { id: "m6", name: "Walking Lunge", category: "leg_accessory", muscles: ["quads", "glutes"], equipment: "DB" },
-  { id: "m7", name: "Bicep Curl", category: "arm_accessory", muscles: ["biceps"], equipment: "DB" },
-  { id: "m8", name: "Lateral Raise", category: "shoulder", muscles: ["lateral_delt"], equipment: "DB" },
-  { id: "m9", name: "Cat-Cow", category: "mobility", muscles: ["spine"], equipment: "—" },
-  { id: "m10", name: "Assault Bike Intervals", category: "cardio", equipment: "Bike" },
-  { id: "m11", name: "Back Squat", category: "squat", muscles: ["quads", "glutes"], equipment: "Barbell" },
-  { id: "m12", name: "Conventional Deadlift", category: "hinge", muscles: ["hamstrings", "glutes", "low_back"], equipment: "Barbell" },
-  { id: "m13", name: "Push-up", category: "push", muscles: ["pec_major", "triceps"], equipment: "—" },
-  { id: "m14", name: "Bent-over Row", category: "pull", muscles: ["lats", "rhomboids"], equipment: "Barbell" },
-  { id: "m15", name: "Plank", category: "core", muscles: ["abs"], equipment: "—" },
-  { id: "m16", name: "Step-up", category: "leg_accessory", muscles: ["quads", "glutes"], equipment: "DB" },
-  { id: "m17", name: "Tricep Pushdown", category: "arm_accessory", muscles: ["triceps"], equipment: "Cable" },
-  { id: "m18", name: "Overhead Press", category: "shoulder", muscles: ["delts", "triceps"], equipment: "Barbell" },
-  { id: "m19", name: "World's Greatest Stretch", category: "mobility", equipment: "—" },
-  { id: "m20", name: "Row Erg 500m", category: "cardio", equipment: "Rower" }
+  { id: "m1", name: "Goblet Squat", category: "squat", muscles: ["quads", "glutes"], equipment: "DB/KB", equipment_list: ["dumbbells", "kettlebell"], cues: "Knees track over toes; chest tall", is_core: true },
+  { id: "m2", name: "Romanian Deadlift", category: "hinge", muscles: ["hamstrings", "glutes"], equipment: "Barbell", equipment_list: ["barbell"], cues: "Hinge from hips; soft knees", is_core: true },
+  { id: "m3", name: "DB Bench Press", category: "push", muscles: ["pec_major", "triceps", "front_delt"], equipment: "DB", equipment_list: ["dumbbells"], is_core: true },
+  { id: "m4", name: "Chin-up", category: "pull", muscles: ["lats", "biceps"], equipment: "Bar", equipment_list: ["bodyweight"], is_core: true },
+  { id: "m5", name: "Hollow Hold", category: "core", muscles: ["abs"], equipment: "—", equipment_list: ["bodyweight"], is_core: true },
+  { id: "m6", name: "Walking Lunge", category: "leg_accessory", muscles: ["quads", "glutes"], equipment: "DB", equipment_list: ["dumbbells"] },
+  { id: "m7", name: "Bicep Curl", category: "arm_accessory", muscles: ["biceps"], equipment: "DB", equipment_list: ["dumbbells"] },
+  { id: "m8", name: "Lateral Raise", category: "shoulder", muscles: ["lateral_delt"], equipment: "DB", equipment_list: ["dumbbells"] },
+  { id: "m9", name: "Cat-Cow", category: "mobility", muscles: ["spine"], equipment: "—", equipment_list: ["bodyweight"] },
+  { id: "m10", name: "Assault Bike Intervals", category: "cardio", equipment: "Bike", equipment_list: ["machine"], equipment_specifics: "Assault bike" },
+  { id: "m11", name: "Back Squat", category: "squat", muscles: ["quads", "glutes"], equipment: "Barbell", equipment_list: ["barbell"], is_core: true },
+  { id: "m12", name: "Conventional Deadlift", category: "hinge", muscles: ["hamstrings", "glutes", "low_back"], equipment: "Barbell", equipment_list: ["barbell"], is_core: true },
+  { id: "m13", name: "Push-up", category: "push", muscles: ["pec_major", "triceps"], equipment: "—", equipment_list: ["bodyweight"], is_core: true },
+  { id: "m14", name: "Bent-over Row", category: "pull", muscles: ["lats", "rhomboids"], equipment: "Barbell", equipment_list: ["barbell"], is_core: true },
+  { id: "m15", name: "Plank", category: "core", muscles: ["abs"], equipment: "—", equipment_list: ["bodyweight"], is_core: true },
+  { id: "m16", name: "Step-up", category: "leg_accessory", muscles: ["quads", "glutes"], equipment: "DB", equipment_list: ["dumbbells"] },
+  { id: "m17", name: "Tricep Pushdown", category: "arm_accessory", muscles: ["triceps"], equipment: "Cable", equipment_list: ["cable"] },
+  { id: "m18", name: "Overhead Press", category: "shoulder", muscles: ["delts", "triceps"], equipment: "Barbell", equipment_list: ["barbell"], is_core: true },
+  { id: "m19", name: "World's Greatest Stretch", category: "mobility", equipment: "—", equipment_list: ["bodyweight"] },
+  { id: "m20", name: "Row Erg 500m", category: "cardio", equipment: "Rower", equipment_list: ["machine"], equipment_specifics: "Concept2 rower" }
 ];
 
 // ─── Past programs (demo) ────────────────────────────────────────────
 export type ProgramKind = "in_gym" | "at_home";
 
-export const PROGRAM_KIND_LABEL: Record<ProgramKind, string> = {
-  in_gym: "In-gym (James-led)",
-  at_home: "At-home (client follows)"
+export type Equipment = "machine" | "bands" | "dumbbells" | "barbell" | "bodyweight" | "kettlebell" | "cable" | "other";
+
+export const EQUIPMENT_OPTIONS: { value: Equipment; label: string; allowsSpecifics?: boolean }[] = [
+  { value: "machine", label: "Machine", allowsSpecifics: true },
+  { value: "bands", label: "Bands" },
+  { value: "dumbbells", label: "Dumbbells" },
+  { value: "barbell", label: "Barbell" },
+  { value: "bodyweight", label: "Bodyweight" },
+  { value: "kettlebell", label: "Kettlebell" },
+  { value: "cable", label: "Cable" },
+  { value: "other", label: "Other", allowsSpecifics: true }
+];
+
+export const EXERTION_LABELS: Record<number, string> = {
+  1: "1 — very easy",
+  2: "2 — easy",
+  3: "3 — light",
+  4: "4 — comfortable",
+  5: "5 — moderate",
+  6: "6 — somewhat hard",
+  7: "7 — challenging",
+  8: "8 — hard",
+  9: "9 — very hard",
+  10: "10 — max effort"
 };
+
+export const EXERTION_SHORT: Record<number, string> = {
+  1: "very easy", 2: "easy", 3: "light", 4: "comfortable", 5: "moderate",
+  6: "somewhat hard", 7: "challenging", 8: "hard", 9: "very hard", 10: "max"
+};
+
+export const PROGRAM_KIND_LABEL: Record<ProgramKind, string> = {
+  in_gym: "Sessions",
+  at_home: "Program"
+};
+
+// ─── Hierarchical exercise library ───────────────────────────────────────────
+export type LibraryLeaf = {
+  id: string;
+  label: string;
+  description?: string;
+  category: Category;
+  is_core?: boolean;
+};
+
+export type LibraryNode = {
+  id: string;
+  label: string;
+  description?: string;
+  category: Category;
+  is_core?: boolean;
+  children?: LibraryLeaf[];  // only two levels within a node
+};
+
+export type LibraryGroup = {
+  id: string;
+  label: string;
+  nodes: LibraryNode[];
+};
+
+export const LIBRARY_HIERARCHY: LibraryGroup[] = [
+  {
+    id: "upper", label: "Upper",
+    nodes: [
+      { id: "vertical-pull",      label: "Vertical Pull",      category: "pull",         is_core: true },
+      { id: "horizontal-pull",    label: "Horizontal Pull",    category: "pull",         is_core: true },
+      { id: "vertical-push",      label: "Vertical Push",      category: "push",         is_core: true },
+      { id: "horizontal-push",    label: "Horizontal Push",    category: "push",         is_core: true },
+      { id: "downward-push",      label: "Downward Push",      category: "push",
+        description: "chest, table decline, decline db press, dip" },
+      { id: "lat-pushdown",       label: "Lat Pushdown",       category: "pull" },
+      { id: "scapular-training",  label: "Scapular Training",  category: "shoulder" },
+    ],
+  },
+  {
+    id: "accessory", label: "Accessory",
+    nodes: [
+      { id: "tricep-ext",     label: "Tricep ext.",   category: "arm_accessory" },
+      { id: "lateral-raise",  label: "Lateral raise", category: "shoulder" },
+      { id: "rear-delt",      label: "Rear delt",     category: "shoulder" },
+    ],
+  },
+  {
+    id: "middle", label: "Middle",
+    nodes: [
+      { id: "back-extension", label: "Back extension", category: "hinge" },
+      {
+        id: "ab", label: "Ab", category: "core", is_core: true,
+        children: [
+          { id: "crunch",          label: "Crunch",          category: "core" },
+          { id: "oblique-crunch",  label: "Oblique crunch",  category: "core" },
+          { id: "oblique-twist",   label: "Oblique twist",   category: "core" },
+          { id: "reverse-crunch",  label: "Reverse crunch",  category: "core" },
+          { id: "vacuum",          label: "Vacuum",          category: "core" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "lower", label: "Lower",
+    nodes: [
+      { id: "hinge", label: "Hinge", category: "hinge", is_core: true },
+      { id: "squat", label: "Squat", category: "squat", is_core: true },
+    ],
+  },
+  {
+    id: "cardio", label: "Cardio",
+    nodes: [
+      { id: "running",     label: "Running",     category: "cardio" },
+      { id: "biking",      label: "Biking",      category: "cardio" },
+      { id: "rowing",      label: "Rowing",      category: "cardio" },
+      { id: "ski-erg",     label: "Ski Erg",     category: "cardio" },
+      { id: "boxing",      label: "Boxing",      category: "cardio" },
+      { id: "jump-roping", label: "Jump roping", category: "cardio" },
+      { id: "hiit",        label: "HIIT",        category: "cardio",
+        description: "explosive combos of the above" },
+      {
+        id: "specialty-skills", label: "Specialty skills", category: "cardio",
+        children: [
+          { id: "speed",      label: "Speed",      category: "cardio" },
+          { id: "agility",    label: "Agility",    category: "cardio" },
+          { id: "quickness",  label: "Quickness",  category: "cardio" },
+        ],
+      },
+    ],
+  },
+];
+
+/** All leaf nodes (individual movements) from the hierarchy. */
+export function hierarchyLeaves(): LibraryLeaf[] {
+  const out: LibraryLeaf[] = [];
+  for (const g of LIBRARY_HIERARCHY) {
+    for (const node of g.nodes) {
+      if (node.children?.length) {
+        out.push(...node.children);
+      } else {
+        out.push({ id: node.id, label: node.label, description: node.description, category: node.category, is_core: node.is_core });
+      }
+    }
+  }
+  return out;
+}
+
+/** Convert a LibraryLeaf into a Movement-compatible object for the program builder. */
+export function leafToMovement(leaf: LibraryLeaf): Movement {
+  const existing = MOVEMENT_LIBRARY.find((m) => m.id === leaf.id || m.name.toLowerCase() === leaf.label.toLowerCase());
+  if (existing) return existing;
+  return {
+    id: leaf.id,
+    name: leaf.label,
+    category: leaf.category,
+    is_core: leaf.is_core ?? false,
+    equipment_list: [],
+    cues: leaf.description,
+  };
+}
 
 export type PastProgramSummary = {
   id: string;

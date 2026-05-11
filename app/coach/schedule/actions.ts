@@ -3,11 +3,12 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import type { AppointmentRow } from "@/lib/data";
+import type { CancelReason } from "@/lib/cancel-reasons";
 
 export type RepeatInput = {
   enabled: boolean;
-  cadence_weeks: 1 | 2;       // weekly or biweekly
-  occurrences: number;        // how many to materialize (incl. first)
+  cadence_weeks: 1 | 2;
+  occurrences: number;
 };
 
 export type ApptInput = {
@@ -23,6 +24,8 @@ export type ApptInput = {
   notes?: string | null;
   session_program_id?: string | null;
   program_status?: "programmed" | "needs_programming" | "n/a";
+  cancel_reason?: CancelReason | null;
+  cancel_reason_other?: string | null;
   repeat?: RepeatInput;
 };
 
@@ -36,6 +39,7 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
   const supabase = await createSupabaseServer();
   const isPersonal = input.session_type === "personal";
 
+  const isCancelled = input.status === "cancelled" || input.status === "no_show";
   const payload = {
     coach_id: me.id,
     client_id: isPersonal ? null : input.client_id,
@@ -49,6 +53,8 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
     status: input.status,
     notes: input.notes ?? null,
     session_program_id: input.session_program_id ?? null,
+    cancel_reason: isCancelled ? (input.cancel_reason ?? null) : null,
+    cancel_reason_other: isCancelled && input.cancel_reason === "other" ? (input.cancel_reason_other ?? null) : null,
     updated_at: new Date().toISOString()
   };
 
