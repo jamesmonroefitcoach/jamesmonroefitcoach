@@ -1,11 +1,16 @@
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import LoginForm from "./login-form";
 
-type ProfileRow = { id: string; full_name: string; email: string | null; role: "coach" | "client" | "admin" };
+export type ProfileRow = { id: string; full_name: string; email: string | null; role: "coach" | "client" | "admin"; is_admin?: boolean };
+
+// Profiles whose DB role may differ from their actual admin status.
+// Ryan Mecca has role='client' (so she appears in the clients list) but
+// retains admin access via is_admin=true.
+const ADMIN_IDS = new Set(["00000000-0000-0000-0000-000000000ad1"]);
 
 const FALLBACK_PROFILES: ProfileRow[] = [
   { id: "demo-coach", full_name: "James Monroe", email: "coachjamesmonroe@gmail.com", role: "coach" },
-  { id: "demo-admin", full_name: "Admin (you)", email: "ramecca0711@gmail.com", role: "admin" },
+  { id: "demo-admin", full_name: "Ryan Mecca", email: "ramecca0711@gmail.com", role: "client", is_admin: true },
   { id: "demo-client-abbey", full_name: "Abbey Archer", email: null, role: "client" },
   { id: "demo-client-acacia", full_name: "Acacia Chan", email: null, role: "client" },
   { id: "demo-client-jen", full_name: "Jen Loving", email: null, role: "client" }
@@ -24,7 +29,11 @@ async function loadProfiles(): Promise<ProfileRow[]> {
       .order("full_name", { ascending: true });
     console.log("[login] profiles query — count:", data?.length, "| error:", error?.message);
     if (error || !data || data.length === 0) return FALLBACK_PROFILES;
-    return data as ProfileRow[];
+    // Derive is_admin: check hardcoded set + anyone whose DB role is still 'admin'
+    return data.map((p) => ({
+      ...p,
+      is_admin: ADMIN_IDS.has(p.id) || p.role === "admin" || undefined,
+    })) as ProfileRow[];
   } catch (e) {
     console.error("[login] caught exception:", e);
     return FALLBACK_PROFILES;

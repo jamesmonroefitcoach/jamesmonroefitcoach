@@ -143,6 +143,7 @@ export default function BuildProgramClient({
   initialClientId,
   initialAppts = [],
   initialApptId = "",
+  initialStartsAt = "",
   initialType = "in_gym",
   weekSessions = [],
   clientProgramSummary = []
@@ -151,6 +152,8 @@ export default function BuildProgramClient({
   initialClientId?: string;
   initialAppts?: ApptOption[];
   initialApptId?: string;
+  /** starts_at of the targeted appointment — used as title fallback when appt isn't in initialAppts */
+  initialStartsAt?: string;
   initialType?: ProgramKind;
   weekSessions?: WeekSession[];
   clientProgramSummary?: ClientProgramItem[];
@@ -171,8 +174,9 @@ export default function BuildProgramClient({
     initialType === "at_home" ? "picker" : "builder"
   );
   // in_gym Session tab flow: picker → builder
+  // Skip picker if we have either an appt UUID *or* a starts_at timestamp from the URL
   const [inGymStep, setInGymStep] = useState<"picker" | "builder">(
-    initialType === "in_gym" && !initialApptId ? "picker" : "builder"
+    initialType === "in_gym" && !initialApptId && !initialStartsAt ? "picker" : "builder"
   );
   const [atHomeEditingHeader, setAtHomeEditingHeader] = useState(false);
   const [pickedExistingId, setPickedExistingId] = useState("");
@@ -181,11 +185,14 @@ export default function BuildProgramClient({
     dayUid: string; supersetId: string;
   } | null>(null);
   const [days, setDays] = useState<ProgramDay[]>(() => {
-    if (initialApptId && initialAppts.length > 0) {
-      const appt = initialAppts.find((a) => a.id === initialApptId);
+    // Resolve a starts_at: prefer the matched appointment, then the URL param
+    const appt = initialApptId ? initialAppts.find((a) => a.id === initialApptId) : undefined;
+    const startsAt = appt?.starts_at ?? initialStartsAt;
+    if (startsAt) {
+      // We have enough info to name the session — go straight to builder
       return [{
         uid: `day-1-${Date.now()}`,
-        title: appt ? fmtSessionTitle(appt.starts_at) : "Session",
+        title: fmtSessionTitle(startsAt),
         collapsed: false,
         items: [],
       }];
@@ -872,37 +879,39 @@ export default function BuildProgramClient({
 
       {/* ─── in_gym PICKER FLOW ─── */}
       {programKind === "in_gym" && inGymStep === "picker" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
 
-          {/* Sessions this week — above client card */}
+          {/* Sessions this week — above client selector */}
           {weekSessions.length > 0 && (
             <SessionsThisWeekBanner sessions={weekSessions} onSelect={handleBannerSelect} />
           )}
 
-          {/* Step 1: Client + summary */}
-          <div className="card" style={{ borderLeft: selectedClient ? "4px solid var(--rust)" : undefined }}>
-            <label className="stat-label">Client</label>
+          {/* Client selector — outside any card */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <span className="stat-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Client</span>
             <ClientCombobox clients={clients} value={clientId} onChange={selectClient} />
-            {selectedClient && (
-              <>
-                <div style={{ marginTop: "0.65rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-                  <div>
-                    <span className="badge">Programming for</span>
-                    <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
-                    <div className="meta" style={{ fontSize: "0.82rem" }}>
-                      {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
-                    </div>
-                  </div>
-                  <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
-                    full profile →
-                  </Link>
-                </div>
-                <ClientGoalsSection client={selectedClient} />
-              </>
-            )}
           </div>
 
-          {/* Step 2: Session picker */}
+          {/* Client summary card — only when selected */}
+          {selectedClient && (
+            <div className="card" style={{ borderLeft: "4px solid var(--rust)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+                <div>
+                  <span className="badge">Programming for</span>
+                  <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
+                  <div className="meta" style={{ fontSize: "0.82rem" }}>
+                    {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
+                  </div>
+                </div>
+                <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
+                  full profile →
+                </Link>
+              </div>
+              <ClientGoalsSection client={selectedClient} />
+            </div>
+          )}
+
+          {/* Session picker */}
           {clientId && (
             <div className="card">
               <label className="stat-label">
@@ -948,35 +957,37 @@ export default function BuildProgramClient({
 
       {/* ─── at_home SETUP FLOW (picker / form steps) ─── */}
       {programKind === "at_home" && atHomeProgramStep !== "builder" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
 
-          {/* Client programs banner — above client card */}
+          {/* Client programs banner — above client selector */}
           {clientProgramSummary.length > 0 && (
             <ClientProgramsBanner items={clientProgramSummary} onSelect={handleBannerProgramSelect} />
           )}
 
-          {/* Step 1: Client + summary */}
-          <div className="card" style={{ borderLeft: selectedClient ? "4px solid var(--rust)" : undefined }}>
-            <label className="stat-label">Client</label>
+          {/* Client selector — outside any card */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <span className="stat-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Client</span>
             <ClientCombobox clients={clients} value={clientId} onChange={selectClient} />
-            {selectedClient && (
-              <>
-                <div style={{ marginTop: "0.65rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-                  <div>
-                    <span className="badge">Programming for</span>
-                    <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
-                    <div className="meta" style={{ fontSize: "0.82rem" }}>
-                      {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
-                    </div>
-                  </div>
-                  <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
-                    full profile →
-                  </Link>
-                </div>
-                <ClientGoalsSection client={selectedClient} />
-              </>
-            )}
           </div>
+
+          {/* Client summary card — only when selected */}
+          {selectedClient && (
+            <div className="card" style={{ borderLeft: "4px solid var(--rust)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+                <div>
+                  <span className="badge">Programming for</span>
+                  <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
+                  <div className="meta" style={{ fontSize: "0.82rem" }}>
+                    {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
+                  </div>
+                </div>
+                <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
+                  full profile →
+                </Link>
+              </div>
+              <ClientGoalsSection client={selectedClient} />
+            </div>
+          )}
 
           {/* Step 2a: Pick existing */}
           {clientId && atHomeProgramStep === "picker" && (
@@ -2858,31 +2869,27 @@ function SupersetExercisePicker({
 
 // ── Form data helpers ─────────────────────────────────────────────────────────
 
-// Specific intake form questions to surface for goals (order preserved)
-const GOAL_QUESTION_FRAGMENTS = [
-  "what do you want to get out of training",
-  "tell me more about your primary goal",
-  "where do you feel you need the most improvement",
-  "specific areas of training or exercises you would like to learn",
+// Exact form field keys for goals (order preserved in display)
+const GOAL_KEYS = [
+  "Training goals",
+  "Exercises to learn / work on",
+  "Needs most improvement",
 ];
 
-function getFormGoals(formData: Record<string, string> | null): Array<{ key: string; value: string }> {
-  if (!formData) return [];
-  return GOAL_QUESTION_FRAGMENTS
-    .map((frag) => {
-      const entry = Object.entries(formData).find(([k]) => k.toLowerCase().includes(frag));
-      return entry ? { key: entry[0], value: entry[1] } : null;
-    })
-    .filter((e): e is { key: string; value: string } => !!e && e.value.trim() !== "");
+const INJURY_KEY = "Injuries / limitations";
+
+function getFormFieldValue(formData: Record<string, string> | null, key: string): string {
+  if (!formData) return "No Response";
+  const val = formData[key]?.trim();
+  return val || "No Response";
 }
 
-const INJURY_QUESTION = "Do you currently have any injuries, pain, or physical limitations I should be aware of?";
+function getFormGoals(formData: Record<string, string> | null): Array<{ key: string; value: string }> {
+  return GOAL_KEYS.map((key) => ({ key, value: getFormFieldValue(formData, key) }));
+}
 
 function getFormInjuryValue(formData: Record<string, string> | null): string {
-  if (!formData) return "No Response";
-  const val = formData[INJURY_QUESTION]?.trim();
-  if (!val) return "No Response";
-  return val; // show whatever they wrote, including "None"
+  return getFormFieldValue(formData, INJURY_KEY);
 }
 
 // ── Client goals + injuries panel ────────────────────────────────────────────
@@ -2893,47 +2900,41 @@ function ClientGoalsSection({ client }: { client: ClientRow }) {
   const isRealInjury = injuryAnswer !== "No Response" && injuryAnswer.toLowerCase() !== "none" && injuryAnswer.toLowerCase() !== "no" && injuryAnswer.toLowerCase() !== "n/a";
   const hasInjury = isRealInjury || !!client.injuries;
 
+  const rowStyle: React.CSSProperties = { fontSize: "0.82rem", lineHeight: 1.5 };
+  const keyStyle: React.CSSProperties = { fontWeight: 600 };
+
   return (
-    <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+    <div style={{ marginTop: "0.55rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
       <div>
         <div className="stat-label">Goals</div>
-        <div style={{ marginTop: "0.3rem", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div style={{ marginTop: "0.2rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {/* Coach notes first */}
+          {client.goals && (
+            <div style={rowStyle}>
+              <span style={keyStyle}>Coach notes:</span>{" "}{client.goals}
+            </div>
+          )}
           {formGoals.map(({ key, value }) => (
-            <div key={key}>
-              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--muted)", marginBottom: "0.1rem" }}>{key}</div>
-              <div style={{ lineHeight: 1.45 }}>{value}</div>
+            <div key={key} style={{ ...rowStyle, color: value === "No Response" ? "var(--muted)" : undefined }}>
+              <span style={keyStyle}>{key}:</span>{" "}{value}
             </div>
           ))}
-          {client.goals && (
-            <div>
-              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--muted)", marginBottom: "0.1rem" }}>Coach notes</div>
-              <div style={{ lineHeight: 1.45 }}>{client.goals}</div>
-            </div>
-          )}
-          {formGoals.length === 0 && !client.goals && (
-            <span className="meta">No goals on file</span>
-          )}
         </div>
       </div>
       <div>
         <div className="stat-label" style={{ color: hasInjury ? "var(--red)" : undefined }}>
-          Injuries / cautions
+          Injuries / limitations
         </div>
-        <div style={{ marginTop: "0.3rem", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          <div>
-            <div style={{ fontSize: "0.68rem", fontWeight: 600, color: isRealInjury ? "var(--red)" : "var(--muted)", opacity: 0.8, marginBottom: "0.1rem" }}>
-              {INJURY_QUESTION}
-            </div>
-            <div style={{ lineHeight: 1.45, color: isRealInjury ? "var(--red)" : undefined }}>
-              {injuryAnswer}
-            </div>
-          </div>
+        <div style={{ marginTop: "0.2rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {/* Coach notes first */}
           {client.injuries && (
-            <div>
-              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--muted)", marginBottom: "0.1rem" }}>Coach notes</div>
-              <div style={{ lineHeight: 1.45, color: "var(--red)" }}>{client.injuries}</div>
+            <div style={{ ...rowStyle, color: "var(--red)" }}>
+              <span style={keyStyle}>Coach notes:</span>{" "}{client.injuries}
             </div>
           )}
+          <div style={{ ...rowStyle, color: isRealInjury ? "var(--red)" : injuryAnswer === "No Response" ? "var(--muted)" : undefined }}>
+            <span style={keyStyle}>{INJURY_KEY}:</span>{" "}{injuryAnswer}
+          </div>
         </div>
       </div>
     </div>
@@ -2982,15 +2983,29 @@ function ClientCombobox({
     onChange(id);
   }
 
+  function handleFocus() {
+    setQuery(""); // clear so full list shows for tapping
+    setOpen(true);
+  }
+
+  function handleBlur() {
+    setTimeout(() => {
+      setOpen(false);
+      // Restore selected name if nothing new was picked
+      const name = sorted.find((c) => c.id === value)?.full_name ?? "";
+      setQuery(name);
+    }, 150);
+  }
+
   return (
     <div style={{ position: "relative", maxWidth: 320, marginTop: "0.3rem" }}>
       <input
         className="input"
         value={query}
-        placeholder="Search clients…"
+        placeholder="Search or tap to browse…"
         onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         style={{ width: "100%" }}
         autoComplete="off"
       />

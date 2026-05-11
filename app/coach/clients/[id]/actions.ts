@@ -21,7 +21,7 @@ export async function updateCoachProfile(
   input: CoachProfileInput
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user || (user.role !== "coach" && user.role !== "admin")) return { ok: false, error: "unauthorized" };
+  if (!user || (user.role !== "coach" && user.role !== "admin" && !user.is_admin)) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) { revalidatePath(`/coach/clients/${clientId}`); return { ok: true }; }
 
   const supabase = createSupabaseAdmin();
@@ -58,7 +58,7 @@ export async function updateClientInfo(
   input: ClientInfoInput
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user || (user.role !== "coach" && user.role !== "admin")) return { ok: false, error: "unauthorized" };
+  if (!user || (user.role !== "coach" && user.role !== "admin" && !user.is_admin)) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) { revalidatePath(`/coach/clients/${clientId}`); return { ok: true }; }
 
   const supabase = createSupabaseAdmin();
@@ -142,7 +142,7 @@ export async function setRequiresConfirmation(
 
 export async function setLifecycle(
   clientId: string,
-  lifecycle: "active" | "inactive" | "paused"
+  lifecycle: "active" | "inactive" | "paused" | "prospective"
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };

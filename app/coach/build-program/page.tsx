@@ -16,7 +16,7 @@ export type ClientProgramItem = {
 export default async function BuildProgramPage({
   searchParams,
 }: {
-  searchParams: Promise<{ client?: string; appt?: string; type?: string; tab?: string }>;
+  searchParams: Promise<{ client?: string; appt?: string; type?: string; tab?: string; starts?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -27,6 +27,8 @@ export default async function BuildProgramPage({
 
   const initialClientId = sp.client ?? clients[0]?.id ?? "";
   const initialApptId = sp.appt ?? "";
+  // starts param is the appointment's starts_at — used as title fallback
+  const initialStartsAt = sp.starts ?? "";
   // tab=session|program takes precedence; appt param implies session tab
   const tabParam = sp.tab ?? sp.type ?? "";
   const initialType: ProgramKind =
@@ -39,7 +41,13 @@ export default async function BuildProgramPage({
   // Initial appointments for the pre-selected client (for the Select Session dropdown)
   const rawAppts = initialClientId ? await listAppointmentsForClient(initialClientId) : [];
   const initialAppts = rawAppts
-    .filter((a) => a.session_type === "session" && (a.status === "scheduled" || a.status === "change_requested") && a.starts_at >= now)
+    .filter((a) =>
+      a.session_type === "session" && (
+        // Always include the appointment we're specifically linking to (even if past or completed)
+        a.id === initialApptId ||
+        ((a.status === "scheduled" || a.status === "change_requested") && a.starts_at >= now)
+      )
+    )
     .map((a) => ({
       id: a.id,
       starts_at: a.starts_at,
@@ -98,6 +106,7 @@ export default async function BuildProgramPage({
         initialClientId={initialClientId}
         initialAppts={initialAppts}
         initialApptId={initialApptId}
+        initialStartsAt={initialStartsAt}
         initialType={initialType}
         weekSessions={weekSessions}
         clientProgramSummary={clientProgramSummary}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { ClientRow, Prospect } from "@/lib/data";
 import { pastProgramsForClient } from "@/lib/programs";
 import { fmtMoney, fmtDate, fmtSessionAgo, fmtSessionAway } from "@/lib/format";
-import { addProspect, deleteProspect, logProspectFollowUp, updateProspect, type ProspectInput } from "./actions";
+import { addProspect, deleteProspect, updateProspect, quickUpdateClient, type ProspectInput } from "./actions";
 import type { NextSessionStatus } from "./page";
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -15,10 +15,47 @@ function daysAgo(iso: string | null): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
+/** Parse monthly session count from form data or frequency string for sorting */
+function monthlyNum(c: ClientRow): number {
+  const form = c.form_data?.["Sessions per month (preferred)"] ?? c.form_data?.["Sessions per month"];
+  if (form) { const n = parseInt(form); if (!isNaN(n)) return n; }
+  if (c.regular_frequency) { const n = parseFloat(c.regular_frequency); if (!isNaN(n)) return n * 4; }
+  return 0;
+}
+
+const TIER_ORDER: Record<string, number> = { tier_1: 1, tier_2: 2, tier_3: 3 };
+const TIER_LABEL: Record<string, string> = { tier_1: "1", tier_2: "2", tier_3: "3" };
+
 const BLANK_PROSPECT: ProspectInput = {
   full_name: "", phone: "", email: "", where_met: "", connection: "",
   last_followed_up: "", notes: "",
 };
+
+// ── sort header ──────────────────────────────────────────────────────────
+
+type SortKey = "name" | "tier" | "rate" | "monthly" | "completed" | "scheduled" | "last" | "next" | "owed";
+
+function SortTh({
+  label, col, current, dir, onClick, style,
+}: {
+  label: React.ReactNode; col: SortKey; current: SortKey; dir: "asc" | "desc";
+  onClick: (c: SortKey) => void; style?: React.CSSProperties;
+}) {
+  const active = current === col;
+  return (
+    <th
+      onClick={() => onClick(col)}
+      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", ...style }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+        {label}
+        <span style={{ fontSize: "0.65rem", opacity: active ? 1 : 0.3, color: active ? "var(--rust)" : undefined }}>
+          {active ? (dir === "asc" ? "▲" : "▼") : "⇅"}
+        </span>
+      </span>
+    </th>
+  );
+}
 
 // ── sub-components ────────────────────────────────────────────────────────
 
@@ -54,6 +91,12 @@ function NextSessionCell({ iso }: { iso: string | null }) {
   );
 }
 
+const INPUT_SM: React.CSSProperties = {
+  fontSize: "0.82rem", padding: "0.2rem 0.35rem",
+  width: "100%", minWidth: 0, boxSizing: "border-box",
+};
+const SELECT_SM: React.CSSProperties = { ...INPUT_SM, height: "auto" };
+
 function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionStatus: NextSessionStatus }) {
   const atHomeProg = pastProgramsForClient(c.id).find(
     (p) => p.is_current && p.program_kind === "at_home"
@@ -63,94 +106,228 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
     : null;
   const nextStatus = c.next_session_at ? nextSessionStatus[c.id] : undefined;
 
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    tier: c.tier ?? "",
+    session_rate: c.session_rate != null ? String(c.session_rate) : "",
+    regular_frequency: c.regular_frequency ?? "",
+  });
+  const [saving, startSave] = useTransition();
+
+  // Monthly sessions: form value first, then coach frequency
+  const formMonthly = c.form_data?.["Sessions per month (preferred)"] ?? c.form_data?.["Sessions per month"] ?? null;
+  const coachFreq = c.regular_frequency ? `${c.regular_frequency}×/wk` : null;
+
+  function saveEdit() {
+    startSave(async () => {
+      await quickUpdateClient(c.id, {
+        tier: draft.tier || null,
+        session_rate: draft.session_rate !== "" ? parseFloat(draft.session_rate) : null,
+        regular_frequency: draft.regular_frequency || null,
+      });
+      setEditing(false);
+    });
+  }
+
+  if (editing) {
+    return (
+      <tr style={{ background: "rgba(168,61,43,0.03)" }}>
+        {/* Client — read-only */}
+        <td><strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong></td>
+        {/* Goal — read-only */}
+        <td className="meta" style={{ fontSize: "0.82rem", maxWidth: 160 }}>{c.goals ?? "—"}</td>
+        {/* Tier */}
+        <td>
+          <select className="select" style={SELECT_SM} value={draft.tier}
+            onChange={(e) => setDraft((d) => ({ ...d, tier: e.target.value }))}>
+            <option value="">—</option>
+            <option value="tier_1">Tier 1</option>
+            <option value="tier_2">Tier 2</option>
+            <option value="tier_3">Tier 3</option>
+          </select>
+        </td>
+        {/* Session Rate */}
+        <td>
+          <input className="input" style={{ ...INPUT_SM, maxWidth: 70 }} type="number" min={0} step={5}
+            value={draft.session_rate} placeholder="$"
+            onChange={(e) => setDraft((d) => ({ ...d, session_rate: e.target.value }))} />
+        </td>
+        {/* Monthly Sessions — form value read-only, coach freq editable */}
+        <td>
+          {formMonthly && <div className="meta" style={{ fontSize: "0.72rem", marginBottom: "0.2rem" }}>Form: {formMonthly}</div>}
+          <input className="input" style={{ ...INPUT_SM, maxWidth: 60 }}
+            value={draft.regular_frequency} placeholder="2×/wk"
+            onChange={(e) => setDraft((d) => ({ ...d, regular_frequency: e.target.value }))} />
+        </td>
+        {/* Completed this mo */}
+        <td style={{ fontVariantNumeric: "tabular-nums", textAlign: "center" }}>{c.sessions_this_month_completed}</td>
+        {/* Scheduled this mo */}
+        <td style={{ fontVariantNumeric: "tabular-nums", textAlign: "center" }}>{c.sessions_this_month_scheduled}</td>
+        {/* Last / Next / Program / Owed — read-only */}
+        <td><LastSessionCell iso={c.last_session_at} /></td>
+        <td><NextSessionCell iso={c.next_session_at} /></td>
+        <td className="meta" style={{ fontSize: "0.78rem" }}>
+          {atHomeProg ? atHomeProg.name : <span style={{ color: "var(--muted)" }}>No program</span>}
+        </td>
+        <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
+        {/* Actions */}
+        <td>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+            <button className="btn btn-primary" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+              onClick={saveEdit} disabled={saving}>
+              {saving ? "…" : "✓ Save"}
+            </button>
+            <button className="btn btn-ghost" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+              onClick={() => setEditing(false)} disabled={saving}>
+              ✕
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
+      {/* Client */}
       <td>
-        <strong>{c.full_name}</strong>
-        {c.tier && <><br /><span className="meta" style={{ fontSize: "0.72rem" }}>{c.tier.replace("_", " ")}</span></>}
-        {c.requires_confirmation && <><br /><span className="badge" style={{ fontSize: "0.68rem", background: "var(--amber-light, #fff8e1)", color: "#8a6200" }}>confirm</span></>}
+        <strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong>
+        {c.requires_confirmation && (
+          <><br /><span className="badge" style={{ fontSize: "0.67rem", background: "var(--amber-light, #fff8e1)", color: "#8a6200" }}>confirm</span></>
+        )}
       </td>
-      <td className="meta" style={{ maxWidth: 200, fontSize: "0.82rem" }}>{c.goals ?? "—"}</td>
+      {/* Goal */}
+      <td className="meta" style={{ maxWidth: 180, fontSize: "0.82rem" }}>{c.goals ?? "—"}</td>
+      {/* Tier */}
       <td>
-        <div>{c.regular_frequency ? `${c.regular_frequency}×/wk` : "—"}</div>
-        <div className="meta" style={{ fontSize: "0.74rem" }}>{fmtMoney(c.session_rate)}/session</div>
+        {c.tier
+          ? <span className="badge" style={{ fontSize: "0.72rem" }}>{TIER_LABEL[c.tier] ?? c.tier}</span>
+          : <span className="meta">—</span>}
       </td>
+      {/* Session Rate */}
+      <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+        {c.session_rate != null ? <strong>{fmtMoney(c.session_rate)}</strong> : <span className="meta">—</span>}
+      </td>
+      {/* Monthly Sessions */}
+      <td>
+        {formMonthly
+          ? <div style={{ fontSize: "0.85rem", fontWeight: 500 }}>{formMonthly}<span className="meta" style={{ fontWeight: 400 }}>/mo</span></div>
+          : null}
+        {coachFreq
+          ? <div className="meta" style={{ fontSize: "0.74rem" }}>{coachFreq}</div>
+          : (!formMonthly ? <span className="meta">—</span> : null)}
+      </td>
+      {/* Completed this mo */}
+      <td style={{ fontVariantNumeric: "tabular-nums", textAlign: "center" }}>
+        <span style={{ fontWeight: c.sessions_this_month_completed > 0 ? 600 : 400, color: c.sessions_this_month_completed === 0 ? "var(--muted)" : undefined }}>
+          {c.sessions_this_month_completed}
+        </span>
+      </td>
+      {/* Scheduled this mo */}
+      <td style={{ fontVariantNumeric: "tabular-nums", textAlign: "center" }}>
+        <span style={{ fontWeight: c.sessions_this_month_scheduled > 0 ? 600 : 400, color: c.sessions_this_month_scheduled === 0 ? "var(--muted)" : undefined }}>
+          {c.sessions_this_month_scheduled}
+        </span>
+      </td>
+      {/* Last Session */}
       <td><LastSessionCell iso={c.last_session_at} /></td>
+      {/* Next Session */}
       <td>
         <NextSessionCell iso={c.next_session_at} />
         {c.next_session_at && (
           <Link
             href={`/coach/build-program?tab=session&client=${c.id}${nextStatus ? `&appt=${nextStatus.apptId}` : ""}`}
             style={{
-              display: "inline-block",
-              marginTop: "0.3rem",
-              fontSize: "0.7rem",
-              fontWeight: 600,
-              padding: "0.15rem 0.45rem",
-              borderRadius: 3,
+              display: "inline-block", marginTop: "0.3rem",
+              fontSize: "0.7rem", fontWeight: 600,
+              padding: "0.15rem 0.45rem", borderRadius: 3,
               border: `1px solid ${nextStatus?.programmed ? "var(--sage)" : "var(--amber)"}`,
               color: nextStatus?.programmed ? "var(--sage)" : "var(--amber)",
               background: nextStatus?.programmed ? "rgba(90,107,74,0.07)" : "rgba(217,119,6,0.07)",
-              textDecoration: "none",
-              whiteSpace: "nowrap",
+              textDecoration: "none", whiteSpace: "nowrap",
             }}
           >
             {nextStatus?.programmed ? "Programmed →" : "Not Programmed →"}
           </Link>
         )}
       </td>
-      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.total_sessions}</td>
+      {/* Program */}
       <td>
-        <div className="meta" style={{ fontSize: "0.7rem", marginBottom: "0.25rem" }}>
+        <div className="meta" style={{ fontSize: "0.72rem", marginBottom: "0.2rem" }}>
           {atHomeProg?.ends_on ? (
             <>
               {new Date(atHomeProg.ends_on).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               {" · "}
               <span style={{ color: daysLeft !== null && daysLeft <= 7 ? "var(--amber)" : undefined }}>
-                {daysLeft !== null
-                  ? daysLeft <= 0 ? "expired" : `${daysLeft}d left`
-                  : "no end"}
+                {daysLeft !== null ? (daysLeft <= 0 ? "expired" : `${daysLeft}d left`) : "no end"}
               </span>
             </>
-          ) : (
-            <span style={{ color: "var(--muted)" }}>No current program</span>
-          )}
+          ) : <span style={{ color: "var(--muted)" }}>No program</span>}
         </div>
         <Link
           href={`/coach/build-program?tab=program&client=${c.id}`}
           style={{
-            fontSize: "0.72rem",
-            fontWeight: 600,
-            padding: "0.15rem 0.45rem",
-            borderRadius: 3,
-            border: "1px solid var(--sage)",
-            color: "var(--sage)",
-            background: "rgba(90,107,74,0.07)",
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-            display: "inline-block",
+            fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
+            borderRadius: 3, border: "1px solid var(--sage)", color: "var(--sage)",
+            background: "rgba(90,107,74,0.07)", textDecoration: "none",
+            whiteSpace: "nowrap", display: "inline-block",
           }}
-        >
-          View Program →
-        </Link>
+        >View →</Link>
       </td>
+      {/* Owed */}
       <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
-      <td><Link href={`/coach/clients/${c.id}`}>open →</Link></td>
+      {/* Actions */}
+      <td>
+        <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+          <button
+            className="btn btn-ghost"
+            title="Edit"
+            style={{ fontSize: "1rem", padding: "0.1rem 0.4rem", lineHeight: 1 }}
+            onClick={() => setEditing(true)}
+          >✎</button>
+          <Link href={`/coach/clients/${c.id}`} style={{ fontSize: "0.78rem", whiteSpace: "nowrap" }}>→</Link>
+        </div>
+      </td>
     </tr>
   );
 }
 
+const LIFECYCLE_COLORS: Record<string, { bg: string; color: string }> = {
+  inactive:    { bg: "#fce8e8", color: "var(--red)" },
+  paused:      { bg: "#e8f0fe", color: "#1a56db" },
+  prospective: { bg: "#fef9e7", color: "#8a6200" },
+};
+
 function InactiveClientRow({ c }: { c: ClientRow }) {
+  const [lifecycle, setLifecycle] = useState(c.lifecycle);
+  const [saving, startSave] = useTransition();
+
+  function handleLifecycleChange(val: string) {
+    setLifecycle(val as ClientRow["lifecycle"]);
+    startSave(async () => {
+      await quickUpdateClient(c.id, { lifecycle: val });
+    });
+  }
+
+  const lc = lifecycle as string;
+  const colors = LIFECYCLE_COLORS[lc] ?? LIFECYCLE_COLORS.inactive;
+
   return (
-    <tr>
+    <tr style={{ opacity: saving ? 0.6 : 1 }}>
+      <td><strong>{c.full_name}</strong></td>
       <td>
-        <strong>{c.full_name}</strong>
-        <br />
-        <span className="badge" style={{
-          fontSize: "0.68rem",
-          background: c.lifecycle === "paused" ? "#e8f0fe" : "#fce8e8",
-          color: c.lifecycle === "paused" ? "#1a56db" : "var(--red)"
-        }}>{c.lifecycle}</span>
+        <select
+          className="select"
+          style={{ fontSize: "0.78rem", padding: "0.15rem 0.3rem", height: "auto",
+            background: colors.bg, color: colors.color, border: "none", borderRadius: 4, fontWeight: 600 }}
+          value={lifecycle}
+          onChange={(e) => handleLifecycleChange(e.target.value)}
+          disabled={saving}
+        >
+          <option value="inactive">Inactive</option>
+          <option value="paused">Paused</option>
+          <option value="prospective">Prospective</option>
+        </select>
       </td>
       <td className="meta" style={{ fontSize: "0.82rem" }}>{c.goals ?? "—"}</td>
       <td><LastSessionCell iso={c.last_session_at} /></td>
@@ -168,9 +345,8 @@ const INLINE_INPUT: React.CSSProperties = {
   width: "100%", minWidth: 0, boxSizing: "border-box",
 };
 
-function ProspectRow({ p, onFollowUp, onDelete, onSave }: {
+function ProspectRow({ p, onDelete, onSave }: {
   p: Prospect;
-  onFollowUp: (id: string) => void;
   onDelete: (id: string) => void;
   onSave: (id: string, data: ProspectInput) => Promise<void>;
 }) {
@@ -277,10 +453,6 @@ function ProspectRow({ p, onFollowUp, onDelete, onSave }: {
             onClick={() => setEditing(true)}
           >
             ✎
-          </button>
-          <button className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.2rem 0.5rem" }}
-            onClick={() => onFollowUp(p.id)}>
-            log follow-up
           </button>
           <button
             className="btn btn-ghost"
@@ -418,18 +590,37 @@ function RosterSection({ title, count, defaultOpen, extra, children }: {
 
 export default function ClientsClient({ clients, prospects, nextSessionStatus }: { clients: ClientRow[]; prospects: Prospect[]; nextSessionStatus: NextSessionStatus }) {
   const [showModal, setShowModal] = useState(false);
-  const [, startFU] = useTransition();
   const [, startDel] = useTransition();
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const active = clients.filter((c) => c.lifecycle === "active");
-  const inactive = clients.filter((c) => c.lifecycle === "inactive" || c.lifecycle === "paused");
+  const inactive = clients.filter((c) => c.lifecycle === "inactive" || c.lifecycle === "paused" || c.lifecycle === "prospective");
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  }
+
+  function sortClients(list: ClientRow[]): ClientRow[] {
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "name":    cmp = a.full_name.localeCompare(b.full_name); break;
+        case "tier":    cmp = (TIER_ORDER[a.tier ?? ""] ?? 99) - (TIER_ORDER[b.tier ?? ""] ?? 99); break;
+        case "rate":    cmp = (a.session_rate ?? -1) - (b.session_rate ?? -1); break;
+        case "monthly": cmp = monthlyNum(a) - monthlyNum(b); break;
+        case "completed": cmp = a.sessions_this_month_completed - b.sessions_this_month_completed; break;
+        case "scheduled": cmp = a.sessions_this_month_scheduled - b.sessions_this_month_scheduled; break;
+        case "last":    cmp = (a.last_session_at ?? "").localeCompare(b.last_session_at ?? ""); break;
+        case "next":    cmp = (a.next_session_at ?? "zzz").localeCompare(b.next_session_at ?? "zzz"); break;
+        case "owed":    cmp = a.balance_owed - b.balance_owed; break;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }
 
   const needsReview = active.filter((c) => daysAgo(c.last_session_at) >= 30 && !c.next_session_at);
-
-  function handleFollowUp(id: string) {
-    const today = new Date().toISOString().split("T")[0];
-    startFU(async () => { await logProspectFollowUp(id, today); });
-  }
 
   function handleDelete(id: string) {
     if (!confirm("Remove this prospect?")) return;
@@ -449,7 +640,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           <span className="badge">Clients</span>
           <h1 style={{ marginTop: "0.5rem" }}>Roster</h1>
           <p className="meta">
-            {active.length} active · {inactive.length} inactive/paused · {prospects.length} prospects
+            {active.length} active · {inactive.length} past · {prospects.length} potential new
           </p>
         </div>
       </header>
@@ -496,30 +687,65 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           <table className="table">
             <thead>
               <tr>
-                <th>Client</th>
+                <SortTh label="Client"         col="name"      current={sortKey} dir={sortDir} onClick={toggleSort} />
                 <th>Goal</th>
-                <th>Cadence / Rate</th>
-                <th>Last session</th>
-                <th>Next session</th>
-                <th>Sessions</th>
+                <SortTh label="Tier"           col="tier"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTh label="Session Rate"   col="rate"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTh label="Monthly Sess."  col="monthly"   current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTh label="Completed"      col="completed" current={sortKey} dir={sortDir} onClick={toggleSort} style={{ textAlign: "center" }} />
+                <SortTh label="Scheduled"      col="scheduled" current={sortKey} dir={sortDir} onClick={toggleSort} style={{ textAlign: "center" }} />
+                <SortTh label="Last Session"   col="last"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTh label="Next Session"   col="next"      current={sortKey} dir={sortDir} onClick={toggleSort} />
                 <th>Program</th>
-                <th>Owed</th>
+                <SortTh label="Owed"           col="owed"      current={sortKey} dir={sortDir} onClick={toggleSort} />
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {active.map((c) => <ActiveClientRow key={c.id} c={c} nextSessionStatus={nextSessionStatus} />)}
+              {sortClients(active).map((c) => <ActiveClientRow key={c.id} c={c} nextSessionStatus={nextSessionStatus} />)}
               {active.length === 0 && (
-                <tr><td colSpan={9} className="meta" style={{ textAlign: "center", padding: "1.5rem" }}>No active clients.</td></tr>
+                <tr><td colSpan={12} className="meta" style={{ textAlign: "center", padding: "1.5rem" }}>No active clients.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </RosterSection>
 
-      {/* ── Prospects (collapsed by default) ─────────────────────── */}
+      {/* ── Past Clients (collapsed by default) ──────────────────── */}
       <RosterSection
-        title="Prospects"
+        title="Past Clients"
+        count={inactive.length}
+        defaultOpen={false}
+      >
+        {inactive.length === 0 ? (
+          <div className="card" style={{ padding: "1.25rem", textAlign: "center" }}>
+            <p className="meta">No past clients.</p>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: "auto" }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Status</th>
+                  <th>Goal</th>
+                  <th>Last session</th>
+                  <th>Injuries / notes</th>
+                  <th>Owed</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {inactive.map((c) => <InactiveClientRow key={c.id} c={c} />)}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </RosterSection>
+
+      {/* ── Potential New Clients (collapsed by default) ──────────── */}
+      <RosterSection
+        title="Potential New Clients"
         count={prospects.length}
         defaultOpen={false}
         extra={
@@ -534,7 +760,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
       >
         {prospects.length === 0 ? (
           <div className="card" style={{ padding: "1.25rem", textAlign: "center" }}>
-            <p className="meta">No prospects yet.</p>
+            <p className="meta">No potential new clients yet.</p>
           </div>
         ) : (
           <div className="card" style={{ padding: 0, overflow: "auto" }}>
@@ -551,49 +777,8 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
               </thead>
               <tbody>
                 {prospects.map((p) => (
-                  <ProspectRow key={p.id} p={p} onFollowUp={handleFollowUp} onDelete={handleDelete} onSave={handleSave} />
+                  <ProspectRow key={p.id} p={p} onDelete={handleDelete} onSave={handleSave} />
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </RosterSection>
-
-      {/* ── Inactive / Paused (collapsed by default) ─────────────── */}
-      <RosterSection
-        title="Inactive / Paused"
-        count={inactive.length}
-        defaultOpen={false}
-        extra={
-          <Link
-            href="/signup"
-            className="btn btn-ghost"
-            style={{ fontSize: "0.72rem", padding: "0.15rem 0.5rem", marginLeft: "0.25rem" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            + Add
-          </Link>
-        }
-      >
-        {inactive.length === 0 ? (
-          <div className="card" style={{ padding: "1.25rem", textAlign: "center" }}>
-            <p className="meta">No inactive clients.</p>
-          </div>
-        ) : (
-          <div className="card" style={{ padding: 0, overflow: "auto" }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Goal</th>
-                  <th>Last session</th>
-                  <th>Injuries / notes</th>
-                  <th>Owed</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {inactive.map((c) => <InactiveClientRow key={c.id} c={c} />)}
               </tbody>
             </table>
           </div>

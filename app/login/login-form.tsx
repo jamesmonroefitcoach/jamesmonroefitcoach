@@ -1,8 +1,7 @@
 "use client";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
-type ProfileRow = { id: string; full_name: string; email: string | null; role: "coach" | "client" | "admin" };
+import type { ProfileRow } from "./page";
 
 export default function LoginForm({ profiles }: { profiles: ProfileRow[] }) {
   const router = useRouter();
@@ -12,7 +11,11 @@ export default function LoginForm({ profiles }: { profiles: ProfileRow[] }) {
 
   const grouped = useMemo(() => {
     const g: Record<string, ProfileRow[]> = { coach: [], admin: [], client: [] };
-    profiles.forEach((p) => { (g[p.role] ??= []).push(p); });
+    profiles.forEach((p) => {
+      // is_admin profiles always appear in the ADMIN group regardless of DB role
+      const bucket = p.is_admin ? "admin" : p.role;
+      (g[bucket] ??= []).push(p);
+    });
     return g;
   }, [profiles]);
 
@@ -29,7 +32,7 @@ export default function LoginForm({ profiles }: { profiles: ProfileRow[] }) {
     const res = await fetch("/api/sign-in", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: profile.id, name: profile.full_name, role: profile.role, email: profile.email })
+      body: JSON.stringify({ id: profile.id, name: profile.full_name, role: profile.role, email: profile.email, is_admin: profile.is_admin ?? false })
     });
     if (!res.ok) {
       setErr("Sign in failed.");

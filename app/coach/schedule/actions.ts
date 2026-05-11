@@ -97,6 +97,7 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
     if (error) return { ok: false, error: error.message };
     revalidatePath("/coach/schedule");
     revalidatePath("/coach");
+    revalidatePath("/coach/clients", "layout");
     return { ok: true, data };
   }
 
@@ -164,6 +165,7 @@ export async function cancelSeries(seriesId: string, opts: { fromDate?: string }
   const { data, error } = await q.select("id");
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/schedule");
+  revalidatePath("/coach/clients", "layout");
   return { ok: true, data: { count: (data ?? []).length } };
 }
 
@@ -200,6 +202,7 @@ export async function approveChangeRequest(apptId: string): Promise<Result> {
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/schedule");
   revalidatePath("/coach/appointments");
+  revalidatePath("/coach/clients", "layout");
   return { ok: true };
 }
 
@@ -243,6 +246,7 @@ export async function denyChangeRequest(apptId: string): Promise<Result> {
 
   revalidatePath("/coach/schedule");
   revalidatePath("/coach/appointments");
+  revalidatePath("/coach/clients", "layout");
   revalidatePath("/client");
   revalidatePath("/client/messages");
   return { ok: true };

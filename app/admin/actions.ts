@@ -7,7 +7,7 @@ type Result = { ok: true } | { ok: false; error: string };
 
 export async function approveAccountRequest(reqId: string, coachId?: string): Promise<Result> {
   const me = await getSessionUser();
-  if (!me || me.role !== "admin") return { ok: false, error: "unauthorized" };
+  if (!me || (!me.is_admin && me.role !== "admin")) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
   const supabase = createSupabaseAdmin();
 
@@ -53,7 +53,7 @@ export async function approveAccountRequest(reqId: string, coachId?: string): Pr
 
 export async function rejectAccountRequest(reqId: string): Promise<Result> {
   const me = await getSessionUser();
-  if (!me || me.role !== "admin") return { ok: false, error: "unauthorized" };
+  if (!me || (!me.is_admin && me.role !== "admin")) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
   const supabase = createSupabaseAdmin();
   const { error } = await supabase

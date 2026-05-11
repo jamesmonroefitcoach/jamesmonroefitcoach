@@ -97,6 +97,34 @@ export async function updateProspect(
   return { ok: true };
 }
 
+export async function quickUpdateClient(
+  clientId: string,
+  input: { tier?: string | null; session_rate?: number | null; regular_frequency?: string | null; lifecycle?: string | null }
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && !user.is_admin)) return { ok: false, error: "unauthorized" };
+
+  if (!hasSupabaseEnv()) {
+    revalidatePath("/coach/clients");
+    return { ok: true };
+  }
+
+  const supabase = createSupabaseAdmin();
+  const payload: Record<string, unknown> = {};
+  if (input.tier !== undefined) payload.tier = input.tier || null;
+  if (input.session_rate !== undefined) payload.session_rate = input.session_rate;
+  if (input.regular_frequency !== undefined) payload.regular_frequency = input.regular_frequency?.trim() || null;
+  if (input.lifecycle !== undefined) payload.lifecycle = input.lifecycle || null;
+
+  if (!Object.keys(payload).length) return { ok: true };
+
+  const { error } = await supabase.from("client_details").update(payload).eq("profile_id", clientId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/coach/clients");
+  revalidatePath(`/coach/clients/${clientId}`);
+  return { ok: true };
+}
+
 export async function deleteProspect(prospectId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };

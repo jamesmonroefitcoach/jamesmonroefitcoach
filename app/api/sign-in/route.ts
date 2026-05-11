@@ -15,7 +15,8 @@ export async function POST(req: Request) {
     id: String(body.id),
     name: String(body.name),
     role: body.role,
-    email: body.email ?? null
+    email: body.email ?? null,
+    ...(body.is_admin ? { is_admin: true } : {})
   };
   const store = await cookies();
   store.set(SESSION_COOKIE, buildSessionCookieValue(user), {

@@ -1,11 +1,9 @@
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 
-const INJURY_QUESTION = "Do you currently have any injuries, pain, or physical limitations I should be aware of?";
-
-// Extract injury info from the specific intake form question
+// Extract injury info from the specific intake form field
 function extractInjuriesFromForm(formData: Record<string, string> | null): string | null {
   if (!formData) return null;
-  const val = formData[INJURY_QUESTION]?.trim();
+  const val = formData["Injuries / limitations"]?.trim();
   if (!val || val.toLowerCase() === "none" || val.toLowerCase() === "no" || val.toLowerCase() === "n/a") return null;
   return val;
 }
@@ -31,10 +29,12 @@ export type ClientRow = {
   last_session_at: string | null;
   next_session_at: string | null;
   total_sessions: number;
+  sessions_this_month_completed: number;
+  sessions_this_month_scheduled: number;
   phone: string | null;
   birthday: string | null;
   injuries: string | null;
-  lifecycle: "active" | "inactive" | "paused";
+  lifecycle: "active" | "inactive" | "paused" | "prospective";
   requires_confirmation: boolean;
   // spreadsheet coaching assessment fields
   trained_since_note: string | null;
@@ -48,7 +48,7 @@ export type ClientRow = {
   form_data: Record<string, string> | null;
 };
 
-const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null };
+const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0 };
 
 const DEMO_CLIENTS: ClientRow[] = [
   { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-abbey",   full_name: "Abbey Archer",      email: null, age_category: "22",  goals: "Form & knowledge",               regular_frequency: "1", session_rate: 100, test_rate: 100, monthly_revenue: 200,  current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 4 * 86400000).toISOString(), total_sessions: 4,  injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
@@ -106,10 +106,12 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         last_session_at: null,
         next_session_at: null,
         total_sessions: 0,
+        sessions_this_month_completed: 0,
+        sessions_this_month_scheduled: 0,
         phone: p.phone ?? null,
         birthday: d?.birthday ?? null,
         injuries: extractInjuriesFromForm(d?.form_data ?? null),
-        lifecycle: (d?.lifecycle ?? "active") as ClientRow["lifecycle"],
+        lifecycle: (d?.lifecycle ?? "active") as "active" | "inactive" | "paused" | "prospective",
         requires_confirmation: d?.requires_confirmation ?? false,
         trained_since_note: d?.trained_since_note ?? null,
         accountability: d?.accountability ?? null,
@@ -185,6 +187,33 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
       });
       rows.forEach((r) => {
         r.balance_owed = balanceByClient[r.id] ?? 0;
+      });
+    }
+
+    // This-month session counts
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const monthEnd = new Date(monthStart); monthEnd.setMonth(monthEnd.getMonth() + 1);
+    const { data: monthSessions } = await supabase
+      .from("appointments")
+      .select("client_id, status")
+      .in("client_id", ids)
+      .eq("session_type", "session")
+      .gte("starts_at", monthStart.toISOString())
+      .lt("starts_at", monthEnd.toISOString())
+      .not("status", "in", '("cancelled","no_show")');
+    if (monthSessions) {
+      const completedByClient: Record<string, number> = {};
+      const scheduledByClient: Record<string, number> = {};
+      monthSessions.forEach((s: any) => {
+        if (s.status === "completed") {
+          completedByClient[s.client_id] = (completedByClient[s.client_id] ?? 0) + 1;
+        } else {
+          scheduledByClient[s.client_id] = (scheduledByClient[s.client_id] ?? 0) + 1;
+        }
+      });
+      rows.forEach((r) => {
+        r.sessions_this_month_completed = completedByClient[r.id] ?? 0;
+        r.sessions_this_month_scheduled = scheduledByClient[r.id] ?? 0;
       });
     }
   }

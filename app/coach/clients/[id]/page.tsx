@@ -98,7 +98,7 @@ function ProgramCard({ label, prog, clientId }: { label: string; prog: PastProgr
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  if (user.role !== "coach" && user.role !== "admin") redirect("/");
+  if (user.role !== "coach" && user.role !== "admin" && !user.is_admin) redirect("/");
 
   const { id } = await params;
   const [client, reminderPrefs] = await Promise.all([
@@ -122,7 +122,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <span className="badge">Client</span>
           <h1 style={{ marginTop: "0.5rem" }}>{client.full_name}</h1>
           <p className="meta">
-            {client.tier?.replace("_", " ") ?? "—"}
+            {client.tier ? `Tier ${client.tier.replace("tier_", "")}` : "—"}
             {client.member_since ? ` · member since ${fmtDate(client.member_since)}` : ""}
             {client.email ? ` · ${client.email}` : ""}
             {client.lifecycle !== "active" && (

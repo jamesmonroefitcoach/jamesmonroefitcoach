@@ -8,7 +8,7 @@ export type NextSessionStatus = Record<string, { apptId: string; programmed: boo
 export default async function ClientsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  if (user.role !== "coach" && user.role !== "admin") redirect("/");
+  if (user.role !== "coach" && user.role !== "admin" && !user.is_admin) redirect("/");
 
   const coachId = user.role === "coach" ? user.id : undefined;
 

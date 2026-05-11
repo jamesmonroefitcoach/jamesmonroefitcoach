@@ -6,7 +6,7 @@ import { listClients } from "@/lib/data";
 export default async function AdminProfilesPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  if (!user.is_admin && user.role !== "admin") redirect("/");
 
   const clients = await listClients();
 

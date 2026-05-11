@@ -7,7 +7,7 @@ import AdminRequestsList from "./admin-requests-list";
 export default async function AdminPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/");
+  if (!user.is_admin && user.role !== "admin") redirect("/");
 
   const [requests, clients] = await Promise.all([listAccountRequests(), listClients()]);
 

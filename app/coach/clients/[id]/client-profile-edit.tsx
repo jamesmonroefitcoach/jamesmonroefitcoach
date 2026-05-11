@@ -14,9 +14,10 @@ const LEVEL_OPTIONS  = ["", "Low", "Medium", "High"] as const;
 const GENDER_OPTIONS = ["", "Male", "Female", "Non-binary", "Prefer not to say"] as const;
 
 const LIFECYCLE_COLORS: Record<string, { bg: string; color: string }> = {
-  active:   { bg: "rgba(90,107,74,0.12)",  color: "var(--sage)" },
-  paused:   { bg: "#e8f0fe",               color: "#1a56db"    },
-  inactive: { bg: "#fce8e8",               color: "var(--red)" },
+  active:      { bg: "rgba(90,107,74,0.12)",  color: "var(--sage)" },
+  paused:      { bg: "#e8f0fe",               color: "#1a56db"    },
+  inactive:    { bg: "#fce8e8",               color: "var(--red)" },
+  prospective: { bg: "#fef9e7",               color: "#8a6200"    },
 };
 
 function fmtBirthday(iso: string | null): string {
@@ -131,6 +132,7 @@ export function CoachProfileCard({ client }: { client: ClientRow }) {
             <option value="active">Active</option>
             <option value="paused">Paused</option>
             <option value="inactive">Inactive</option>
+            <option value="prospective">Prospective</option>
           </select>
         </Field>
         <Field label="Session rate ($)">
