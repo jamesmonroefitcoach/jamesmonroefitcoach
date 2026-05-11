@@ -1,13 +1,13 @@
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 
-// Extract injury info from form_data by matching question keys containing injury keywords
+const INJURY_QUESTION = "Do you currently have any injuries, pain, or physical limitations I should be aware of?";
+
+// Extract injury info from the specific intake form question
 function extractInjuriesFromForm(formData: Record<string, string> | null): string | null {
   if (!formData) return null;
-  const kw = ["injur", "pain", "limitation", "caution", "restrict"];
-  const values = Object.entries(formData)
-    .filter(([k, v]) => kw.some((w) => k.toLowerCase().includes(w)) && v.trim() !== "" && v.toLowerCase() !== "none" && v.toLowerCase() !== "no" && v.toLowerCase() !== "n/a")
-    .map(([, v]) => v.trim());
-  return values.length > 0 ? values.join("; ") : null;
+  const val = formData[INJURY_QUESTION]?.trim();
+  if (!val || val.toLowerCase() === "none" || val.toLowerCase() === "no" || val.toLowerCase() === "n/a") return null;
+  return val;
 }
 
 export type ClientRow = {

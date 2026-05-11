@@ -2876,12 +2876,13 @@ function getFormGoals(formData: Record<string, string> | null): Array<{ key: str
     .filter((e): e is { key: string; value: string } => !!e && e.value.trim() !== "");
 }
 
+const INJURY_QUESTION = "Do you currently have any injuries, pain, or physical limitations I should be aware of?";
+
 function getFormInjuries(formData: Record<string, string> | null): Array<{ key: string; value: string }> {
   if (!formData) return [];
-  const kw = ["injur", "pain", "limitation", "caution", "restrict"];
-  return Object.entries(formData)
-    .filter(([k, v]) => kw.some((w) => k.toLowerCase().includes(w)) && v.trim() !== "")
-    .map(([key, value]) => ({ key, value }));
+  const val = formData[INJURY_QUESTION]?.trim();
+  if (!val || val.toLowerCase() === "none" || val.toLowerCase() === "no" || val.toLowerCase() === "n/a") return [];
+  return [{ key: INJURY_QUESTION, value: val }];
 }
 
 // ── Client goals + injuries panel ────────────────────────────────────────────
