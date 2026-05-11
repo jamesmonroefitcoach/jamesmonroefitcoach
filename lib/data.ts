@@ -1,5 +1,15 @@
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 
+// Extract injury info from form_data by matching question keys containing injury keywords
+function extractInjuriesFromForm(formData: Record<string, string> | null): string | null {
+  if (!formData) return null;
+  const kw = ["injur", "pain", "limitation", "caution", "restrict"];
+  const values = Object.entries(formData)
+    .filter(([k, v]) => kw.some((w) => k.toLowerCase().includes(w)) && v.trim() !== "" && v.toLowerCase() !== "none" && v.toLowerCase() !== "no" && v.toLowerCase() !== "n/a")
+    .map(([, v]) => v.trim());
+  return values.length > 0 ? values.join("; ") : null;
+}
+
 export type ClientRow = {
   id: string;
   full_name: string;
@@ -57,7 +67,7 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
     .select(`
       id, full_name, email, phone,
       details:client_details!client_details_profile_id_fkey (
-        age_category, gender, goals, injuries, regular_frequency, session_rate, test_rate,
+        age_category, gender, goals, regular_frequency, session_rate, test_rate,
         monthly_revenue, starting_weight_lb, current_weight_lb, goal_weight_lb,
         tier, member_since, status, coach_id, lifecycle, requires_confirmation,
         trained_since_note, accountability, education, commitment,
@@ -98,7 +108,7 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         total_sessions: 0,
         phone: p.phone ?? null,
         birthday: d?.birthday ?? null,
-        injuries: d?.injuries ?? null,
+        injuries: extractInjuriesFromForm(d?.form_data ?? null),
         lifecycle: (d?.lifecycle ?? "active") as ClientRow["lifecycle"],
         requires_confirmation: d?.requires_confirmation ?? false,
         trained_since_note: d?.trained_since_note ?? null,
