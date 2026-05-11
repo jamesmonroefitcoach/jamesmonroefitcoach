@@ -2878,19 +2878,20 @@ function getFormGoals(formData: Record<string, string> | null): Array<{ key: str
 
 const INJURY_QUESTION = "Do you currently have any injuries, pain, or physical limitations I should be aware of?";
 
-function getFormInjuries(formData: Record<string, string> | null): Array<{ key: string; value: string }> {
-  if (!formData) return [];
+function getFormInjuryValue(formData: Record<string, string> | null): string {
+  if (!formData) return "No Response";
   const val = formData[INJURY_QUESTION]?.trim();
-  if (!val || val.toLowerCase() === "none" || val.toLowerCase() === "no" || val.toLowerCase() === "n/a") return [];
-  return [{ key: INJURY_QUESTION, value: val }];
+  if (!val) return "No Response";
+  return val; // show whatever they wrote, including "None"
 }
 
 // ── Client goals + injuries panel ────────────────────────────────────────────
 
 function ClientGoalsSection({ client }: { client: ClientRow }) {
   const formGoals = getFormGoals(client.form_data);
-  const formInjuries = getFormInjuries(client.form_data);
-  const hasInjury = !!(client.injuries || formInjuries.length > 0);
+  const injuryAnswer = getFormInjuryValue(client.form_data);
+  const isRealInjury = injuryAnswer !== "No Response" && injuryAnswer.toLowerCase() !== "none" && injuryAnswer.toLowerCase() !== "no" && injuryAnswer.toLowerCase() !== "n/a";
+  const hasInjury = isRealInjury || !!client.injuries;
 
   return (
     <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
@@ -2919,20 +2920,19 @@ function ClientGoalsSection({ client }: { client: ClientRow }) {
           Injuries / cautions
         </div>
         <div style={{ marginTop: "0.3rem", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {formInjuries.map(({ key, value }) => (
-            <div key={key}>
-              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--red)", opacity: 0.8, marginBottom: "0.1rem" }}>{key}</div>
-              <div style={{ lineHeight: 1.45, color: "var(--red)" }}>{value}</div>
+          <div>
+            <div style={{ fontSize: "0.68rem", fontWeight: 600, color: isRealInjury ? "var(--red)" : "var(--muted)", opacity: 0.8, marginBottom: "0.1rem" }}>
+              {INJURY_QUESTION}
             </div>
-          ))}
+            <div style={{ lineHeight: 1.45, color: isRealInjury ? "var(--red)" : undefined }}>
+              {injuryAnswer}
+            </div>
+          </div>
           {client.injuries && (
             <div>
               <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--muted)", marginBottom: "0.1rem" }}>Coach notes</div>
               <div style={{ lineHeight: 1.45, color: "var(--red)" }}>{client.injuries}</div>
             </div>
-          )}
-          {formInjuries.length === 0 && !client.injuries && (
-            <span className="meta">None reported</span>
           )}
         </div>
       </div>
