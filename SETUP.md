@@ -23,7 +23,8 @@ In Supabase Dashboard → **SQL Editor** → New query, run these in order:
 4. supabase/migrations/0004_recurring_and_requests.sql        (recurring appointments, change-request history)
 5. supabase/migrations/0005_program_kind.sql                  (in_gym vs at_home program types)
 6. supabase/migrations/0006_equipment_exertion_prospects_reminders.sql  (equipment lists, prospect lifecycle, reminders)
-7. supabase/import-clients.sql                                (loads all ~35 clients + prospects from your sheet)
+7. supabase/migrations/0007_intake_form.sql                   (adds form_received_at + form_data columns to client_details)
+8. supabase/import-clients.sql                                (loads all ~35 clients + prospects from your sheet)
 ```
 
 After step 7 you should see a row like `total_clients: 27, total_monthly_revenue: ~8,000`.
