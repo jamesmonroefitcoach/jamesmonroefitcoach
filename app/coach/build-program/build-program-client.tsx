@@ -40,6 +40,8 @@ type SetRow = {
   exertion_score: number;  // 1..10
   variations: Variation[];
   notes?: string;
+  equipment_list?: Equipment[];
+  equipment_specifics?: string;
 };
 
 type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "dropset";
@@ -409,12 +411,14 @@ export default function BuildProgramClient({
           items: day.items.map((it) => {
             if (it.uid !== itemUid) return it;
             if (it.same_format) {
-              // Expand: build one row per set from current values
+              // Expand: build one row per set from current values (including equipment)
               const rows: SetRow[] = Array.from({ length: it.sets }, () => ({
                 reps: it.reps,
                 exertion_score: it.exertion_score,
                 variations: [...it.variations],
                 notes: it.notes,
+                equipment_list: [...it.equipment_list],
+                equipment_specifics: it.equipment_specifics,
               }));
               return { ...it, same_format: false, set_rows: rows };
             } else {
@@ -426,6 +430,8 @@ export default function BuildProgramClient({
                 reps: first?.reps ?? it.reps,
                 exertion_score: first?.exertion_score ?? it.exertion_score,
                 notes: first?.notes ?? it.notes,
+                equipment_list: first?.equipment_list ?? it.equipment_list,
+                equipment_specifics: first?.equipment_specifics ?? it.equipment_specifics,
               };
             }
           }),
@@ -1850,19 +1856,19 @@ function persistPresets(movementId: string, list: ExercisePreset[]) {
   } catch {}
 }
 
-// ─── Variation dropdown (compact multi-select) ──────────────────────────────
+// ─── Variation dropdown (single-select) ─────────────────────────────────────
 function VariationDropdown({ value, onChange }: {
   value: Variation[];
   onChange: (v: Variation[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const label =
-    value.length === 0 ? "Spec"
-    : value.length === 1 ? VARIATION_LABELS[value[0]]
-    : `${value.length} specs`;
+  const selected = value[0] ?? null;
+  const label = selected ? VARIATION_LABELS[selected] : "Spec";
 
-  function toggleV(v: Variation) {
-    onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
+  function selectV(v: Variation) {
+    // Toggle: clicking the active option clears it; clicking a new one replaces
+    onChange(selected === v ? [] : [v]);
+    setOpen(false);
   }
 
   return (
@@ -1879,9 +1885,9 @@ function VariationDropdown({ value, onChange }: {
           fontSize: "0.67rem",
           padding: "0.16rem 0.28rem",
           borderRadius: 3,
-          border: value.length > 0 ? "1px solid var(--ink)" : "1px solid var(--line)",
-          background: value.length > 0 ? "rgba(0,0,0,0.07)" : "transparent",
-          color: value.length > 0 ? "var(--ink)" : "var(--muted)",
+          border: selected ? "1px solid var(--ink)" : "1px solid var(--line)",
+          background: selected ? "rgba(0,0,0,0.07)" : "transparent",
+          color: selected ? VARIATION_TEXT[selected] : "var(--muted)",
           cursor: "pointer",
           fontFamily: "inherit",
           whiteSpace: "nowrap",
@@ -1889,8 +1895,9 @@ function VariationDropdown({ value, onChange }: {
           overflow: "hidden",
           textOverflow: "ellipsis",
           textAlign: "left",
+          fontWeight: selected ? 600 : undefined,
         }}
-        title={value.map((v) => VARIATION_LABELS[v]).join(", ") || "Spec"}
+        title={selected ? VARIATION_LABELS[selected] : "Spec"}
       >
         {label} {open ? "▴" : "▾"}
       </button>
@@ -1903,24 +1910,33 @@ function VariationDropdown({ value, onChange }: {
           background: "var(--paper)",
           border: "1px solid var(--line)",
           borderRadius: 4,
-          padding: "0.3rem 0.45rem",
-          minWidth: 112,
+          padding: "0.25rem 0.35rem",
+          minWidth: 108,
           boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
         }}>
           {VARIATIONS.map((v) => (
-            <label
+            <button
               key={v}
-              onMouseDown={(e) => e.preventDefault()} // keep focus in container so blur doesn't close before toggle
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => selectV(v)}
               style={{
-                display: "flex", alignItems: "center", gap: "0.3rem",
-                fontSize: "0.72rem", cursor: "pointer", padding: "0.1rem 0",
-                color: value.includes(v) ? VARIATION_TEXT[v] : undefined,
-                fontWeight: value.includes(v) ? 600 : undefined,
-              }}
+                display: "flex", alignItems: "center", gap: "0.35rem", width: "100%",
+                border: "none", cursor: "pointer",
+                fontSize: "0.72rem", padding: "0.15rem 0.2rem", borderRadius: 3,
+                fontFamily: "inherit", textAlign: "left",
+                color: selected === v ? VARIATION_TEXT[v] : undefined,
+                fontWeight: selected === v ? 700 : undefined,
+                background: selected === v ? VARIATION_COLORS[v] : "transparent",
+              } as React.CSSProperties}
             >
-              <input type="checkbox" checked={value.includes(v)} onChange={() => toggleV(v)} style={{ cursor: "pointer" }} />
+              <span style={{
+                width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                border: `2px solid ${selected === v ? VARIATION_TEXT[v] : "var(--line)"}`,
+                background: selected === v ? VARIATION_TEXT[v] : "transparent",
+              }} />
               {VARIATION_LABELS[v]}
-            </label>
+            </button>
           ))}
         </div>
       )}
@@ -2076,19 +2092,12 @@ function ExerciseCard({
                   </select>
                 </>
               ) : (
-                <>
-                  <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={10}
-                    value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} title="Sets" />
-                  <EquipmentMultiSelect
-                    value={it.equipment_list} specifics={it.equipment_specifics}
-                    onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
-                    compact
-                  />
-                </>
+                <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={10}
+                  value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} title="Sets" />
               )}
             </div>
 
-            {/* Per-set rows */}
+            {/* Per-set rows (equipment repeats per row) */}
             {!it.same_format && (
               <div style={{ marginTop: "0.2rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
                 {it.set_rows.map((row, si) => (
@@ -2097,6 +2106,12 @@ function ExerciseCard({
                     <input className="input" style={{ ...INP, width: 46 }}
                       value={row.reps} onChange={(e) => onPatchSetRow(si, { reps: e.target.value })} title="Reps" placeholder="reps" />
                     <VariationDropdown value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
+                    <EquipmentMultiSelect
+                      value={row.equipment_list ?? it.equipment_list}
+                      specifics={row.equipment_specifics ?? it.equipment_specifics}
+                      onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
+                      compact
+                    />
                     <input className="input" style={{ flex: "1 1 50px", minWidth: 0, fontSize: "0.71rem", padding: "0.16rem 0.2rem" }}
                       placeholder="Notes…" value={row.notes ?? ""} onChange={(e) => onPatchSetRow(si, { notes: e.target.value })} />
                     <select className="select" style={{ ...INP, width: 70 }}
