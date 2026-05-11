@@ -233,3 +233,46 @@ a:hover { text-decoration: underline; }
   .card, .day-card, .stat { border: 1px solid #000; box-shadow: none; }
   .btn { display: none !important; }
 }
+
+/* Mobile nav — sidebar moves to a collapsible top bar on small screens */
+.sidebar-mobile { display: none; }
+
+@media (max-width: 640px) {
+  .app-shell { flex-direction: column; }
+
+  /* Hide the desktop left-rail sidebar */
+  .sidebar-desktop { display: none !important; }
+
+  /* Mobile top bar */
+  .sidebar-mobile {
+    display: block;
+    width: 100%;
+    background: #181513;
+    border-bottom: 1px solid #2a2522;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .sidebar-mobile-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem 1rem;
+  }
+
+  .sidebar-mobile-nav {
+    padding: 0.35rem 0.85rem 0.75rem;
+    border-top: 1px solid #2a2522;
+  }
+
+  .sidebar-mobile-nav .sidebar-link {
+    padding: 0.55rem 0.55rem;
+  }
+
+  /* Tighten page padding on mobile */
+  .shell {
+    width: 100%;
+    padding: 1rem 0.85rem 2.5rem;
+  }
+}
