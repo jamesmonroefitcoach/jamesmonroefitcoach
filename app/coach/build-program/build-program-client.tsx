@@ -2060,67 +2060,95 @@ function ExerciseCard({
         </div>
       )}
 
-      {/* Set controls — all inline, no column headers */}
+      {/* Set controls — grid layout so headers align with inputs */}
       {(() => {
+        const HDR: React.CSSProperties = {
+          fontSize: "0.56rem", color: "var(--muted)", textTransform: "uppercase",
+          letterSpacing: "0.05em", textAlign: "center", alignSelf: "end",
+          paddingBottom: "0.12rem", userSelect: "none",
+        };
         const INP: React.CSSProperties = { fontSize: "0.73rem", padding: "0.16rem 0.18rem", textAlign: "center" };
+        // Same-format: 6 data columns. Per-set: row-label col + 5 data columns.
+        const SF_COLS = "36px 46px 68px 72px 1fr 72px";
+        const PS_COLS = "28px 46px 68px 72px 1fr 70px";
+
         return (
           <div style={{ marginTop: "0.3rem" }}>
-            {/* Toggle + first/shared row */}
-            <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.22rem", cursor: "pointer", flexShrink: 0 }}>
-                <input type="checkbox" checked={it.same_format} onChange={onToggleSameFormat} style={{ cursor: "pointer" }} />
-                <span style={{ fontSize: "0.61rem", color: "var(--muted)", userSelect: "none", whiteSpace: "nowrap" }}>All same</span>
-              </label>
 
-              {it.same_format ? (
-                <>
-                  <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={20}
-                    value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 0 })} title="Sets" placeholder="sets" />
-                  <input className="input" style={{ ...INP, width: 46 }}
-                    value={it.reps} onChange={(e) => onPatch({ reps: e.target.value })} title="Reps" placeholder="reps" />
-                  <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
-                  <EquipmentMultiSelect
-                    value={it.equipment_list} specifics={it.equipment_specifics}
-                    onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
-                    compact
-                  />
-                  <input className="input" style={{ flex: "1 1 52px", minWidth: 0, fontSize: "0.72rem", padding: "0.16rem 0.2rem" }}
-                    placeholder="Notes…" value={it.notes ?? ""} onChange={(e) => onPatch({ notes: e.target.value })} />
-                  <select className="select" style={{ ...INP, width: 72 }}
-                    value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
-                    {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
-                  </select>
-                </>
-              ) : (
-                <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={10}
-                  value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} title="Sets" />
-              )}
-            </div>
+            {/* "All same" toggle — always above the grid */}
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "0.22rem", cursor: "pointer", marginBottom: "0.22rem" }}>
+              <input type="checkbox" checked={it.same_format} onChange={onToggleSameFormat} style={{ cursor: "pointer" }} />
+              <span style={{ fontSize: "0.61rem", color: "var(--muted)", userSelect: "none" }}>All same</span>
+            </label>
 
-            {/* Per-set rows (equipment repeats per row) */}
-            {!it.same_format && (
-              <div style={{ marginTop: "0.2rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-                {it.set_rows.map((row, si) => (
-                  <div key={si} style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
-                    <span style={{ minWidth: 30, fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>S{si + 1}</span>
-                    <input className="input" style={{ ...INP, width: 46 }}
-                      value={row.reps} onChange={(e) => onPatchSetRow(si, { reps: e.target.value })} title="Reps" placeholder="reps" />
-                    <VariationDropdown value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
-                    <EquipmentMultiSelect
-                      value={row.equipment_list ?? it.equipment_list}
-                      specifics={row.equipment_specifics ?? it.equipment_specifics}
-                      onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
-                      compact
-                    />
-                    <input className="input" style={{ flex: "1 1 50px", minWidth: 0, fontSize: "0.71rem", padding: "0.16rem 0.2rem" }}
-                      placeholder="Notes…" value={row.notes ?? ""} onChange={(e) => onPatchSetRow(si, { notes: e.target.value })} />
-                    <select className="select" style={{ ...INP, width: 70 }}
-                      value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
-                      {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
-                    </select>
-                  </div>
-                ))}
+            {it.same_format ? (
+              /* ── Same-format grid: header row + single input row ── */
+              <div style={{ display: "grid", gridTemplateColumns: SF_COLS, gap: "0.35rem", alignItems: "center" }}>
+                {/* Headers */}
+                <span style={HDR}>Sets</span>
+                <span style={HDR}>Reps</span>
+                <span style={HDR}>Spec</span>
+                <span style={HDR}>Equip.</span>
+                <span style={HDR}>Notes</span>
+                <span style={HDR}>Exertion</span>
+                {/* Inputs */}
+                <input className="input" style={INP} type="number" min={1} max={20}
+                  value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 0 })} />
+                <input className="input" style={INP}
+                  value={it.reps} onChange={(e) => onPatch({ reps: e.target.value })} />
+                <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
+                <EquipmentMultiSelect
+                  value={it.equipment_list} specifics={it.equipment_specifics}
+                  onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
+                  compact
+                />
+                <input className="input" style={{ fontSize: "0.72rem", padding: "0.16rem 0.2rem", width: "100%", boxSizing: "border-box" }}
+                  placeholder="Notes…" value={it.notes ?? ""} onChange={(e) => onPatch({ notes: e.target.value })} />
+                <select className="select" style={INP}
+                  value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
+                  {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
+                </select>
               </div>
+            ) : (
+              /* ── Per-set: sets count + grid with header row + one row per set ── */
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.22rem" }}>
+                  <span style={{ ...HDR, textAlign: "left" }}>Sets</span>
+                  <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={10}
+                    value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: PS_COLS, gap: "0.3rem", alignItems: "center" }}>
+                  {/* Headers — single row above all set rows */}
+                  <span style={HDR}></span>{/* blank over S1/S2 labels */}
+                  <span style={HDR}>Reps</span>
+                  <span style={HDR}>Spec</span>
+                  <span style={HDR}>Equip.</span>
+                  <span style={HDR}>Notes</span>
+                  <span style={HDR}>Exertion</span>
+                  {/* Set rows */}
+                  {it.set_rows.map((row, si) => (
+                    <>
+                      <span key={`lbl-${si}`} style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600, textAlign: "center" }}>S{si + 1}</span>
+                      <input key={`reps-${si}`} className="input" style={INP}
+                        value={row.reps} onChange={(e) => onPatchSetRow(si, { reps: e.target.value })} />
+                      <VariationDropdown key={`spec-${si}`} value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
+                      <EquipmentMultiSelect
+                        key={`eq-${si}`}
+                        value={row.equipment_list ?? it.equipment_list}
+                        specifics={row.equipment_specifics ?? it.equipment_specifics}
+                        onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
+                        compact
+                      />
+                      <input key={`notes-${si}`} className="input" style={{ fontSize: "0.71rem", padding: "0.16rem 0.2rem", width: "100%", boxSizing: "border-box" }}
+                        placeholder="Notes…" value={row.notes ?? ""} onChange={(e) => onPatchSetRow(si, { notes: e.target.value })} />
+                      <select key={`exr-${si}`} className="select" style={INP}
+                        value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
+                        {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
+                      </select>
+                    </>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         );
@@ -2357,7 +2385,7 @@ function EquipmentMultiSelect({
   }
 
   return (
-    <div style={{ position: "relative", minWidth: compact ? 0 : 160, flexShrink: compact ? 1 : 0 }}>
+    <div style={{ position: "relative", minWidth: 0 }}>
       <button
         type="button"
         className="btn btn-ghost"
@@ -2365,12 +2393,13 @@ function EquipmentMultiSelect({
           padding: compact ? "0.16rem 0.28rem" : "0.35rem 0.5rem",
           fontSize: compact ? "0.67rem" : "0.74rem",
           textAlign: "left",
-          width: compact ? "auto" : "100%",
+          width: "100%",
           justifyContent: "space-between",
           display: "flex",
           alignItems: "center",
           gap: "0.3rem",
           whiteSpace: "nowrap",
+          boxSizing: "border-box",
         }}
         onClick={() => setOpen((o) => !o)}
       >
