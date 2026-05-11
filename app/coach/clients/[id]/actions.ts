@@ -1,9 +1,92 @@
 "use server";
 
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import type { ReminderPrefs } from "@/lib/data";
+
+// ── Coach-provided fields ──────────────────────────────────────────────────
+export type CoachProfileInput = {
+  session_rate?: number | null;
+  trained_since_note?: string;
+  time_window_note?: string;
+  accountability?: string;
+  education?: string;
+  commitment?: string;
+  dire_need_ranking?: string;
+};
+
+export async function updateCoachProfile(
+  clientId: string,
+  input: CoachProfileInput
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin")) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) { revalidatePath(`/coach/clients/${clientId}`); return { ok: true }; }
+
+  const supabase = createSupabaseAdmin();
+  const payload: Record<string, any> = {};
+  if (input.session_rate       !== undefined) payload.session_rate        = input.session_rate;
+  if (input.trained_since_note !== undefined) payload.trained_since_note  = input.trained_since_note?.trim() || null;
+  if (input.time_window_note   !== undefined) payload.time_window_note    = input.time_window_note?.trim() || null;
+  if (input.accountability     !== undefined) payload.accountability       = input.accountability?.trim() || null;
+  if (input.education          !== undefined) payload.education            = input.education?.trim() || null;
+  if (input.commitment         !== undefined) payload.commitment           = input.commitment?.trim() || null;
+  if (input.dire_need_ranking  !== undefined) payload.dire_need_ranking    = input.dire_need_ranking?.trim() || null;
+
+  if (Object.keys(payload).length) {
+    const { error } = await supabase.from("client_details").update(payload).eq("profile_id", clientId);
+    if (error) return { ok: false, error: error.message };
+  }
+  revalidatePath(`/coach/clients/${clientId}`);
+  revalidatePath("/coach/clients");
+  return { ok: true };
+}
+
+// ── Client-provided / contact fields ──────────────────────────────────────
+export type ClientInfoInput = {
+  goals?: string;
+  age_category?: string;
+  birthday?: string;        // YYYY-MM-DD or ""
+  gender?: string;
+  email?: string;
+  phone?: string;
+};
+
+export async function updateClientInfo(
+  clientId: string,
+  input: ClientInfoInput
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin")) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) { revalidatePath(`/coach/clients/${clientId}`); return { ok: true }; }
+
+  const supabase = createSupabaseAdmin();
+
+  // Update profiles table (email, phone)
+  const profilePayload: Record<string, any> = {};
+  if (input.email !== undefined) profilePayload.email = input.email?.trim() || null;
+  if (input.phone !== undefined) profilePayload.phone = input.phone?.trim() || null;
+  if (Object.keys(profilePayload).length) {
+    const { error } = await supabase.from("profiles").update(profilePayload).eq("id", clientId);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  // Update client_details table
+  const detailPayload: Record<string, any> = {};
+  if (input.goals        !== undefined) detailPayload.goals         = input.goals?.trim() || null;
+  if (input.age_category !== undefined) detailPayload.age_category  = input.age_category?.trim() || null;
+  if (input.gender       !== undefined) detailPayload.gender         = input.gender?.trim() || null;
+  if (input.birthday     !== undefined) detailPayload.birthday       = input.birthday?.trim() || null;
+  if (Object.keys(detailPayload).length) {
+    const { error } = await supabase.from("client_details").update(detailPayload).eq("profile_id", clientId);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/coach/clients/${clientId}`);
+  revalidatePath("/coach/clients");
+  return { ok: true };
+}
 
 export async function saveReminderPrefs(
   clientId: string,
@@ -17,7 +100,7 @@ export async function saveReminderPrefs(
     return { ok: true };
   }
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase.from("client_reminder_prefs").upsert(
     {
       client_id: clientId,
@@ -46,7 +129,7 @@ export async function setRequiresConfirmation(
     return { ok: true };
   }
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase
     .from("client_details")
     .update({ requires_confirmation: value })
@@ -69,7 +152,7 @@ export async function setLifecycle(
     return { ok: true };
   }
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase
     .from("client_details")
     .update({ lifecycle })
@@ -91,7 +174,7 @@ export async function sendConfirmationEmail(
   // For now, just log a message into the client thread.
   if (!hasSupabaseEnv()) return { ok: true };
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data: thread } = await supabase
     .from("message_threads")
     .upsert(

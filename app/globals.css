@@ -120,6 +120,9 @@ a:hover { text-decoration: underline; }
   padding: 1.1rem 1.2rem;
 }
 .card + .card { margin-top: 1rem; }
+/* Inside grid/flex containers the gap prop handles spacing — reset the sibling margin */
+[style*="grid-template-columns"] > .card,
+[style*="grid-template-rows"] > .card { margin-top: 0; }
 
 /* Stat tiles */
 .stat {

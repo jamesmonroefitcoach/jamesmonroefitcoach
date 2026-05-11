@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { ClientRow, ReminderPrefs } from "@/lib/data";
-import { saveReminderPrefs, setRequiresConfirmation, setLifecycle } from "./actions";
+import { saveReminderPrefs, setRequiresConfirmation } from "./actions";
 
 const OFFSET_OPTIONS: { value: number; label: string }[] = [
   { value: 2880, label: "2 days before" },
@@ -11,8 +11,6 @@ const OFFSET_OPTIONS: { value: number; label: string }[] = [
   { value: 60,   label: "1 hour before" },
   { value: 30,   label: "30 min before" },
 ];
-
-type Lifecycle = "active" | "inactive" | "paused";
 
 export default function ClientSettings({
   client,
@@ -23,7 +21,6 @@ export default function ClientSettings({
 }) {
   const [prefs, setPrefs] = useState(reminderPrefs);
   const [reqConfirm, setReqConfirm] = useState(client.requires_confirmation);
-  const [lifecycle, setLifecycleState] = useState<Lifecycle>(client.lifecycle);
   const [saved, setSaved] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -58,46 +55,10 @@ export default function ClientSettings({
     });
   }
 
-  function handleLifecycleChange(val: Lifecycle) {
-    setLifecycleState(val);
-    start(async () => {
-      const res = await setLifecycle(client.id, val);
-      if (!res.ok) { setLifecycleState(lifecycle); setErr(res.error ?? "Failed."); }
-    });
-  }
-
   return (
     <div className="card">
       <h2>Client settings</h2>
       <hr className="divider" />
-
-      {/* Lifecycle */}
-      <div style={{ marginBottom: "1.25rem" }}>
-        <div style={{ fontWeight: 600, fontSize: "0.82rem", marginBottom: "0.4rem" }}>Lifecycle status</div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {(["active", "paused", "inactive"] as Lifecycle[]).map((lc) => (
-            <button
-              key={lc}
-              className="btn"
-              disabled={pending}
-              onClick={() => handleLifecycleChange(lc)}
-              style={{
-                padding: "0.3rem 0.7rem",
-                fontSize: "0.78rem",
-                background: lifecycle === lc ? "var(--ink)" : "transparent",
-                color: lifecycle === lc ? "var(--paper)" : undefined,
-                border: `1px solid ${lifecycle === lc ? "var(--ink)" : "var(--line)"}`,
-                textTransform: "capitalize",
-              }}
-            >
-              {lc}
-            </button>
-          ))}
-        </div>
-        <p className="meta" style={{ fontSize: "0.74rem", marginTop: "0.4rem" }}>
-          Inactive and paused clients appear in a separate section on the roster.
-        </p>
-      </div>
 
       {/* Requires confirmation */}
       <div style={{ marginBottom: "1.25rem" }}>

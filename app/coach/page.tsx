@@ -5,9 +5,15 @@ import { listClients, listAppointmentsForWeek, countOpenRequests, listCoachThrea
 import { fmtMoney } from "@/lib/format";
 import { pastProgramsForClient } from "@/lib/programs";
 import TodoBlock from "./todo-block";
+import WeekBanners from "./week-banners";
+import type { WeekSessionItem, WeekProgramItem, NoSessionClient } from "./week-banners";
 
 function fmtDaysAway(date: Date): string {
-  const days = Math.ceil((date.getTime() - Date.now()) / 86400000);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const days = Math.round((target.getTime() - today.getTime()) / 86400000);
   if (days < 0) return `${Math.abs(days)}d ago`;
   if (days === 0) return "Today";
   if (days === 1) return "Tomorrow";
@@ -51,6 +57,43 @@ export default async function CoachDashboard() {
     });
   }
 
+  // ── Banner datasets ────────────────────────────────────────────────────────
+
+  const weekSessions: WeekSessionItem[] = appts
+    .filter((a) => a.session_type === "session" && a.status !== "cancelled" && a.status !== "no_show" && !!a.client_id)
+    .map((a) => ({
+      id: a.id,
+      client_id: a.client_id!,
+      client_name: a.client_name,
+      starts_at: a.starts_at,
+      is_programmed: a.program_status === "programmed" || !!a.session_program_id,
+    }))
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+
+  const activeClients = clients.filter((c) => c.lifecycle === "active");
+
+  const weekProgramItems: WeekProgramItem[] = activeClients.map((c) => {
+    const current = pastProgramsForClient(c.id).find(
+      (p) => p.is_current && p.program_kind === "at_home"
+    ) ?? null;
+    const daysUntilEnd = current?.ends_on
+      ? Math.ceil((new Date(current.ends_on).getTime() - now) / 86400000)
+      : null;
+    return {
+      clientId: c.id,
+      clientName: c.full_name,
+      programName: current?.name ?? null,
+      endsOn: current?.ends_on ?? null,
+      daysUntilEnd,
+      hasCurrent: !!current,
+    };
+  });
+
+  const sessionClientIds = new Set(weekSessions.map((s) => s.client_id));
+  const noSessionClients: NoSessionClient[] = activeClients
+    .filter((c) => !sessionClientIds.has(c.id))
+    .map((c) => ({ id: c.id, name: c.full_name }));
+
   return (
     <main className="shell">
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -75,8 +118,8 @@ export default async function CoachDashboard() {
           <div className="stat-sub">at booked rates</div>
         </div>
         <div className="stat">
-          <div className="stat-label">Total clients</div>
-          <div className="stat-value">{clients.length}</div>
+          <div className="stat-label">Active Clients</div>
+          <div className="stat-value">{clients.filter((c) => c.lifecycle === "active").length}</div>
           <div className="stat-sub">{clients.filter((c) => c.balance_owed > 0).length} with balance</div>
         </div>
         <div className="stat">
@@ -95,6 +138,11 @@ export default async function CoachDashboard() {
             <Link href="/coach/schedule" className="meta">Full schedule →</Link>
           </div>
           <hr className="divider" />
+          <WeekBanners
+            sessions={weekSessions}
+            programs={weekProgramItems}
+            noSessions={noSessionClients}
+          />
           {appts.length === 0 ? (
             <p className="meta">No sessions booked yet this week.</p>
           ) : (

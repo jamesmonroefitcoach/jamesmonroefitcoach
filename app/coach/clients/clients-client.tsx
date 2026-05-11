@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { ClientRow, Prospect } from "@/lib/data";
 import { pastProgramsForClient } from "@/lib/programs";
 import { fmtMoney, fmtDate, fmtSessionAgo, fmtSessionAway } from "@/lib/format";
-import { addProspect, deleteProspect, logProspectFollowUp, type ProspectInput } from "./actions";
+import { addProspect, deleteProspect, logProspectFollowUp, updateProspect, type ProspectInput } from "./actions";
 import type { NextSessionStatus } from "./page";
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -163,14 +163,88 @@ function InactiveClientRow({ c }: { c: ClientRow }) {
   );
 }
 
-function ProspectRow({ p, onFollowUp, onDelete }: {
+const INLINE_INPUT: React.CSSProperties = {
+  fontSize: "0.82rem", padding: "0.25rem 0.4rem",
+  width: "100%", minWidth: 0, boxSizing: "border-box",
+};
+
+function ProspectRow({ p, onFollowUp, onDelete, onSave }: {
   p: Prospect;
   onFollowUp: (id: string) => void;
   onDelete: (id: string) => void;
+  onSave: (id: string, data: ProspectInput) => Promise<void>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<ProspectInput>({
+    full_name: p.full_name ?? "",
+    phone: p.phone ?? "",
+    email: p.email ?? "",
+    where_met: p.where_met ?? "",
+    connection: p.connection ?? "",
+    last_followed_up: p.last_followed_up ? p.last_followed_up.split("T")[0] : "",
+    notes: p.notes ?? "",
+  });
+  const [saving, startSave] = useTransition();
+
   const daysSince = p.last_followed_up
     ? Math.floor((Date.now() - new Date(p.last_followed_up).getTime()) / 86400000)
     : null;
+
+  function set(field: keyof ProspectInput, val: string) {
+    setDraft((d) => ({ ...d, [field]: val }));
+  }
+
+  function save() {
+    if (!draft.full_name.trim()) return;
+    startSave(async () => {
+      await onSave(p.id, draft);
+      setEditing(false);
+    });
+  }
+
+  if (editing) {
+    return (
+      <tr style={{ background: "var(--paper-alt, #f9f9f7)" }}>
+        <td>
+          <input className="input" style={INLINE_INPUT} value={draft.full_name}
+            onChange={(e) => set("full_name", e.target.value)} placeholder="Full name" />
+        </td>
+        <td>
+          <input className="input" style={{ ...INLINE_INPUT, marginBottom: "0.3rem" }}
+            value={draft.phone} onChange={(e) => set("phone", e.target.value)} placeholder="Phone" />
+          <input className="input" style={INLINE_INPUT}
+            value={draft.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" />
+        </td>
+        <td>
+          <input className="input" style={{ ...INLINE_INPUT, marginBottom: "0.3rem" }}
+            value={draft.where_met} onChange={(e) => set("where_met", e.target.value)} placeholder="Where met" />
+          <input className="input" style={INLINE_INPUT}
+            value={draft.connection} onChange={(e) => set("connection", e.target.value)} placeholder="Connection" />
+        </td>
+        <td>
+          <input className="input" type="date" style={INLINE_INPUT}
+            value={draft.last_followed_up} onChange={(e) => set("last_followed_up", e.target.value)} />
+        </td>
+        <td>
+          <textarea className="input" rows={2} style={{ ...INLINE_INPUT, resize: "vertical" }}
+            value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Notes…" />
+        </td>
+        <td>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <button className="btn btn-primary" style={{ fontSize: "0.78rem", padding: "0.2rem 0.55rem" }}
+              onClick={save} disabled={saving}>
+              {saving ? "…" : "✓ Save"}
+            </button>
+            <button className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.2rem 0.55rem" }}
+              onClick={() => setEditing(false)} disabled={saving}>
+              ✕ Cancel
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
       <td><strong>{p.full_name}</strong></td>
@@ -195,14 +269,26 @@ function ProspectRow({ p, onFollowUp, onDelete }: {
       </td>
       <td className="meta" style={{ maxWidth: 240, fontSize: "0.8rem" }}>{p.notes ?? "—"}</td>
       <td>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+          <button
+            className="btn btn-ghost"
+            title="Edit"
+            style={{ fontSize: "1rem", padding: "0.1rem 0.4rem", lineHeight: 1 }}
+            onClick={() => setEditing(true)}
+          >
+            ✎
+          </button>
           <button className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.2rem 0.5rem" }}
             onClick={() => onFollowUp(p.id)}>
             log follow-up
           </button>
-          <button className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.2rem 0.5rem", color: "var(--red)" }}
-            onClick={() => onDelete(p.id)}>
-            remove
+          <button
+            className="btn btn-ghost"
+            title="Remove"
+            style={{ fontSize: "1rem", padding: "0.1rem 0.4rem", lineHeight: 1, color: "var(--red)" }}
+            onClick={() => onDelete(p.id)}
+          >
+            🗑
           </button>
         </div>
       </td>
@@ -296,27 +382,33 @@ function RosterSection({ title, count, defaultOpen, extra, children }: {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <section style={{ marginBottom: "1rem" }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
+      <div
         style={{
-          width: "100%", textAlign: "left", background: "none", border: "none",
-          padding: "0.6rem 0", cursor: "pointer",
           display: "flex", alignItems: "center", gap: "0.6rem",
           borderBottom: "1px solid var(--line)",
           marginBottom: open ? "0.75rem" : 0,
         }}
       >
-        <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{title}</span>
-        <span style={{
-          background: "var(--ink)", color: "var(--paper)",
-          borderRadius: "999px", fontSize: "0.7rem", fontWeight: 700,
-          padding: "0.1rem 0.5rem", lineHeight: 1.6
-        }}>{count}</span>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          style={{
+            flex: 1, textAlign: "left", background: "none", border: "none",
+            padding: "0.6rem 0", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: "0.6rem",
+          }}
+        >
+          <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{title}</span>
+          <span style={{
+            background: "var(--ink)", color: "var(--paper)",
+            borderRadius: "999px", fontSize: "0.7rem", fontWeight: 700,
+            padding: "0.1rem 0.5rem", lineHeight: 1.6
+          }}>{count}</span>
+          <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "var(--text-secondary, #888)" }}>
+            {open ? "▲ collapse" : "▼ expand"}
+          </span>
+        </button>
         {extra}
-        <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "var(--text-secondary, #888)" }}>
-          {open ? "▲ collapse" : "▼ expand"}
-        </span>
-      </button>
+      </div>
       {open && children}
     </section>
   );
@@ -342,6 +434,10 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
   function handleDelete(id: string) {
     if (!confirm("Remove this prospect?")) return;
     startDel(async () => { await deleteProspect(id); });
+  }
+
+  async function handleSave(id: string, data: ProspectInput) {
+    await updateProspect(id, data);
   }
 
   return (
@@ -455,7 +551,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
               </thead>
               <tbody>
                 {prospects.map((p) => (
-                  <ProspectRow key={p.id} p={p} onFollowUp={handleFollowUp} onDelete={handleDelete} />
+                  <ProspectRow key={p.id} p={p} onFollowUp={handleFollowUp} onDelete={handleDelete} onSave={handleSave} />
                 ))}
               </tbody>
             </table>

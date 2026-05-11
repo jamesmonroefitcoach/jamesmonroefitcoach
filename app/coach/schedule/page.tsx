@@ -29,8 +29,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       </header>
       <hr className="divider" />
       <ScheduleView
-        weekStart={weekStart.toISOString()}
-        monthStart={monthStart.toISOString()}
+        weekStart={weekStart.toISOString().slice(0, 10)}
+        monthStart={monthStart.toISOString().slice(0, 10)}
         initialView={sp.view === "month" ? "month" : "week"}
         weekAppts={weekAppts}
         monthAppts={monthAppts}

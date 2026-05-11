@@ -1,9 +1,21 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
-import type { AppointmentRow } from "@/lib/data";
+import { listAppointmentsForWeek, listAppointmentsForMonth, type AppointmentRow } from "@/lib/data";
 import type { CancelReason } from "@/lib/cancel-reasons";
+
+export async function fetchWeekAppts(weekStart: string): Promise<AppointmentRow[]> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return [];
+  return listAppointmentsForWeek(me.id, new Date(weekStart));
+}
+
+export async function fetchMonthAppts(monthStart: string): Promise<AppointmentRow[]> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return [];
+  return listAppointmentsForMonth(me.id, new Date(monthStart));
+}
 
 export type RepeatInput = {
   enabled: boolean;
@@ -36,7 +48,7 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and ANON_KEY in .env.local." };
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const isPersonal = input.session_type === "personal";
 
   const isCancelled = input.status === "cancelled" || input.status === "no_show";
@@ -146,7 +158,7 @@ export async function cancelSeries(seriesId: string, opts: { fromDate?: string }
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   let q = supabase.from("appointments").update({ status: "cancelled" }).eq("series_id", seriesId).eq("coach_id", me.id);
   if (opts.fromDate) q = q.gte("starts_at", opts.fromDate);
   const { data, error } = await q.select("id");
@@ -159,7 +171,7 @@ export async function approveChangeRequest(apptId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data: prior } = await supabase
     .from("appointments")
     .select("starts_at, change_count, requested_starts_at, requested_ends_at")
@@ -195,7 +207,7 @@ export async function denyChangeRequest(apptId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   // Pull the appt so we can notify the client *before* deleting it.
   const { data: appt } = await supabase
@@ -240,7 +252,7 @@ export async function deleteAppointment(apptId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase.from("appointments").delete().eq("id", apptId).eq("coach_id", me.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/schedule");
@@ -252,7 +264,7 @@ export async function requestSessionChange(apptId: string, kind: "reschedule" | 
   const me = await getSessionUser();
   if (!me) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase
     .from("appointments")
     .update({ status: "change_requested", notes: note ? `[${kind}] ${note}` : `[${kind}]` })

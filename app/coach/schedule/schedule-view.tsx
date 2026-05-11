@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
-import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries } from "./actions";
+import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
 import { CANCEL_REASONS, CANCEL_REASON_LABELS } from "@/lib/cancel-reasons";
 
 const HOUR_HEIGHT = 56; // px per hour cell
@@ -156,19 +156,26 @@ export default function ScheduleView({
   clients: ClientRow[];
 }) {
   const [view, setView] = useState<View>(initialView);
-  const [ws, setWs] = useState(() => new Date(weekStart));
+  // Parse "YYYY-MM-DD" as local midnight (not UTC) to avoid timezone shift
+  const [ws, setWs] = useState(() => {
+    const [y, m, d] = weekStart.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  });
   const [ms, setMs] = useState(() => {
-    const d = new Date(monthStart);
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
+    const [y, m] = monthStart.split("-").map(Number);
+    return new Date(y, m - 1, 1, 0, 0, 0, 0);
   });
   const [appts, setAppts] = useState<AppointmentRow[]>(weekAppts);
   const [monthCache, setMonthCache] = useState<AppointmentRow[]>(monthAppts);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [savePending, startSave] = useTransition();
+  const [fetching, startFetch] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [dragClientId, setDragClientId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ day: number; hour: number } | null>(null);
 
   const today = new Date();
 
@@ -176,23 +183,29 @@ export default function ScheduleView({
     const next = new Date(ws);
     next.setDate(next.getDate() + deltaDays);
     setWs(next);
-    setAppts((cur) => cur.filter((a) => {
-      const t = new Date(a.starts_at).getTime();
-      return t >= next.getTime() && t < next.getTime() + 7 * 86400000;
-    }));
+    startFetch(async () => {
+      const data = await fetchWeekAppts(next.toISOString());
+      setAppts(data);
+    });
   }
   function jumpToDate(iso: string) {
     if (!iso) return;
-    setWs(startOfWeekLocal(new Date(iso)));
+    const [y, m, d] = iso.split("-").map(Number);
+    const next = startOfWeekLocal(new Date(y, m - 1, d));
+    setWs(next);
+    startFetch(async () => {
+      const data = await fetchWeekAppts(next.toISOString());
+      setAppts(data);
+    });
   }
   function shiftMonth(delta: number) {
     const next = new Date(ms);
     next.setMonth(next.getMonth() + delta);
     setMs(next);
-    setMonthCache((cur) => cur.filter((a) => {
-      const t = new Date(a.starts_at);
-      return t.getMonth() === next.getMonth() && t.getFullYear() === next.getFullYear();
-    }));
+    startFetch(async () => {
+      const data = await fetchMonthAppts(next.toISOString());
+      setMonthCache(data);
+    });
   }
 
   // Daily totals exclude personal blocks; cancellations stay in for visibility but not in revenue.
@@ -217,7 +230,7 @@ export default function ScheduleView({
     setDraft(newDraft(d, e));
   }
   function openEdit(a: AppointmentRow) { setDraft(fromAppt(a)); }
-  function close() { setDraft(null); setSaveError(null); }
+  function close() { setDraft(null); setSaveError(null); setPickerOpen(false); setPickerQuery(""); }
   function openNewBooking() {
     const now = new Date();
     // Default to the next full hour, clamped to 7am–6pm, on today (or Monday of current week)
@@ -482,11 +495,19 @@ export default function ScheduleView({
         {view === "week" ? (
           <>
             <button className="btn btn-ghost" onClick={() => shiftWeek(-7)} style={{ padding: "0.35rem 0.65rem" }}>‹ prev</button>
-            <button className="btn btn-ghost" onClick={() => setWs(startOfWeekLocal(new Date()))} style={{ padding: "0.35rem 0.65rem" }}>Today</button>
+            <button className="btn btn-ghost" onClick={() => {
+              const next = startOfWeekLocal(new Date());
+              setWs(next);
+              startFetch(async () => {
+                const data = await fetchWeekAppts(next.toISOString());
+                setAppts(data);
+              });
+            }} style={{ padding: "0.35rem 0.65rem" }}>Today</button>
             <button className="btn btn-ghost" onClick={() => shiftWeek(7)} style={{ padding: "0.35rem 0.65rem" }}>next ›</button>
-            <input type="date" className="input" style={{ width: 170 }} value={ws.toISOString().slice(0, 10)} onChange={(e) => jumpToDate(e.target.value)} />
+            <input type="date" className="input" style={{ width: 170 }} value={`${ws.getFullYear()}-${String(ws.getMonth()+1).padStart(2,"0")}-${String(ws.getDate()).padStart(2,"0")}`} onChange={(e) => jumpToDate(e.target.value)} />
             <span className="meta" style={{ marginLeft: "0.5rem" }}>
               Week of {ws.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              {fetching && <span style={{ marginLeft: "0.5rem", opacity: 0.6 }}>loading…</span>}
             </span>
             <span className="meta" style={{ marginLeft: "auto" }}>
               {dayTotals.reduce((a, d) => a + d.count, 0)} sessions · <strong style={{ color: "var(--ink)" }}>{fmtMoney(weekRevenue)}</strong>
@@ -495,10 +516,18 @@ export default function ScheduleView({
         ) : (
           <>
             <button className="btn btn-ghost" onClick={() => shiftMonth(-1)} style={{ padding: "0.35rem 0.65rem" }}>‹ prev</button>
-            <button className="btn btn-ghost" onClick={() => setMs(new Date(new Date().getFullYear(), new Date().getMonth(), 1))} style={{ padding: "0.35rem 0.65rem" }}>This month</button>
+            <button className="btn btn-ghost" onClick={() => {
+              const next = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+              setMs(next);
+              startFetch(async () => {
+                const data = await fetchMonthAppts(next.toISOString());
+                setMonthCache(data);
+              });
+            }} style={{ padding: "0.35rem 0.65rem" }}>This month</button>
             <button className="btn btn-ghost" onClick={() => shiftMonth(1)} style={{ padding: "0.35rem 0.65rem" }}>next ›</button>
             <span className="meta" style={{ marginLeft: "0.5rem" }}>
               {ms.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              {fetching && <span style={{ marginLeft: "0.5rem", opacity: 0.6 }}>loading…</span>}
             </span>
             <span className="meta" style={{ marginLeft: "auto" }}>
               completed <strong style={{ color: "var(--sage)" }}>{fmtMoney(monthTotals.completed)}</strong> · scheduled <strong style={{ color: "var(--ink)" }}>{fmtMoney(monthTotals.scheduled)}</strong> · unpaid <strong style={{ color: "var(--red)" }}>{fmtMoney(monthTotals.unpaid)}</strong>
@@ -534,16 +563,33 @@ export default function ScheduleView({
               </span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
                 {noSessionClients.map((c) => (
-                  <Link key={c.id} href={`/coach/clients/${c.id}`} style={{
-                    fontSize: "0.76rem", padding: "0.18rem 0.5rem",
-                    borderRadius: 3, border: "1px solid var(--line)",
-                    background: "var(--paper)", color: "var(--ink)",
-                    textDecoration: "none",
-                  }}>
-                    {c.full_name}
-                  </Link>
+                  <a
+                    key={c.id}
+                    href={`/coach/clients/${c.id}`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", c.id);
+                      e.dataTransfer.effectAllowed = "copy";
+                      setDragClientId(c.id);
+                    }}
+                    onDragEnd={() => { setDragClientId(null); setDropTarget(null); }}
+                    onClick={(e) => { if (dragClientId) e.preventDefault(); }}
+                    style={{
+                      fontSize: "0.76rem", padding: "0.18rem 0.5rem",
+                      borderRadius: 3, border: "1px solid var(--line)",
+                      background: "var(--paper)", color: "var(--ink)",
+                      textDecoration: "none", cursor: "grab", userSelect: "none",
+                    }}
+                  >
+                    ⠿ {c.full_name}
+                  </a>
                 ))}
               </div>
+              {dragClientId && (
+                <span style={{ fontSize: "0.72rem", color: "var(--muted)", fontStyle: "italic", flexBasis: "100%" }}>
+                  Drop onto a time slot to schedule a session
+                </span>
+              )}
             </>
           )}
         </div>
@@ -628,27 +674,53 @@ export default function ScheduleView({
                   }}
                 >
                   {/* hour gridlines */}
-                  {HOURS.map((h, i) => (
-                    <div
-                      key={h}
-                      onDragOver={(e) => { if (dragId) e.preventDefault(); }}
-                      onDrop={() => onCellDrop(dayIdx, h)}
-                      style={{
-                        position: "absolute",
-                        top: i * HOUR_HEIGHT,
-                        left: 0,
-                        right: 0,
-                        height: HOUR_HEIGHT,
-                        borderBottom: "1px solid var(--line)",
-                        cursor: "pointer"
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // only respond if click is on the gridline itself, not on an event
-                        if (e.target === e.currentTarget) openCreate(dayIdx, h);
-                      }}
-                    />
-                  ))}
+                  {HOURS.map((h, i) => {
+                    const isDropTarget = dropTarget?.day === dayIdx && dropTarget?.hour === h;
+                    return (
+                      <div
+                        key={h}
+                        onDragOver={(e) => {
+                          if (dragId || dragClientId) {
+                            e.preventDefault();
+                            if (dragClientId) setDropTarget({ day: dayIdx, hour: h });
+                          }
+                        }}
+                        onDragLeave={() => { if (dragClientId) setDropTarget(null); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragClientId) {
+                            const d = new Date(ws);
+                            d.setDate(ws.getDate() + dayIdx);
+                            d.setHours(h, 0, 0, 0);
+                            const end = new Date(d);
+                            end.setHours(h + 1);
+                            const nd = newDraft(d, end);
+                            const client = clients.find((c) => c.id === dragClientId);
+                            setDraft({ ...nd, client_id: dragClientId, rate: client?.session_rate?.toString() ?? nd.rate });
+                            setDragClientId(null);
+                            setDropTarget(null);
+                          } else {
+                            onCellDrop(dayIdx, h);
+                          }
+                        }}
+                        style={{
+                          position: "absolute",
+                          top: i * HOUR_HEIGHT,
+                          left: 0,
+                          right: 0,
+                          height: HOUR_HEIGHT,
+                          borderBottom: "1px solid var(--line)",
+                          cursor: dragClientId ? "copy" : "pointer",
+                          background: isDropTarget ? "rgba(90,107,74,0.18)" : undefined,
+                          transition: "background 0.1s",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (e.target === e.currentTarget) openCreate(dayIdx, h);
+                        }}
+                      />
+                    );
+                  })}
 
                   {/* WIP ghost */}
                   {ghost ? (
@@ -871,16 +943,94 @@ export default function ScheduleView({
               <>
                 <div>
                   <label className="stat-label">Client</label>
-                  <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem", alignItems: "center" }}>
-                    <select className="select" value={draft.client_id} onChange={(e) => {
-                      const c = clients.find((x) => x.id === e.target.value);
-                      setDraft({ ...draft, client_id: e.target.value, rate: c?.session_rate?.toString() ?? draft.rate });
-                    }} style={{ flex: 1 }}>
-                      <option value="">— pick client —</option>
-                      {clients.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                    </select>
+                  <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1, position: "relative" }}>
+                      {/* Searchable client combobox */}
+                      <input
+                        className="input"
+                        placeholder="Type to search clients…"
+                        value={
+                          pickerOpen
+                            ? pickerQuery
+                            : draft.client_id
+                              ? (clients.find((x) => x.id === draft.client_id)?.full_name ?? "")
+                              : ""
+                        }
+                        onFocus={() => {
+                          setPickerOpen(true);
+                          setPickerQuery("");
+                        }}
+                        onChange={(e) => setPickerQuery(e.target.value)}
+                        onBlur={() => {
+                          // Delay so mousedown on dropdown item fires first
+                          setTimeout(() => setPickerOpen(false), 150);
+                        }}
+                        style={{ width: "100%" }}
+                        autoComplete="off"
+                      />
+                      {pickerOpen && (() => {
+                        const q = pickerQuery.trim().toLowerCase();
+                        const filtered = clients
+                          .filter((c) => c.lifecycle === "active" && (q === "" || c.full_name.toLowerCase().includes(q)))
+                          .sort((a, b) => a.full_name.localeCompare(b.full_name));
+                        return filtered.length > 0 ? (
+                          <div style={{
+                            position: "absolute",
+                            top: "calc(100% + 2px)",
+                            left: 0,
+                            right: 0,
+                            background: "var(--paper)",
+                            border: "1px solid var(--line)",
+                            borderRadius: 6,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                            zIndex: 50,
+                            maxHeight: 220,
+                            overflowY: "auto",
+                          }}>
+                            {filtered.map((c) => (
+                              <div
+                                key={c.id}
+                                onMouseDown={() => {
+                                  setDraft({ ...draft, client_id: c.id, rate: c.session_rate?.toString() ?? draft.rate });
+                                  setPickerOpen(false);
+                                  setPickerQuery("");
+                                }}
+                                style={{
+                                  padding: "0.45rem 0.75rem",
+                                  fontSize: "0.84rem",
+                                  cursor: "pointer",
+                                  background: draft.client_id === c.id ? "rgba(90,107,74,0.1)" : undefined,
+                                  borderBottom: "1px solid var(--line)",
+                                }}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "rgba(90,107,74,0.08)"; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = draft.client_id === c.id ? "rgba(90,107,74,0.1)" : ""; }}
+                              >
+                                {c.full_name}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{
+                            position: "absolute",
+                            top: "calc(100% + 2px)",
+                            left: 0,
+                            right: 0,
+                            background: "var(--paper)",
+                            border: "1px solid var(--line)",
+                            borderRadius: 6,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                            zIndex: 50,
+                            padding: "0.5rem 0.75rem",
+                            fontSize: "0.82rem",
+                            color: "var(--muted)",
+                          }}>
+                            No active clients match
+                          </div>
+                        );
+                      })()}
+                    </div>
                     {draft.client_id ? (
-                      <Link href={`/coach/clients/${draft.client_id}`} className="btn btn-ghost" style={{ padding: "0.4rem 0.6rem", fontSize: "0.75rem" }}>view profile →</Link>
+                      <Link href={`/coach/clients/${draft.client_id}`} className="btn btn-ghost" style={{ padding: "0.4rem 0.6rem", fontSize: "0.75rem", whiteSpace: "nowrap" }}>view profile →</Link>
                     ) : null}
                   </div>
                 </div>

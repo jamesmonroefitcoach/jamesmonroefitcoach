@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForClient } from "@/lib/data";
 import type { Category, ProgramKind } from "@/lib/programs";
@@ -45,7 +45,7 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   // compute ends_on from starts_on + duration_weeks
   const start = new Date(input.starts_on);
@@ -202,7 +202,7 @@ export async function logMovementSet(input: {
   const me = await getSessionUser();
   if (!me) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase.from("movement_logs").insert({
     client_id: me.id,
     appointment_id: input.appointment_id ?? null,

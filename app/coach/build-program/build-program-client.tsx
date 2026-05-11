@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ClientRow } from "@/lib/data";
@@ -170,13 +170,28 @@ export default function BuildProgramClient({
   const [atHomeProgramStep, setAtHomeProgramStep] = useState<"picker" | "form" | "builder">(
     initialType === "at_home" ? "picker" : "builder"
   );
+  // in_gym Session tab flow: picker → builder
+  const [inGymStep, setInGymStep] = useState<"picker" | "builder">(
+    initialType === "in_gym" && !initialApptId ? "picker" : "builder"
+  );
   const [atHomeEditingHeader, setAtHomeEditingHeader] = useState(false);
   const [pickedExistingId, setPickedExistingId] = useState("");
   const [importDayModalUid, setImportDayModalUid] = useState<string | null>(null);
   const [supersetPickerState, setSupersetPickerState] = useState<{
-    dayUid: string; supersetId: string; search: string;
+    dayUid: string; supersetId: string;
   } | null>(null);
-  const [days, setDays] = useState<ProgramDay[]>([NEW_DAY(1)]);
+  const [days, setDays] = useState<ProgramDay[]>(() => {
+    if (initialApptId && initialAppts.length > 0) {
+      const appt = initialAppts.find((a) => a.id === initialApptId);
+      return [{
+        uid: `day-1-${Date.now()}`,
+        title: appt ? fmtSessionTitle(appt.starts_at) : "Session",
+        collapsed: false,
+        items: [],
+      }];
+    }
+    return [NEW_DAY(1)];
+  });
 
   const [savePending, startSave] = useTransition();
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -206,6 +221,9 @@ export default function BuildProgramClient({
     if (k === "at_home") {
       setAtHomeProgramStep("picker");
       setAtHomeEditingHeader(false);
+    }
+    if (k === "in_gym") {
+      setInGymStep("picker");
     }
     const url = new URL(window.location.href);
     url.searchParams.set("tab", k === "in_gym" ? "session" : "program");
@@ -241,23 +259,32 @@ export default function BuildProgramClient({
     setAtHomeEditingHeader(false);
   }
 
-  function handleBannerProgramSelect(clientId: string) {
-    setClientId(clientId);
+  function handleBannerProgramSelect(item: ClientProgramItem) {
+    setClientId(item.clientId);
     setPastSelId("");
+    if (!item.hasCurrent) {
+      // No current program → jump straight to the new-program form
+      setProgramName("New program");
+      setStartsOn(new Date().toISOString().slice(0, 10));
+      setDurationWeeks(8);
+      setDaysPerWeek(3);
+      setAtHomeProgramStep("form");
+    }
+    // If they already have a program, stay on picker so coach can choose Edit or + Add
   }
 
   function handleBannerSelect(s: WeekSession) {
     setClientId(s.client_id);
     setSelectedApptId(s.id);
-    setDays((d) => d.map((day, i) => i === 0 ? { ...day, title: fmtSessionTitle(s.starts_at) } : day));
+    setDays([{ uid: `day-1-${Date.now()}`, title: fmtSessionTitle(s.starts_at), collapsed: false, items: [] }]);
+    setInGymStep("builder");
     startApptsFetch(async () => {
       const result = await getClientAppointments(s.client_id);
       setAppts(result);
     });
   }
 
-  function handleClientChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const id = e.target.value;
+  function selectClient(id: string) {
     setClientId(id);
     setPastSelId("");
     setSelectedApptId("");
@@ -647,6 +674,25 @@ export default function BuildProgramClient({
     addMovementToDay(dayUid, leafToMovement(leaf), false);
   }
 
+  function addMovementToSuperset(dayUid: string, m: Movement, supersetId: string) {
+    setDays((d) =>
+      d.map((day) => {
+        if (day.uid !== dayUid) return day;
+        const newItem: ProgramItem = {
+          uid: `${m.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          movement: m, is_warmup: false,
+          sets: 3, reps: "8-10", exertion_score: 7,
+          same_format: true, set_rows: [], variations: [],
+          rest_seconds: 60,
+          equipment_list: (m.equipment_list ?? []) as Equipment[],
+          equipment_specifics: m.equipment_specifics,
+          superset_id: supersetId,
+        };
+        return { ...day, items: [...day.items, newItem] };
+      })
+    );
+  }
+
   // ─── Variation toggle ────────────────────────────────────────────
   function toggleVariation(dayUid: string, itemUid: string, v: Variation) {
     setDays((d) =>
@@ -824,21 +870,19 @@ export default function BuildProgramClient({
         </span>
       </div>
 
-      {/* Sessions this week banner — Session tab only */}
-      {programKind === "in_gym" && weekSessions.length > 0 ? (
-        <SessionsThisWeekBanner sessions={weekSessions} onSelect={handleBannerSelect} />
-      ) : null}
-
-      {/* ─── at_home SETUP FLOW (picker / form steps) ─── */}
-      {programKind === "at_home" && atHomeProgramStep !== "builder" && (
+      {/* ─── in_gym PICKER FLOW ─── */}
+      {programKind === "in_gym" && inGymStep === "picker" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+          {/* Sessions this week — above client card */}
+          {weekSessions.length > 0 && (
+            <SessionsThisWeekBanner sessions={weekSessions} onSelect={handleBannerSelect} />
+          )}
 
           {/* Step 1: Client + summary */}
           <div className="card" style={{ borderLeft: selectedClient ? "4px solid var(--rust)" : undefined }}>
             <label className="stat-label">Client</label>
-            <select className="select" value={clientId} onChange={handleClientChange} style={{ marginTop: "0.3rem", maxWidth: 320 }}>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-            </select>
+            <ClientCombobox clients={clients} value={clientId} onChange={selectClient} />
             {selectedClient && (
               <>
                 <div style={{ marginTop: "0.65rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -853,18 +897,83 @@ export default function BuildProgramClient({
                     full profile →
                   </Link>
                 </div>
-                <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+                <ClientGoalsSection client={selectedClient} />
+              </>
+            )}
+          </div>
+
+          {/* Step 2: Session picker */}
+          {clientId && (
+            <div className="card">
+              <label className="stat-label">
+                Select Session
+                {apptsPending ? <span className="meta" style={{ marginLeft: "0.5rem", fontWeight: 400 }}>loading…</span> : null}
+              </label>
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.3rem", alignItems: "center", flexWrap: "wrap" }}>
+                <select
+                  className="select"
+                  style={{ flex: 1, maxWidth: 420 }}
+                  value={selectedApptId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedApptId(id);
+                    const appt = appts.find((a) => a.id === id);
+                    setDays([{
+                      uid: `day-1-${Date.now()}`,
+                      title: appt ? fmtSessionTitle(appt.starts_at) : "Session",
+                      collapsed: false,
+                      items: [],
+                    }]);
+                  }}
+                  disabled={apptsPending}
+                >
+                  <option value="">— pick a session —</option>
+                  {appts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {new Date(a.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      {a.program_status === "programmed" ? "  ✓ programmed" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="btn btn-primary"
+                  disabled={!selectedApptId}
+                  onClick={() => setInGymStep("builder")}
+                >Build →</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── at_home SETUP FLOW (picker / form steps) ─── */}
+      {programKind === "at_home" && atHomeProgramStep !== "builder" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+          {/* Client programs banner — above client card */}
+          {clientProgramSummary.length > 0 && (
+            <ClientProgramsBanner items={clientProgramSummary} onSelect={handleBannerProgramSelect} />
+          )}
+
+          {/* Step 1: Client + summary */}
+          <div className="card" style={{ borderLeft: selectedClient ? "4px solid var(--rust)" : undefined }}>
+            <label className="stat-label">Client</label>
+            <ClientCombobox clients={clients} value={clientId} onChange={selectClient} />
+            {selectedClient && (
+              <>
+                <div style={{ marginTop: "0.65rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
                   <div>
-                    <div className="stat-label">Goals</div>
-                    <p style={{ marginTop: "0.25rem", fontSize: "0.88rem" }}>{selectedClient.goals ?? <span className="meta">No goals on file</span>}</p>
+                    <span className="badge">Programming for</span>
+                    <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
+                    <div className="meta" style={{ fontSize: "0.82rem" }}>
+                      {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
+                    </div>
                   </div>
-                  <div>
-                    <div className="stat-label" style={{ color: selectedClient.injuries ? "var(--red)" : undefined }}>Injuries / cautions</div>
-                    <p style={{ marginTop: "0.25rem", fontSize: "0.88rem", color: selectedClient.injuries ? "var(--red)" : undefined }}>
-                      {selectedClient.injuries ?? <span className="meta">None reported</span>}
-                    </p>
-                  </div>
+                  <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
+                    full profile →
+                  </Link>
                 </div>
+                <ClientGoalsSection client={selectedClient} />
               </>
             )}
           </div>
@@ -1011,8 +1120,59 @@ export default function BuildProgramClient({
         </div>
       )}
 
+      {/* ─── in_gym BUILDER: session header card ─── */}
+      {programKind === "in_gym" && inGymStep === "builder" && (
+        <div className="card no-print" style={{ marginBottom: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <span className="badge">Session</span>
+              <h2 style={{ margin: "0.35rem 0 0.2rem" }}>{days[0]?.title ?? "Session"}</h2>
+              <div className="meta" style={{ fontSize: "0.82rem" }}>
+                {selectedClient?.full_name} · In-gym training session
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.78rem" }}
+              onClick={() => setInGymStep("picker")}
+            >← Back</button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── in_gym builder: client summary ─── */}
+      {programKind === "in_gym" && inGymStep === "builder" && selectedClient && (
+        <div className="card" style={{ marginBottom: "1rem", borderLeft: "4px solid var(--rust)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+            <div>
+              <span className="badge">Programming for</span>
+              <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
+              <div className="meta" style={{ fontSize: "0.82rem" }}>
+                {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
+              </div>
+            </div>
+            <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
+              full profile →
+            </Link>
+          </div>
+          <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+            <div>
+              <div className="stat-label">Goals</div>
+              <p style={{ marginTop: "0.25rem", fontSize: "0.88rem" }}>{selectedClient.goals ?? <span className="meta">No goals on file</span>}</p>
+            </div>
+            <div>
+              <div className="stat-label" style={{ color: selectedClient.injuries ? "var(--red)" : undefined }}>Injuries / cautions</div>
+              <p style={{ marginTop: "0.25rem", fontSize: "0.88rem", color: selectedClient.injuries ? "var(--red)" : undefined }}>
+                {selectedClient.injuries ?? <span className="meta">None reported</span>}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
     {/* ─── BUILDER grid: library + main ─── */}
-    {(programKind === "in_gym" || (programKind === "at_home" && atHomeProgramStep === "builder")) && (
+    {((programKind === "in_gym" && inGymStep === "builder") || (programKind === "at_home" && atHomeProgramStep === "builder")) && (
     <>
     <div style={{ display: "grid", gridTemplateColumns: libOpen ? "220px 1fr" : "36px 1fr", gap: "1.25rem", transition: "grid-template-columns 0.15s" }}>
       {/* ─── library accordion (left) ─── */}
@@ -1150,77 +1310,6 @@ export default function BuildProgramClient({
 
       {/* ─── main column ─── */}
       <section>
-        {/* Session tab: client + session selector */}
-        {programKind === "in_gym" && (
-          <div className="card no-print">
-            <div style={{ marginBottom: "0.75rem" }}>
-              <label className="stat-label">Client</label>
-              <select className="select" value={clientId} onChange={handleClientChange} style={{ marginTop: "0.3rem", maxWidth: 300 }}>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="stat-label">
-                Select Session
-                {apptsPending ? <span className="meta" style={{ marginLeft: "0.5rem", fontWeight: 400 }}>loading…</span> : null}
-              </label>
-              <select
-                className="select"
-                value={selectedApptId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setSelectedApptId(id);
-                  const appt = appts.find((a) => a.id === id);
-                  setDays((d) => d.map((day, i) => i === 0
-                    ? { ...day, title: appt ? fmtSessionTitle(appt.starts_at) : "Day 1" }
-                    : day
-                  ));
-                }}
-                style={{ marginTop: "0.3rem", maxWidth: 420 }}
-                disabled={apptsPending}
-              >
-                <option value="">— pick a session —</option>
-                {appts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {new Date(a.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                    {a.program_status === "programmed" ? "  ✓ programmed" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* Client summary — shown for in_gym */}
-        {programKind === "in_gym" && selectedClient ? (
-          <div className="card" style={{ marginTop: "1rem", borderLeft: "4px solid var(--rust)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem" }}>
-              <div>
-                <span className="badge">Programming for</span>
-                <h2 style={{ marginTop: "0.4rem" }}>{selectedClient.full_name}</h2>
-                <div className="meta" style={{ marginTop: "0.2rem", fontSize: "0.82rem" }}>
-                  {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
-                <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>full profile →</Link>
-              </div>
-            </div>
-            <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
-              <div>
-                <div className="stat-label">Goals</div>
-                <p style={{ marginTop: "0.25rem", fontSize: "0.88rem" }}>{selectedClient.goals ?? <span className="meta">No goals on file</span>}</p>
-              </div>
-              <div>
-                <div className="stat-label" style={{ color: selectedClient.injuries ? "var(--red)" : undefined }}>Injuries / cautions</div>
-                <p style={{ marginTop: "0.25rem", fontSize: "0.88rem", color: selectedClient.injuries ? "var(--red)" : undefined }}>
-                  {selectedClient.injuries ?? <span className="meta">None reported</span>}
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         {/* Past programs + at-home pull-from — Session tab only */}
         {programKind === "in_gym" && (
           <div className="card no-print" style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: atHomeForClient.length ? "1fr 1fr" : "1fr", gap: "0.75rem", alignItems: "end" }}>
@@ -1305,86 +1394,129 @@ export default function BuildProgramClient({
           ) : null}
         </div>
 
-        {/* Days — responsive grid layout */}
-        <div style={{
-          marginTop: "1rem",
-          display: "grid",
-          gridTemplateColumns: `repeat(${days.length}, minmax(${Math.max(210, Math.min(380, Math.floor(900 / days.length)))}px, 1fr))`,
-          gap: "0.75rem",
-          alignItems: "start",
-          paddingBottom: "0.75rem",
-          overflowX: "auto",
-        }}>
-          {days.map((day) => {
-            const renderGroups = toRenderGroups(day.items);
-            return (
-              <div
-                key={day.uid}
-                className="card"
-                style={{
-                  padding: 0, display: "flex", flexDirection: "column", minWidth: 0,
-                  marginTop: 0, // override .card + .card { margin-top: 1rem } — grid handles spacing
-                  borderColor: day.uid === activeDayUid ? "var(--rust)" : undefined,
-                }}
-                onDragOver={(e) => { if (drag) e.preventDefault(); }}
-                onDrop={(e) => onDayDrop(day.uid, e)}
-              >
-                {/* Day header */}
-                <div style={{
-                  padding: "0.55rem 0.7rem", display: "flex", alignItems: "center", gap: "0.4rem",
-                  borderBottom: "1px solid var(--line)",
-                  background: day.uid === activeDayUid ? "rgba(168,61,43,0.04)" : undefined,
-                }}>
-                  <input
-                    className="input"
-                    style={{ flex: 1, fontWeight: 700, fontSize: "0.88rem", border: "none", background: "transparent", padding: "0.15rem 0" }}
-                    value={day.title}
-                    onChange={(e) => patchDay(day.uid, { title: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-ghost no-print"
-                    style={{ padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0, color: "var(--muted)" }}
-                    onClick={() => setImportDayModalUid(day.uid)}
-                    title="Import exercises from a past program into this day"
-                  >↓ Import</button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost no-print"
-                    style={{
-                      padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0,
-                      color: day.uid === activeDayUid ? "var(--rust)" : "var(--muted)",
-                      borderColor: day.uid === activeDayUid ? "var(--rust)" : undefined,
-                      background: day.uid === activeDayUid ? "rgba(168,61,43,0.08)" : undefined,
-                      fontWeight: day.uid === activeDayUid ? 700 : undefined,
+        {/* ── in_gym: single day card (session date/time as title, no add/delete/active buttons) ── */}
+        {programKind === "in_gym" && (() => {
+          const day = days[0];
+          if (!day) return null;
+          const renderGroups = toRenderGroups(day.items);
+          return (
+            <div
+              className="card"
+              style={{ padding: 0, display: "flex", flexDirection: "column", marginTop: "1rem" }}
+              onDragOver={(e) => { if (drag) e.preventDefault(); }}
+              onDrop={(e) => onDayDrop(day.uid, e)}
+            >
+              {/* Session day header */}
+              <div style={{
+                padding: "0.55rem 0.7rem", display: "flex", alignItems: "center", gap: "0.4rem",
+                borderBottom: "1px solid var(--line)",
+                background: "rgba(168,61,43,0.04)",
+              }}>
+                <input
+                  className="input"
+                  style={{ flex: 1, fontWeight: 700, fontSize: "0.88rem", border: "none", background: "transparent", padding: "0.15rem 0" }}
+                  value={day.title}
+                  onChange={(e) => patchDay(day.uid, { title: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost no-print"
+                  style={{ padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0, color: "var(--muted)" }}
+                  onClick={() => setImportDayModalUid(day.uid)}
+                  title="Import exercises from a past program into this session"
+                >↓ Import</button>
+              </div>
+              {/* Summary bar */}
+              <div className="meta" style={{ fontSize: "0.68rem", padding: "0.25rem 0.7rem", borderBottom: "1px solid var(--line)", color: "var(--muted)" }}>
+                {daySummary(day)}
+              </div>
+
+              {/* Exercises */}
+              <div style={{ padding: "0.4rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1 }}>
+              {day.items.length === 0 ? (
+                <p className="meta" style={{ fontSize: "0.74rem", textAlign: "center", padding: "0.75rem 0", color: "var(--muted)" }}>
+                  Drop movements here or click + in the library
+                </p>
+              ) : renderGroups.map((group) => {
+
+                /* ── Standalone exercise ── */
+                if (group.kind === "exercise") {
+                  const { item: it, itemIdx } = group;
+                  return (
+                    <ExerciseCard
+                      key={it.uid}
+                      it={it}
+                      dayUid={day.uid}
+                      itemIdx={itemIdx}
+                      inSuperset={false}
+                      drag={drag}
+                      onDragStart={(e) => onDragStartItem(day.uid, it.uid, e)}
+                      onDragEnd={() => setDrag(null)}
+                      onDrop={(e) => onRowDrop(day.uid, itemIdx, e)}
+                      onRemove={() => removeItem(day.uid, it.uid)}
+                      onMoveUp={() => moveItem(day.uid, it.uid, -1)}
+                      onMoveDown={() => moveItem(day.uid, it.uid, 1)}
+                      onPatch={(p) => patchItem(day.uid, it.uid, p)}
+                      onToggleSameFormat={() => toggleSameFormat(day.uid, it.uid)}
+                      onPatchSetRow={(si, p) => patchSetRow(day.uid, it.uid, si, p)}
+                      bottomSlot={
+                        <button
+                          type="button"
+                          className="btn btn-ghost no-print"
+                          style={{ fontSize: "0.62rem", padding: "0.1rem 0.32rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", marginTop: "0.18rem" }}
+                          onClick={() => {
+                            const ssId = initSuperset(day.uid, it.uid);
+                            setSupersetPickerState({ dayUid: day.uid, supersetId: ssId });
+                          }}
+                          title="Add another exercise to form a superset"
+                        >⊞ + Superset</button>
+                      }
+                    />
+                  );
+                }
+
+                /* ── Superset block ── */
+                const { supersetId, entries } = group;
+                const lastEntry = entries[entries.length - 1];
+                return (
+                  <div
+                    key={supersetId}
+                    onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); }}}
+                    onDrop={(e) => {
+                      e.stopPropagation();
+                      if (!drag) return;
+                      if (drag.kind === "lib") {
+                        e.preventDefault();
+                        addMovementToSuperset(day.uid, drag.movement, supersetId);
+                        setDrag(null);
+                      } else if (drag.kind === "item" && !entries.find(x => x.item.uid === drag.itemUid)) {
+                        if (drag.dayUid !== day.uid) moveItemAcross(drag.dayUid, drag.itemUid, day.uid);
+                        addToSuperset(day.uid, drag.itemUid, supersetId);
+                        setDrag(null);
+                      } else {
+                        onRowDrop(day.uid, lastEntry.itemIdx + 1, e);
+                      }
                     }}
-                    onClick={() => setSelectedDayUid(day.uid)}
-                    title={day.uid === activeDayUid ? "Active — library additions go here" : "Set as active day for library"}
+                    style={{ borderRadius: 5, border: "2px solid var(--amber)", overflow: "hidden" }}
                   >
-                    {day.uid === activeDayUid ? "✎ active" : "✎"}
-                  </button>
-                  <button className="btn btn-ghost no-print" style={{ padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: "var(--red)", flexShrink: 0 }} onClick={() => removeDay(day.uid)} title="Delete day">✕</button>
-                </div>
-                <div className="meta" style={{ fontSize: "0.68rem", padding: "0.25rem 0.7rem", borderBottom: "1px solid var(--line)", color: "var(--muted)" }}>
-                  {daySummary(day)}
-                </div>
-
-                {/* Render groups */}
-                <div style={{ padding: "0.4rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1 }}>
-                  {day.items.length === 0 ? (
-                    <p className="meta" style={{ fontSize: "0.74rem", textAlign: "center", padding: "0.75rem 0", color: "var(--muted)" }}>Drop movements here</p>
-                  ) : renderGroups.map((group) => {
-
-                    /* ── Standalone exercise ── */
-                    if (group.kind === "exercise") {
-                      const { item: it, itemIdx } = group;
-                      return (
+                    <div
+                      draggable
+                      onDragStart={(e) => onDragStartSuperset(day.uid, supersetId, e)}
+                      onDragEnd={() => setDrag(null)}
+                      style={{ background: "rgba(217,119,6,0.09)", padding: "0.28rem 0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "grab", borderBottom: "1px solid rgba(217,119,6,0.25)" }}
+                    >
+                      <span className="no-print" style={{ color: "var(--amber)", userSelect: "none", fontSize: "0.7rem" }}>⋮⋮</span>
+                      <span style={{ fontWeight: 700, fontSize: "0.7rem", color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Super Set</span>
+                      <span className="meta" style={{ fontSize: "0.64rem" }}>{entries.length} exercises</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", padding: "0.3rem 0.35rem" }}>
+                      {entries.map(({ item: it, itemIdx }) => (
                         <ExerciseCard
                           key={it.uid}
                           it={it}
                           dayUid={day.uid}
                           itemIdx={itemIdx}
-                          inSuperset={false}
+                          inSuperset={true}
                           drag={drag}
                           onDragStart={(e) => onDragStartItem(day.uid, it.uid, e)}
                           onDragEnd={() => setDrag(null)}
@@ -1399,175 +1531,238 @@ export default function BuildProgramClient({
                             <button
                               type="button"
                               className="btn btn-ghost no-print"
-                              style={{ fontSize: "0.62rem", padding: "0.1rem 0.32rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", marginTop: "0.18rem" }}
-                              onClick={() => {
-                                const ssId = initSuperset(day.uid, it.uid);
-                                setSupersetPickerState({ dayUid: day.uid, supersetId: ssId, search: "" });
-                              }}
-                              title="Add another exercise to form a superset"
-                            >⊞ + Superset</button>
+                              style={{ fontSize: "0.6rem", padding: "0.1rem 0.3rem", color: "var(--muted)", width: "100%", marginTop: "0.2rem" }}
+                              onClick={() => removeFromSuperset(day.uid, it.uid)}
+                            >↗ Ungroup</button>
                           }
                         />
-                      );
-                    }
-
-                    /* ── Superset block ── */
-                    const { supersetId, label, entries } = group;
-                    const lastEntry = entries[entries.length - 1];
-                    const afterSuperset = day.items[lastEntry.itemIdx + 1];
-                    const canExtend = !!afterSuperset && !afterSuperset.superset_id;
-                    return (
-                      <div
-                        key={supersetId}
-                        onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); }}}
-                        onDrop={(e) => {
-                          e.stopPropagation();
-                          if (!drag) return;
-                          if (drag.kind === "item" && !entries.find(x => x.item.uid === drag.itemUid)) {
-                            // Dropping a standalone exercise onto this superset: add it to the superset
-                            if (drag.dayUid !== day.uid) moveItemAcross(drag.dayUid, drag.itemUid, day.uid);
-                            addToSuperset(day.uid, drag.itemUid, supersetId);
-                            setDrag(null);
-                          } else {
-                            onRowDrop(day.uid, lastEntry.itemIdx + 1, e);
-                          }
+                      ))}
+                    </div>
+                    {supersetPickerState?.supersetId === supersetId ? (
+                      <SupersetExercisePicker
+                        onSelect={(leaf) => {
+                          addMovementToSuperset(supersetPickerState.dayUid, leafToMovement(leaf), supersetId);
+                          setSupersetPickerState(null);
                         }}
-                        style={{ borderRadius: 5, border: "2px solid var(--amber)", overflow: "hidden" }}
-                      >
-                        {/* Superset header — draggable */}
-                        <div
-                          draggable
-                          onDragStart={(e) => onDragStartSuperset(day.uid, supersetId, e)}
-                          onDragEnd={() => setDrag(null)}
-                          style={{
-                            background: "rgba(217,119,6,0.09)", padding: "0.28rem 0.5rem",
-                            display: "flex", alignItems: "center", gap: "0.4rem", cursor: "grab",
-                            borderBottom: "1px solid rgba(217,119,6,0.25)"
-                          }}
-                        >
-                          <span className="no-print" style={{ color: "var(--amber)", userSelect: "none", fontSize: "0.7rem" }}>⋮⋮</span>
-                          <span style={{ fontWeight: 700, fontSize: "0.7rem", color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>
-                            Super Set
-                          </span>
-                          <span className="meta" style={{ fontSize: "0.64rem" }}>{entries.length} exercises</span>
-                        </div>
+                        onClose={() => setSupersetPickerState(null)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-ghost no-print"
+                        style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
+                        onClick={() => setSupersetPickerState({ dayUid: day.uid, supersetId })}
+                      >⊞ + Add exercise to Super Set</button>
+                    )}
+                  </div>
+                );
+              })}
+              </div>
+            </div>
+          );
+        })()}
 
-                        {/* Items within superset */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", padding: "0.3rem 0.35rem" }}>
-                          {entries.map(({ item: it, itemIdx }) => (
-                            <ExerciseCard
-                              key={it.uid}
-                              it={it}
-                              dayUid={day.uid}
-                              itemIdx={itemIdx}
-                              inSuperset={true}
-                              drag={drag}
-                              onDragStart={(e) => onDragStartItem(day.uid, it.uid, e)}
-                              onDragEnd={() => setDrag(null)}
-                              onDrop={(e) => onRowDrop(day.uid, itemIdx, e)}
-                              onRemove={() => removeItem(day.uid, it.uid)}
-                              onMoveUp={() => moveItem(day.uid, it.uid, -1)}
-                              onMoveDown={() => moveItem(day.uid, it.uid, 1)}
-                              onPatch={(p) => patchItem(day.uid, it.uid, p)}
-                              onToggleSameFormat={() => toggleSameFormat(day.uid, it.uid)}
-                              onPatchSetRow={(si, p) => patchSetRow(day.uid, it.uid, si, p)}
-                                  bottomSlot={
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost no-print"
-                                  style={{ fontSize: "0.6rem", padding: "0.1rem 0.3rem", color: "var(--muted)", width: "100%", marginTop: "0.2rem" }}
-                                  onClick={() => removeFromSuperset(day.uid, it.uid)}
-                                >↗ Ungroup</button>
-                              }
-                            />
-                          ))}
-                        </div>
+        {/* ── at_home: multi-day card grid ── */}
+        {programKind === "at_home" && (
+          <>
+          <div style={{
+            marginTop: "1rem",
+            display: "grid",
+            gridTemplateColumns: `repeat(${days.length}, minmax(${Math.max(210, Math.min(380, Math.floor(900 / days.length)))}px, 1fr))`,
+            gap: "0.75rem",
+            alignItems: "start",
+            paddingBottom: "0.75rem",
+            overflowX: "auto",
+          }}>
+            {days.map((day) => {
+              const renderGroups = toRenderGroups(day.items);
+              return (
+                <div
+                  key={day.uid}
+                  className="card"
+                  style={{
+                    padding: 0, display: "flex", flexDirection: "column", minWidth: 0,
+                    marginTop: 0,
+                    borderColor: day.uid === activeDayUid ? "var(--rust)" : undefined,
+                  }}
+                  onDragOver={(e) => { if (drag) e.preventDefault(); }}
+                  onDrop={(e) => onDayDrop(day.uid, e)}
+                >
+                  {/* Day header */}
+                  <div style={{
+                    padding: "0.55rem 0.7rem", display: "flex", alignItems: "center", gap: "0.4rem",
+                    borderBottom: "1px solid var(--line)",
+                    background: day.uid === activeDayUid ? "rgba(168,61,43,0.04)" : undefined,
+                  }}>
+                    <input
+                      className="input"
+                      style={{ flex: 1, fontWeight: 700, fontSize: "0.88rem", border: "none", background: "transparent", padding: "0.15rem 0" }}
+                      value={day.title}
+                      onChange={(e) => patchDay(day.uid, { title: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-ghost no-print"
+                      style={{ padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0, color: "var(--muted)" }}
+                      onClick={() => setImportDayModalUid(day.uid)}
+                      title="Import exercises from a past program into this day"
+                    >↓ Import</button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost no-print"
+                      style={{
+                        padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0,
+                        color: day.uid === activeDayUid ? "var(--rust)" : "var(--muted)",
+                        borderColor: day.uid === activeDayUid ? "var(--rust)" : undefined,
+                        background: day.uid === activeDayUid ? "rgba(168,61,43,0.08)" : undefined,
+                        fontWeight: day.uid === activeDayUid ? 700 : undefined,
+                      }}
+                      onClick={() => setSelectedDayUid(day.uid)}
+                      title={day.uid === activeDayUid ? "Active — library additions go here" : "Set as active day for library"}
+                    >
+                      {day.uid === activeDayUid ? "✎ active" : "✎"}
+                    </button>
+                    <button className="btn btn-ghost no-print" style={{ padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: "var(--red)", flexShrink: 0 }} onClick={() => removeDay(day.uid)} title="Delete day">✕</button>
+                  </div>
+                  <div className="meta" style={{ fontSize: "0.68rem", padding: "0.25rem 0.7rem", borderBottom: "1px solid var(--line)", color: "var(--muted)" }}>
+                    {daySummary(day)}
+                  </div>
 
-                        {/* Inline superset picker (shown after initSuperset) */}
-                        {supersetPickerState?.supersetId === supersetId ? (
-                          <div
-                            className="no-print"
-                            style={{ borderTop: "1px solid rgba(217,119,6,0.25)", padding: "0.35rem 0.5rem", background: "rgba(217,119,6,0.04)" }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                              <input
-                                className="input"
-                                autoFocus
-                                placeholder="Search to add exercise…"
-                                value={supersetPickerState.search}
-                                onChange={(e) => setSupersetPickerState(s => s ? { ...s, search: e.target.value } : s)}
-                                style={{ flex: 1, fontSize: "0.72rem", padding: "0.22rem 0.35rem" }}
-                              />
+                  {/* Render groups */}
+                  <div style={{ padding: "0.4rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1 }}>
+                    {day.items.length === 0 ? (
+                      <p className="meta" style={{ fontSize: "0.74rem", textAlign: "center", padding: "0.75rem 0", color: "var(--muted)" }}>Drop movements here</p>
+                    ) : renderGroups.map((group) => {
+
+                      /* ── Standalone exercise ── */
+                      if (group.kind === "exercise") {
+                        const { item: it, itemIdx } = group;
+                        return (
+                          <ExerciseCard
+                            key={it.uid}
+                            it={it}
+                            dayUid={day.uid}
+                            itemIdx={itemIdx}
+                            inSuperset={false}
+                            drag={drag}
+                            onDragStart={(e) => onDragStartItem(day.uid, it.uid, e)}
+                            onDragEnd={() => setDrag(null)}
+                            onDrop={(e) => onRowDrop(day.uid, itemIdx, e)}
+                            onRemove={() => removeItem(day.uid, it.uid)}
+                            onMoveUp={() => moveItem(day.uid, it.uid, -1)}
+                            onMoveDown={() => moveItem(day.uid, it.uid, 1)}
+                            onPatch={(p) => patchItem(day.uid, it.uid, p)}
+                            onToggleSameFormat={() => toggleSameFormat(day.uid, it.uid)}
+                            onPatchSetRow={(si, p) => patchSetRow(day.uid, it.uid, si, p)}
+                            bottomSlot={
                               <button
                                 type="button"
-                                className="btn btn-ghost"
-                                style={{ fontSize: "0.66rem", padding: "0.18rem 0.4rem", color: "var(--muted)" }}
-                                onClick={() => setSupersetPickerState(null)}
-                              >✕</button>
-                            </div>
-                            {supersetPickerState.search.trim().length > 0 && (() => {
-                              const q = supersetPickerState.search.trim().toLowerCase();
-                              const hits = MOVEMENT_LIBRARY.filter(m => m.name.toLowerCase().includes(q) || m.category.includes(q)).slice(0, 8);
-                              return hits.length ? (
-                                <div style={{ marginTop: "0.3rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-                                  {hits.map(m => (
-                                    <button
-                                      key={m.id}
-                                      type="button"
-                                      className="btn btn-ghost"
-                                      style={{ textAlign: "left", fontSize: "0.72rem", padding: "0.2rem 0.4rem", justifyContent: "flex-start" }}
-                                      onClick={() => {
-                                        const { dayUid, supersetId } = supersetPickerState;
-                                        // Build the new item and assign superset_id in one setDays call
-                                        const newUid = `${m.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-                                        setDays(d => d.map(day => {
-                                          if (day.uid !== dayUid) return day;
-                                          const newItem: ProgramItem = {
-                                            uid: newUid,
-                                            movement: m,
-                                            is_warmup: false,
-                                            sets: 3, reps: "8-10", exertion_score: 7,
-                                            same_format: true, set_rows: [], variations: [],
-                                            rest_seconds: 60,
-                                            equipment_list: (m.equipment_list ?? []) as Equipment[],
-                                            equipment_specifics: m.equipment_specifics,
-                                            superset_id: supersetId,
-                                          };
-                                          return { ...day, items: [...day.items, newItem] };
-                                        }));
-                                        setSupersetPickerState(null);
-                                      }}
-                                    >
-                                      <strong>{m.name}</strong>
-                                      <span className="meta" style={{ marginLeft: "0.4rem", fontSize: "0.67rem" }}>{CATEGORY_LABELS[m.category]}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : <p className="meta" style={{ fontSize: "0.72rem", margin: "0.25rem 0 0" }}>No matches</p>;
-                            })()}
+                                className="btn btn-ghost no-print"
+                                style={{ fontSize: "0.62rem", padding: "0.1rem 0.32rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", marginTop: "0.18rem" }}
+                                onClick={() => {
+                                  const ssId = initSuperset(day.uid, it.uid);
+                                  setSupersetPickerState({ dayUid: day.uid, supersetId: ssId });
+                                }}
+                                title="Add another exercise to form a superset"
+                              >⊞ + Superset</button>
+                            }
+                          />
+                        );
+                      }
+
+                      /* ── Superset block ── */
+                      const { supersetId, label, entries } = group;
+                      const lastEntry = entries[entries.length - 1];
+                      const canExtend = !!day.items[lastEntry.itemIdx + 1] && !day.items[lastEntry.itemIdx + 1].superset_id;
+                      return (
+                        <div
+                          key={supersetId}
+                          onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); }}}
+                          onDrop={(e) => {
+                            e.stopPropagation();
+                            if (!drag) return;
+                            if (drag.kind === "lib") {
+                              e.preventDefault();
+                              addMovementToSuperset(day.uid, drag.movement, supersetId);
+                              setDrag(null);
+                            } else if (drag.kind === "item" && !entries.find(x => x.item.uid === drag.itemUid)) {
+                              if (drag.dayUid !== day.uid) moveItemAcross(drag.dayUid, drag.itemUid, day.uid);
+                              addToSuperset(day.uid, drag.itemUid, supersetId);
+                              setDrag(null);
+                            } else {
+                              onRowDrop(day.uid, lastEntry.itemIdx + 1, e);
+                            }
+                          }}
+                          style={{ borderRadius: 5, border: "2px solid var(--amber)", overflow: "hidden" }}
+                        >
+                          <div
+                            draggable
+                            onDragStart={(e) => onDragStartSuperset(day.uid, supersetId, e)}
+                            onDragEnd={() => setDrag(null)}
+                            style={{ background: "rgba(217,119,6,0.09)", padding: "0.28rem 0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "grab", borderBottom: "1px solid rgba(217,119,6,0.25)" }}
+                          >
+                            <span className="no-print" style={{ color: "var(--amber)", userSelect: "none", fontSize: "0.7rem" }}>⋮⋮</span>
+                            <span style={{ fontWeight: 700, fontSize: "0.7rem", color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Super Set</span>
+                            <span className="meta" style={{ fontSize: "0.64rem" }}>{entries.length} exercises</span>
                           </div>
-                        ) : (
-                          /* + Add to superset button */
-                          <button
-                            type="button"
-                            className="btn btn-ghost no-print"
-                            style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
-                            onClick={() => setSupersetPickerState({ dayUid: day.uid, supersetId, search: "" })}
-                          >⊞ + Add exercise to Super Set</button>
-                        )}
-                      </div>
-                    );
-                  })}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", padding: "0.3rem 0.35rem" }}>
+                            {entries.map(({ item: it, itemIdx }) => (
+                              <ExerciseCard
+                                key={it.uid}
+                                it={it}
+                                dayUid={day.uid}
+                                itemIdx={itemIdx}
+                                inSuperset={true}
+                                drag={drag}
+                                onDragStart={(e) => onDragStartItem(day.uid, it.uid, e)}
+                                onDragEnd={() => setDrag(null)}
+                                onDrop={(e) => onRowDrop(day.uid, itemIdx, e)}
+                                onRemove={() => removeItem(day.uid, it.uid)}
+                                onMoveUp={() => moveItem(day.uid, it.uid, -1)}
+                                onMoveDown={() => moveItem(day.uid, it.uid, 1)}
+                                onPatch={(p) => patchItem(day.uid, it.uid, p)}
+                                onToggleSameFormat={() => toggleSameFormat(day.uid, it.uid)}
+                                onPatchSetRow={(si, p) => patchSetRow(day.uid, it.uid, si, p)}
+                                bottomSlot={
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost no-print"
+                                    style={{ fontSize: "0.6rem", padding: "0.1rem 0.3rem", color: "var(--muted)", width: "100%", marginTop: "0.2rem" }}
+                                    onClick={() => removeFromSuperset(day.uid, it.uid)}
+                                  >↗ Ungroup</button>
+                                }
+                              />
+                            ))}
+                          </div>
+                          {supersetPickerState?.supersetId === supersetId ? (
+                            <SupersetExercisePicker
+                              onSelect={(leaf) => {
+                                addMovementToSuperset(supersetPickerState.dayUid, leafToMovement(leaf), supersetId);
+                                setSupersetPickerState(null);
+                              }}
+                              onClose={() => setSupersetPickerState(null)}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-ghost no-print"
+                              style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
+                              onClick={() => setSupersetPickerState({ dayUid: day.uid, supersetId })}
+                            >⊞ + Add exercise to Super Set</button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
 
-        </div>
-
-        {/* Add day */}
-        <button className="btn btn-ghost no-print" onClick={addDay} style={{ whiteSpace: "nowrap", marginTop: "0.5rem", padding: "0.5rem 0.85rem" }}>+ Add day</button>
+          {/* Add day — at_home only */}
+          <button className="btn btn-ghost no-print" onClick={addDay} style={{ whiteSpace: "nowrap", marginTop: "0.5rem", padding: "0.5rem 0.85rem" }}>+ Add day</button>
+          </>
+        )}
       </section>
     </div>{/* end library+main grid */}
 
@@ -1711,6 +1906,128 @@ function ClientProgramSummaryBanner({
                         ? `${item.programName ? item.programName + " · " : ""}${endDate(item)}${endDate(item) ? " — " : ""}${endLabel(item)}`
                         : "No current program"}{" · "}tap to select →
                     </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Client programs banner (Programs tab) ───────────────────────────────────
+function ClientProgramsBanner({
+  items,
+  onSelect,
+}: {
+  items: ClientProgramItem[];
+  onSelect: (item: ClientProgramItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const needs = items.filter((i) => !i.hasCurrent);
+  const active = items.filter((i) => i.hasCurrent);
+
+  function daysLabel(d: number | null) {
+    if (d === null) return "no end date";
+    if (d < 0) return `expired ${Math.abs(d)}d ago`;
+    if (d === 0) return "expires today";
+    if (d <= 7) return `${d}d left`;
+    return `${d}d left`;
+  }
+
+  return (
+    <div className="card no-print" style={{ marginBottom: "1.25rem" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", background: "none", border: "none", padding: 0,
+          cursor: "pointer", display: "flex", alignItems: "center",
+          justifyContent: "space-between", fontFamily: "inherit",
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: "0.88rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
+          {open ? "▾" : "▸"} Client Programs
+        </h3>
+        <span className="meta" style={{ fontSize: "0.76rem" }}>
+          {active.length} active · {needs.length} need programming
+        </span>
+      </button>
+      {open && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "0.75rem" }}>
+          {/* Active programs */}
+          <div>
+            <div style={{
+              fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase",
+              letterSpacing: "0.07em", color: "var(--sage)",
+              paddingBottom: "0.4rem", borderBottom: "2px solid var(--sage)",
+              marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.4rem"
+            }}>
+              ✓ Active Program <span style={{ fontWeight: 400, opacity: 0.7 }}>({active.length})</span>
+            </div>
+            {active.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.78rem" }}>None yet.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                {active.map((item) => (
+                  <div
+                    key={item.clientId}
+                    style={{
+                      padding: "0.3rem 0.5rem", borderRadius: 3,
+                      background: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14)
+                        ? "rgba(217,119,6,0.07)" : "rgba(90,107,74,0.07)",
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: "0.84rem", flexShrink: 0 }}>{item.clientName}</span>
+                    <div style={{ textAlign: "right", minWidth: 0 }}>
+                      <div className="meta" style={{ fontSize: "0.72rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {item.programName}
+                      </div>
+                      <div style={{
+                        fontSize: "0.68rem",
+                        color: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14) ? "var(--amber)" : "var(--muted)"
+                      }}>
+                        {daysLabel(item.daysUntilEnd)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Needs programming */}
+          <div>
+            <div style={{
+              fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase",
+              letterSpacing: "0.07em", color: "var(--amber)",
+              paddingBottom: "0.4rem", borderBottom: "2px solid var(--amber)",
+              marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.4rem"
+            }}>
+              ⚠ Needs Program <span style={{ fontWeight: 400, opacity: 0.7 }}>({needs.length})</span>
+            </div>
+            {needs.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.78rem" }}>All clients are programmed 🎉</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                {needs.map((item) => (
+                  <button
+                    key={item.clientId}
+                    type="button"
+                    onClick={() => onSelect(item)}
+                    style={{
+                      width: "100%", textAlign: "left", background: "rgba(217,119,6,0.07)",
+                      border: "1px solid rgba(217,119,6,0.2)", borderRadius: 3,
+                      padding: "0.3rem 0.5rem", cursor: "pointer", fontFamily: "inherit",
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem"
+                    }}
+                    title="Click to start a new program for this client"
+                  >
+                    <span style={{ fontWeight: 600, fontSize: "0.84rem" }}>{item.clientName}</span>
+                    <span style={{ fontSize: "0.72rem", color: "var(--amber)", whiteSpace: "nowrap" }}>tap to program →</span>
                   </button>
                 ))}
               </div>
@@ -2441,6 +2758,267 @@ function EquipmentMultiSelect({
           <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: "0.4rem", padding: "0.25rem", fontSize: "0.7rem" }} onClick={() => setOpen(false)}>Done</button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ─── Superset exercise picker ─────────────────────────────────────────────
+function SupersetExercisePicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (leaf: LibraryLeaf) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+
+  const filtered = q
+    ? hierarchyLeaves().filter(
+        (l) => l.label.toLowerCase().includes(q) || l.category.toLowerCase().includes(q)
+      )
+    : null;
+
+  return (
+    <div
+      className="no-print"
+      style={{ borderTop: "1px solid rgba(217,119,6,0.25)", padding: "0.4rem 0.5rem", background: "rgba(217,119,6,0.04)" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+        <input
+          className="input"
+          autoFocus
+          placeholder="Search exercises…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, fontSize: "0.72rem", padding: "0.22rem 0.35rem" }}
+        />
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{ fontSize: "0.66rem", padding: "0.18rem 0.4rem", color: "var(--muted)" }}
+          onClick={onClose}
+        >✕</button>
+      </div>
+
+      <div style={{ marginTop: "0.35rem", maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        {filtered ? (
+          filtered.length > 0 ? (
+            filtered.map((leaf) => (
+              <button
+                key={leaf.id}
+                type="button"
+                className="btn btn-ghost"
+                style={{ textAlign: "left", fontSize: "0.72rem", padding: "0.22rem 0.45rem", justifyContent: "flex-start" }}
+                onClick={() => onSelect(leaf)}
+              >
+                <strong>{leaf.label}</strong>
+                <span className="meta" style={{ marginLeft: "0.4rem", fontSize: "0.67rem" }}>{CATEGORY_LABELS[leaf.category]}</span>
+              </button>
+            ))
+          ) : (
+            <p className="meta" style={{ fontSize: "0.72rem", margin: "0.15rem 0.45rem" }}>No matches</p>
+          )
+        ) : (
+          LIBRARY_HIERARCHY.map((group) => (
+            <div key={group.id}>
+              <div style={{
+                fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: "0.07em", color: "var(--amber)",
+                padding: "0.3rem 0.45rem 0.1rem", marginTop: "0.15rem",
+              }}>
+                {group.label}
+              </div>
+              {group.nodes.flatMap((node): { leaf: LibraryLeaf; parentLabel: string | undefined }[] =>
+                node.children?.length
+                  ? node.children.map((child) => ({ leaf: child as LibraryLeaf, parentLabel: node.label }))
+                  : [{ leaf: { id: node.id, label: node.label, category: node.category, is_core: node.is_core, description: node.description } as LibraryLeaf, parentLabel: undefined }]
+              ).map(({ leaf, parentLabel }) => (
+                <button
+                  key={leaf.id}
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ width: "100%", textAlign: "left", fontSize: "0.72rem", padding: "0.2rem 0.45rem", justifyContent: "flex-start" }}
+                  onClick={() => onSelect(leaf)}
+                >
+                  {parentLabel && (
+                    <span className="meta" style={{ fontSize: "0.67rem", marginRight: "0.25rem" }}>{parentLabel} ›</span>
+                  )}
+                  <strong>{leaf.label}</strong>
+                </button>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Form data helpers ─────────────────────────────────────────────────────────
+
+// Specific intake form questions to surface for goals (order preserved)
+const GOAL_QUESTION_FRAGMENTS = [
+  "what do you want to get out of training",
+  "tell me more about your primary goal",
+  "where do you feel you need the most improvement",
+  "specific areas of training or exercises you would like to learn",
+];
+
+function getFormGoals(formData: Record<string, string> | null): Array<{ key: string; value: string }> {
+  if (!formData) return [];
+  return GOAL_QUESTION_FRAGMENTS
+    .map((frag) => {
+      const entry = Object.entries(formData).find(([k]) => k.toLowerCase().includes(frag));
+      return entry ? { key: entry[0], value: entry[1] } : null;
+    })
+    .filter((e): e is { key: string; value: string } => !!e && e.value.trim() !== "");
+}
+
+function getFormInjuries(formData: Record<string, string> | null): Array<{ key: string; value: string }> {
+  if (!formData) return [];
+  const kw = ["injur", "pain", "limitation", "caution", "restrict"];
+  return Object.entries(formData)
+    .filter(([k, v]) => kw.some((w) => k.toLowerCase().includes(w)) && v.trim() !== "")
+    .map(([key, value]) => ({ key, value }));
+}
+
+// ── Client goals + injuries panel ────────────────────────────────────────────
+
+function ClientGoalsSection({ client }: { client: ClientRow }) {
+  const formGoals = getFormGoals(client.form_data);
+  const formInjuries = getFormInjuries(client.form_data);
+  const hasInjury = !!(client.injuries || formInjuries.length > 0);
+
+  return (
+    <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+      <div>
+        <div className="stat-label">Goals</div>
+        <div style={{ marginTop: "0.3rem", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {formGoals.map(({ key, value }) => (
+            <div key={key}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--muted)", marginBottom: "0.1rem" }}>{key}</div>
+              <div style={{ lineHeight: 1.45 }}>{value}</div>
+            </div>
+          ))}
+          {client.goals && (
+            <div>
+              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--muted)", marginBottom: "0.1rem" }}>Coach notes</div>
+              <div style={{ lineHeight: 1.45 }}>{client.goals}</div>
+            </div>
+          )}
+          {formGoals.length === 0 && !client.goals && (
+            <span className="meta">No goals on file</span>
+          )}
+        </div>
+      </div>
+      <div>
+        <div className="stat-label" style={{ color: hasInjury ? "var(--red)" : undefined }}>
+          Injuries / cautions
+        </div>
+        <div style={{ marginTop: "0.3rem", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {formInjuries.map(({ key, value }) => (
+            <div key={key}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--red)", opacity: 0.8, marginBottom: "0.1rem" }}>{key}</div>
+              <div style={{ lineHeight: 1.45, color: "var(--red)" }}>{value}</div>
+            </div>
+          ))}
+          {client.injuries && (
+            <div>
+              <div style={{ fontSize: "0.68rem", fontWeight: 600, color: "var(--muted)", marginBottom: "0.1rem" }}>Coach notes</div>
+              <div style={{ lineHeight: 1.45, color: "var(--red)" }}>{client.injuries}</div>
+            </div>
+          )}
+          {formInjuries.length === 0 && !client.injuries && (
+            <span className="meta">None reported</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Client typeable combobox ──────────────────────────────────────────────────
+
+function ClientCombobox({
+  clients,
+  value,
+  onChange,
+}: {
+  clients: ClientRow[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const sorted = useMemo(
+    () => [...clients].sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    [clients]
+  );
+  const [query, setQuery] = useState(() => sorted.find((c) => c.id === value)?.full_name ?? "");
+  const [open, setOpen] = useState(false);
+  const prevValue = useRef(value);
+
+  // Sync display when external value changes (e.g. banner click)
+  useEffect(() => {
+    if (prevValue.current !== value) {
+      prevValue.current = value;
+      const name = sorted.find((c) => c.id === value)?.full_name ?? "";
+      setQuery(name);
+    }
+  }, [value, sorted]);
+
+  const filtered = useMemo(
+    () => query.trim()
+      ? sorted.filter((c) => c.full_name.toLowerCase().includes(query.toLowerCase()))
+      : sorted,
+    [sorted, query]
+  );
+
+  function pick(id: string) {
+    const name = sorted.find((c) => c.id === id)?.full_name ?? "";
+    setQuery(name);
+    setOpen(false);
+    onChange(id);
+  }
+
+  return (
+    <div style={{ position: "relative", maxWidth: 320, marginTop: "0.3rem" }}>
+      <input
+        className="input"
+        value={query}
+        placeholder="Search clients…"
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        style={{ width: "100%" }}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0, zIndex: 50,
+          background: "var(--paper)", border: "1px solid var(--line)",
+          borderRadius: 4, maxHeight: 200, overflowY: "auto",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.1)",
+        }}>
+          {filtered.map((c) => (
+            <div
+              key={c.id}
+              onMouseDown={() => pick(c.id)}
+              style={{
+                padding: "0.4rem 0.65rem",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                background: c.id === value ? "var(--ash)" : undefined,
+                borderBottom: "1px solid var(--line)",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--ash)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = c.id === value ? "var(--ash)" : ""; }}
+            >
+              {c.full_name}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

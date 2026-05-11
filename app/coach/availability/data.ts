@@ -1,4 +1,4 @@
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 
 export type SlotOffer = {
   id: string;
@@ -42,7 +42,7 @@ const DEMO: SlotOffer[] = [
 
 export async function listSlotOffers(coachId: string): Promise<SlotOffer[]> {
   if (!hasSupabaseEnv()) return DEMO;
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data: offers } = await supabase
     .from("slot_offers")
     .select("id, starts_at, ends_at, notes, status, notify_only, target_tier, claimed_by, claimed_at")

@@ -81,23 +81,15 @@ create or replace function _money_to_num(t text) returns numeric language sql im
 $$;
 
 -- ─── 4. upsert into profiles ──────────────────────────────────────────
+-- Guard with NOT EXISTS so re-running is always safe (no email = no ON CONFLICT key)
 insert into profiles (full_name, role, approval_status)
-select trim(full_name), 'client', 'approved'
-from _stg_clients
-where full_name is not null and trim(full_name) <> ''
-on conflict (email) do nothing;
-
--- For new clients without email, dedupe by full_name to avoid double-adds on re-runs.
--- (We can't use ON CONFLICT (full_name) without a unique constraint, so guard with NOT EXISTS.)
-delete from profiles p
-using (
-  select min(id) as keep_id, full_name
-  from profiles
-  where role = 'client' and email is null
-  group by full_name
-  having count(*) > 1
-) dups
-where p.role = 'client' and p.email is null and p.full_name = dups.full_name and p.id <> dups.keep_id;
+select trim(s.full_name), 'client', 'approved'
+from _stg_clients s
+where s.full_name is not null and trim(s.full_name) <> ''
+  and not exists (
+    select 1 from profiles p
+    where p.role = 'client' and p.full_name = trim(s.full_name)
+  );
 
 -- ─── 5. upsert client_details ─────────────────────────────────────────
 insert into client_details (

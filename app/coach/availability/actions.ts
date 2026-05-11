@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 
 export type OfferInput = {
@@ -19,7 +19,7 @@ export async function saveSlotOffer(input: OfferInput): Promise<Result<{ id: str
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   let offerId = input.id;
   if (offerId) {
@@ -60,7 +60,7 @@ export async function cancelSlotOffer(id: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase
     .from("slot_offers")
     .update({ status: "cancelled" })
@@ -75,7 +75,7 @@ export async function deleteSlotOffer(id: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase.from("slot_offers").delete().eq("id", id).eq("coach_id", me.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/availability");

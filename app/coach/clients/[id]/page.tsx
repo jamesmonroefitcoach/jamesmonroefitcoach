@@ -5,6 +5,56 @@ import { getClient, listAppointmentsForClient, getClientReminderPrefs } from "@/
 import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, PROGRAM_KIND_LABEL, type Category, type PastProgramFull } from "@/lib/programs";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import ClientSettings from "./client-settings";
+import { CoachProfileCard, ClientProfileCard } from "./client-profile-edit";
+
+const FORM_SECTIONS: { title: string; keys: string[] }[] = [
+  {
+    title: "General Info",
+    keys: ["Phone", "Birthday"],
+  },
+  {
+    title: "Goals & Progress",
+    keys: [
+      "Training goals",
+      "Primary goal / motivation",
+      "Strengths / most improved",
+      "Needs most improvement",
+      "Satisfaction with training (1-5)",
+      "Exercises to learn / work on",
+      "Commitment (1-10)",
+    ],
+  },
+  {
+    title: "Nutrition, Injuries & Weight",
+    keys: [
+      "Nutrition confidence (1-5)",
+      "Nutrition tracking",
+      "Activity level outside training (1-5)",
+      "Self-exercise days per week",
+      "Sleep / recovery (1-5)",
+      "Injuries / limitations",
+      "Height",
+      "Starting weight (lbs)",
+      "Current weight (lbs)",
+    ],
+  },
+  {
+    title: "Scheduling",
+    keys: [
+      "Sessions per month (preferred)",
+      "Available days",
+      "Available times",
+      "Ideal session times",
+      "Preferred coaching style",
+      "Past consistency barriers",
+      "Time frame",
+    ],
+  },
+  {
+    title: "Additional Feedback",
+    keys: ["Additional requests / notes", "Questions / feedback"],
+  },
+];
 
 function ProgramCard({ label, prog, clientId }: { label: string; prog: PastProgramFull | null; clientId: string }) {
   if (!prog) {
@@ -107,7 +157,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <div className="stat">
           <div className="stat-label">Weight</div>
           <div className="stat-value">{client.current_weight_lb ?? "—"}</div>
-          <div className="stat-sub">{client.goal_weight_lb ? `goal ${client.goal_weight_lb}` : "no goal weight"}</div>
+          <div className="stat-sub">
+            {client.starting_weight_lb ? `start ${client.starting_weight_lb} · ` : ""}
+            {client.goal_weight_lb ? `goal ${client.goal_weight_lb}` : "no goal"}
+          </div>
         </div>
         <div className="stat">
           <div className="stat-label">Owed</div>
@@ -118,52 +171,87 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <hr className="divider" />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-        <div className="card">
-          <h2>Goals & profile</h2>
-          <hr className="divider" />
-          <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.4rem 1rem", margin: 0 }}>
-            <dt className="meta">Goals</dt><dd>{client.goals ?? "—"}</dd>
-            <dt className="meta">Age</dt><dd>{client.age_category ?? "—"}</dd>
-            <dt className="meta">Status</dt><dd>{client.status ?? "—"}</dd>
-            <dt className="meta">Frequency</dt><dd>{client.regular_frequency ?? "—"}</dd>
-            {client.injuries && (
-              <>
-                <dt className="meta">Injuries</dt>
-                <dd style={{ color: "var(--red)", fontSize: "0.84rem", fontWeight: 500 }}>{client.injuries}</dd>
-              </>
-            )}
-          </dl>
-        </div>
+      {/* ── Coach Profile + Client Profile ──────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", alignItems: "start" }}>
+        <CoachProfileCard client={client} />
+        <ClientProfileCard client={client} />
+      </div>
 
-        <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2>Intake Form</h2>
-            {client.form_received_at ? (
-              <span className="meta" style={{ fontSize: "0.75rem" }}>
-                Received {new Date(client.form_received_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-              </span>
-            ) : null}
-          </div>
-          <hr className="divider" />
-          {!client.form_data ? (
-            <p className="meta" style={{ fontStyle: "italic" }}>No form received.</p>
-          ) : (
-            <details>
-              <summary style={{ cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, color: "var(--rust)", userSelect: "none" }}>
-                View Response ▾
-              </summary>
-              <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.35rem 0.85rem", margin: "0.65rem 0 0", alignItems: "baseline" }}>
-                {Object.entries(client.form_data).map(([q, a]) => (
-                  <>
-                    <dt key={`q-${q}`} className="meta" style={{ fontSize: "0.76rem", whiteSpace: "nowrap" }}>{q}</dt>
-                    <dd key={`a-${q}`} style={{ margin: 0, fontSize: "0.84rem" }}>{a}</dd>
-                  </>
-                ))}
-              </dl>
-            </details>
-          )}
+      <hr className="divider" />
+
+      {/* ── Intake Form ────────────────────────────────────────────── */}
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2>Intake Form</h2>
+          {client.form_received_at ? (
+            <span className="meta" style={{ fontSize: "0.75rem" }}>
+              Received {new Date(client.form_received_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          ) : null}
         </div>
+        <hr className="divider" />
+        {!client.form_data ? (
+          <p className="meta" style={{ fontStyle: "italic" }}>No form received yet.</p>
+        ) : (
+          <details open>
+            <summary style={{ cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, color: "var(--rust)", userSelect: "none" }}>
+              View full response ▾
+            </summary>
+            <div style={{ margin: "0.85rem 0 0", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {FORM_SECTIONS.map(({ title, keys }) => {
+                const entries = keys
+                  .filter((k) => (client.form_data as Record<string, string>)[k] != null && (client.form_data as Record<string, string>)[k] !== "")
+                  .map((k) => [k, (client.form_data as Record<string, string>)[k]] as [string, string]);
+                if (entries.length === 0) return null;
+                return (
+                  <div key={title}>
+                    <div style={{
+                      fontSize: "0.69rem", fontWeight: 700, textTransform: "uppercase",
+                      letterSpacing: "0.08em", color: "var(--rust)", marginBottom: "0.5rem",
+                      paddingBottom: "0.25rem", borderBottom: "1px solid var(--line)",
+                    }}>
+                      {title}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "0.35rem 2rem" }}>
+                      {entries.map(([q, a]) => (
+                        <div key={q} style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.2rem 0.65rem", alignItems: "baseline" }}>
+                          <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>{q}</span>
+                          <span style={{ fontSize: "0.84rem" }}>{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Catch-all: any keys not covered by a defined section */}
+              {(() => {
+                const covered = new Set(FORM_SECTIONS.flatMap((s) => s.keys));
+                const extra = Object.entries(client.form_data as Record<string, string>)
+                  .filter(([k]) => !covered.has(k) && k !== "Phone" && k !== "Birthday");
+                if (extra.length === 0) return null;
+                return (
+                  <div key="other">
+                    <div style={{
+                      fontSize: "0.69rem", fontWeight: 700, textTransform: "uppercase",
+                      letterSpacing: "0.08em", color: "var(--rust)", marginBottom: "0.5rem",
+                      paddingBottom: "0.25rem", borderBottom: "1px solid var(--line)",
+                    }}>
+                      Other
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "0.35rem 2rem" }}>
+                      {extra.map(([q, a]) => (
+                        <div key={q} style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.2rem 0.65rem", alignItems: "baseline" }}>
+                          <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>{q}</span>
+                          <span style={{ fontSize: "0.84rem" }}>{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </details>
+        )}
       </div>
 
       <hr className="divider" />
@@ -175,7 +263,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         </div>
         <hr className="divider" />
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", alignItems: "start" }}>
           <ProgramCard label="Sessions" prog={currentInGym} clientId={client.id} />
           <ProgramCard label="Program" prog={currentAtHome} clientId={client.id} />
         </div>
@@ -211,7 +299,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <hr className="divider" />
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginBottom: "1.5rem" }}>
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginBottom: "1.5rem", alignItems: "start" }}>
         <ClientSettings client={client} reminderPrefs={reminderPrefs} />
         <div className="card">
           <h2>Check-ins</h2>

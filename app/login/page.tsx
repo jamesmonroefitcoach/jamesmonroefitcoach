@@ -1,4 +1,4 @@
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import LoginForm from "./login-form";
 
 type ProfileRow = { id: string; full_name: string; email: string | null; role: "coach" | "client" | "admin" };
@@ -12,17 +12,21 @@ const FALLBACK_PROFILES: ProfileRow[] = [
 ];
 
 async function loadProfiles(): Promise<ProfileRow[]> {
-  if (!hasSupabaseEnv()) return FALLBACK_PROFILES;
+  const hasEnv = hasSupabaseEnv();
+  console.log("[login] hasSupabaseEnv:", hasEnv, "| URL:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 40));
+  if (!hasEnv) return FALLBACK_PROFILES;
   try {
-    const supabase = await createSupabaseServer();
+    const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
       .from("profiles")
       .select("id, full_name, email, role")
       .order("role", { ascending: true })
       .order("full_name", { ascending: true });
+    console.log("[login] profiles query — count:", data?.length, "| error:", error?.message);
     if (error || !data || data.length === 0) return FALLBACK_PROFILES;
     return data as ProfileRow[];
-  } catch {
+  } catch (e) {
+    console.error("[login] caught exception:", e);
     return FALLBACK_PROFILES;
   }
 }

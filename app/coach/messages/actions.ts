@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -11,7 +11,7 @@ export async function sendMessage(threadId: string, body: string): Promise<Resul
   const trimmed = body.trim();
   if (!trimmed) return { ok: false, error: "empty" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase.from("messages").insert({
     thread_id: threadId,
     sender_id: me.id,
@@ -27,7 +27,7 @@ export async function markThreadRead(threadId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: true };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   await supabase
     .from("messages")
     .update({ read_at: new Date().toISOString() })
@@ -44,7 +44,7 @@ export async function announceToAllClients(body: string, tier?: "tier_1" | "tier
   if (!trimmed) return { ok: false, error: "empty" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const q = supabase.from("client_details").select("profile_id, tier").eq("coach_id", me.id);
   const { data: clients } = tier ? await q.eq("tier", tier) : await q;
   if (!clients) return { ok: false, error: "no clients" };

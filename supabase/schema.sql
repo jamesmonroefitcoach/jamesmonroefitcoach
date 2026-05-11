@@ -176,7 +176,7 @@ create index if not exists program_movements_day_idx on program_movements(progra
 -- An appointment is a scheduled or completed training session.
 create table if not exists appointments (
   id            uuid primary key default uuid_generate_v4(),
-  client_id     uuid not null references profiles(id) on delete cascade,
+  client_id     uuid references profiles(id) on delete cascade,        -- null for personal blocks
   coach_id      uuid not null references profiles(id) on delete restrict,
   program_day_id uuid references program_days(id) on delete set null,
   starts_at     timestamptz not null,
@@ -317,8 +317,8 @@ select
   ch.full_name as coach_name,
   cd.tier      as client_tier
 from appointments a
-join profiles cp on cp.id = a.client_id
-join profiles ch on ch.id = a.coach_id
+left join profiles cp on cp.id = a.client_id
+join  profiles ch on ch.id = a.coach_id
 left join client_details cd on cd.profile_id = a.client_id;
 
 create or replace view client_balance as

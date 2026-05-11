@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -9,7 +9,7 @@ export async function approveAccountRequest(reqId: string, coachId?: string): Pr
   const me = await getSessionUser();
   if (!me || me.role !== "admin") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   const { data: req } = await supabase.from("account_requests").select("*").eq("id", reqId).maybeSingle();
   if (!req) return { ok: false, error: "request not found" };
@@ -55,7 +55,7 @@ export async function rejectAccountRequest(reqId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "admin") return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase
     .from("account_requests")
     .update({ status: "rejected", approved_by: me.id, approved_at: new Date().toISOString() })
@@ -75,7 +75,7 @@ export type SignupInput = {
 export async function submitSignupRequest(input: SignupInput): Promise<Result> {
   if (!input.full_name?.trim() || !input.email?.trim()) return { ok: false, error: "name and email required" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { error } = await supabase.from("account_requests").insert({
     full_name: input.full_name.trim(),
     email: input.email.trim(),

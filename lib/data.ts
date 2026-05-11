@@ -1,10 +1,11 @@
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 
 export type ClientRow = {
   id: string;
   full_name: string;
   email: string | null;
   age_category: string | null;
+  gender: string | null;
   goals: string | null;
   regular_frequency: string | null;
   session_rate: number | null;
@@ -12,6 +13,7 @@ export type ClientRow = {
   monthly_revenue: number | null;
   current_weight_lb: number | null;
   goal_weight_lb: number | null;
+  starting_weight_lb: number | null;
   tier: "tier_1" | "tier_2" | "tier_3" | null;
   member_since: string | null;
   status: string | null;
@@ -19,66 +21,92 @@ export type ClientRow = {
   last_session_at: string | null;
   next_session_at: string | null;
   total_sessions: number;
-  injuries: string | null;             // pulled from latest check-in if present
+  phone: string | null;
+  birthday: string | null;
+  injuries: string | null;
   lifecycle: "active" | "inactive" | "paused";
   requires_confirmation: boolean;
+  // spreadsheet coaching assessment fields
+  trained_since_note: string | null;
+  accountability: string | null;
+  education: string | null;
+  commitment: string | null;
+  dire_need_ranking: string | null;
+  time_window_note: string | null;
+  // client-submitted intake form
   form_received_at: string | null;
   form_data: Record<string, string> | null;
 };
 
+const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null };
+
 const DEMO_CLIENTS: ClientRow[] = [
-  { id: "demo-client-abbey",   full_name: "Abbey Archer",      email: null, age_category: "22",     goals: "Form & knowledge",                regular_frequency: "1", session_rate: 100, test_rate: 100, monthly_revenue: 200,  current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 4 * 86400000).toISOString(), total_sessions: 4,  injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
-  { id: "demo-client-acacia",  full_name: "Acacia Chan",       email: null, age_category: "30",     goals: "Weight Loss, muscle, posture",   regular_frequency: "2", session_rate: 70,  test_rate: 100, monthly_revenue: 280,  current_weight_lb: 198,  goal_weight_lb: 150,  tier: "tier_2", member_since: "2025-03-01", status: "current", balance_owed: 280, last_session_at: new Date(Date.now() - 2 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 1 * 86400000).toISOString(), total_sessions: 96, injuries: "Mild low-back tightness — avoid heavy spinal-loading", lifecycle: "active", requires_confirmation: true,  form_received_at: "2025-03-02T10:00:00Z", form_data: { "Primary goal": "Weight loss and muscle building", "Motivation": "Feel confident in my body again", "Previous training": "2 years gym, mostly cardio", "Injuries / pain": "Mild low back tightness — worse after long sitting", "Available days": "Mon, Wed, Fri", "Sessions per month": "8", "Commitment (1-10)": "8" } },
-  { id: "demo-client-david",   full_name: "David Syndicongo", email: null, age_category: "32",     goals: "Weight loss, muscle, posture",   regular_frequency: "1", session_rate: 65,  test_rate: 100, monthly_revenue: 260,  current_weight_lb: 229,  goal_weight_lb: 180,  tier: "tier_2", member_since: "2024-10-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 6 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 71, injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: "2024-10-02T09:00:00Z", form_data: { "Primary goal": "Lose weight, build muscle, improve posture", "Motivation": "Wedding coming up — want to look and feel my best", "Previous training": "Occasional gym visits, no program", "Injuries / pain": "None", "Available days": "Tues, Thurs", "Commitment (1-10)": "7" } },
-  { id: "demo-client-jen",     full_name: "Jen Loving",        email: null, age_category: "48",     goals: "Body Recomp – 1 Pull Up",         regular_frequency: "2", session_rate: 65,  test_rate: 100, monthly_revenue: 1040, current_weight_lb: null, goal_weight_lb: 145,  tier: "tier_1", member_since: "2025-11-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 1 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 2 * 86400000).toISOString(), total_sessions: 48, injuries: "R-shoulder impingement — no behind-the-neck work", lifecycle: "active", requires_confirmation: false, form_received_at: "2025-11-02T14:00:00Z", form_data: { "Primary goal": "Body recomp + do 1 unassisted pull-up", "Motivation": "Prove to myself I can do it", "Injuries / pain": "R-shoulder impingement — no behind-neck pressing", "Available days": "Mon, Wed + whenever", "Commitment (1-10)": "9" } },
-  { id: "demo-client-rowland", full_name: "Rowland Bella",     email: null, age_category: "24",     goals: "100 LB weight loss",              regular_frequency: "2", session_rate: null, test_rate: 100, monthly_revenue: null, current_weight_lb: 294,  goal_weight_lb: 280,  tier: "tier_3", member_since: "2025-07-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 35 * 86400000).toISOString(), next_session_at: null,                                             total_sessions: 32, injuries: "Knee — keep hinge-dominant, low-impact cardio",       lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
-  { id: "demo-client-marcus",  full_name: "Marcus Halpern",    email: null, age_category: "44",     goals: "Marathon prep — paused",          regular_frequency: "1", session_rate: 80,  test_rate: 100, monthly_revenue: 0,    current_weight_lb: 168,  goal_weight_lb: null, tier: "tier_2", member_since: "2024-06-01", status: "paused", balance_owed: 0,   last_session_at: new Date(Date.now() - 92 * 86400000).toISOString(), next_session_at: null,                                            total_sessions: 22, injuries: null, lifecycle: "inactive", requires_confirmation: false, form_received_at: null, form_data: null }
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-abbey",   full_name: "Abbey Archer",      email: null, age_category: "22",  goals: "Form & knowledge",               regular_frequency: "1", session_rate: 100, test_rate: 100, monthly_revenue: 200,  current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 4 * 86400000).toISOString(), total_sessions: 4,  injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-acacia",  full_name: "Acacia Chan",       email: null, age_category: "30",  goals: "Weight Loss, muscle, posture",   regular_frequency: "2", session_rate: 70,  test_rate: 100, monthly_revenue: 280,  current_weight_lb: 198,  goal_weight_lb: 150,  tier: "tier_2", member_since: "2025-03-01", status: "current", balance_owed: 280, last_session_at: new Date(Date.now() - 2 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 1 * 86400000).toISOString(), total_sessions: 96, injuries: "Mild low-back tightness — avoid heavy spinal-loading", lifecycle: "active", requires_confirmation: true,  trained_since_note: "March 2025", accountability: "Low", education: "Medium", commitment: "Low", dire_need_ranking: "High", form_received_at: "2025-03-02T10:00:00Z", form_data: { "Primary goal": "Weight loss and muscle building", "Motivation": "Feel confident in my body again", "Previous training": "2 years gym, mostly cardio", "Injuries / pain": "Mild low back tightness — worse after long sitting", "Available days": "Mon, Wed, Fri", "Sessions per month": "8", "Commitment (1-10)": "8" } },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-david",   full_name: "David Syndicongo",  email: null, age_category: "32",  goals: "Weight loss, muscle, posture",   regular_frequency: "1", session_rate: 65,  test_rate: 100, monthly_revenue: 260,  current_weight_lb: 229,  goal_weight_lb: 180,  tier: "tier_2", member_since: "2024-10-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 6 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 71, injuries: null, lifecycle: "active", requires_confirmation: false, trained_since_note: "Oct 2024", accountability: "Low", education: "Low", commitment: "Medium", dire_need_ranking: "High", form_received_at: "2024-10-02T09:00:00Z", form_data: { "Primary goal": "Lose weight, build muscle, improve posture", "Motivation": "Wedding coming up — want to look and feel my best", "Previous training": "Occasional gym visits, no program", "Injuries / pain": "None", "Available days": "Tues, Thurs", "Commitment (1-10)": "7" } },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-jen",     full_name: "Jen Loving",        email: null, age_category: "48",  goals: "Body Recomp – 1 Pull Up",        regular_frequency: "2", session_rate: 65,  test_rate: 100, monthly_revenue: 1040, current_weight_lb: null, goal_weight_lb: 145,  tier: "tier_1", member_since: "2025-11-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 1 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 2 * 86400000).toISOString(), total_sessions: 48, injuries: "R-shoulder impingement — no behind-the-neck work", lifecycle: "active", requires_confirmation: false, trained_since_note: "November 2025", accountability: "High", education: "High", commitment: "High", dire_need_ranking: "Low", form_received_at: "2025-11-02T14:00:00Z", form_data: { "Primary goal": "Body recomp + do 1 unassisted pull-up", "Motivation": "Prove to myself I can do it", "Injuries / pain": "R-shoulder impingement — no behind-neck pressing", "Available days": "Mon, Wed + whenever", "Commitment (1-10)": "9" } },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-rowland", full_name: "Rowland Bella",     email: null, age_category: "24",  goals: "100 LB weight loss",             regular_frequency: "2", session_rate: null, test_rate: 100, monthly_revenue: null, current_weight_lb: 294, goal_weight_lb: 280,  tier: "tier_3", member_since: "2025-07-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 35 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 32, injuries: "Knee — keep hinge-dominant, low-impact cardio",      lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-marcus",  full_name: "Marcus Halpern",    email: null, age_category: "44",  goals: "Marathon prep — paused",         regular_frequency: "1", session_rate: 80,  test_rate: 100, monthly_revenue: 0,    current_weight_lb: 168, goal_weight_lb: null, tier: "tier_2", member_since: "2024-06-01", status: "paused",   balance_owed: 0,   last_session_at: new Date(Date.now() - 92 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 22, injuries: null, lifecycle: "inactive", requires_confirmation: false, form_received_at: null, form_data: null },
 ];
 
 export async function listClients(coachId?: string): Promise<ClientRow[]> {
   if (!hasSupabaseEnv()) return DEMO_CLIENTS;
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
     .select(`
-      id, full_name, email,
+      id, full_name, email, phone,
       details:client_details!client_details_profile_id_fkey (
-        age_category, goals, regular_frequency, session_rate, test_rate,
-        monthly_revenue, current_weight_lb, goal_weight_lb, tier, member_since, status, coach_id,
+        age_category, gender, goals, injuries, regular_frequency, session_rate, test_rate,
+        monthly_revenue, starting_weight_lb, current_weight_lb, goal_weight_lb,
+        tier, member_since, status, coach_id, lifecycle, requires_confirmation,
+        trained_since_note, accountability, education, commitment,
+        dire_need_ranking, time_window_note, birthday,
         form_received_at, form_data
-      ),
-      balance:client_balance!client_balance_client_id_fkey ( balance_owed )
+      )
     `)
     .eq("role", "client");
-  if (error || !data) return DEMO_CLIENTS;
+  if (error) { console.error("[listClients] query error:", error); return DEMO_CLIENTS; }
+  if (!data) { console.error("[listClients] no data returned"); return DEMO_CLIENTS; }
+  console.log("[listClients] raw row count:", data.length, "| coachId:", coachId);
+  if (data.length > 0) console.log("[listClients] sample row:", JSON.stringify(data[0]).slice(0, 300));
 
   const baseRows: (ClientRow | null)[] = data
     .map((p: any) => {
       const d = Array.isArray(p.details) ? p.details[0] : p.details;
-      const b = Array.isArray(p.balance) ? p.balance[0] : p.balance;
       if (coachId && d?.coach_id && d.coach_id !== coachId) return null;
       return {
         id: p.id,
         full_name: p.full_name,
         email: p.email,
         age_category: d?.age_category ?? null,
+        gender: d?.gender ?? null,
         goals: d?.goals ?? null,
         regular_frequency: d?.regular_frequency ?? null,
         session_rate: d?.session_rate ?? null,
         test_rate: d?.test_rate ?? null,
         monthly_revenue: d?.monthly_revenue ?? null,
+        starting_weight_lb: d?.starting_weight_lb ?? null,
         current_weight_lb: d?.current_weight_lb ?? null,
         goal_weight_lb: d?.goal_weight_lb ?? null,
         tier: d?.tier ?? null,
         member_since: d?.member_since ?? null,
         status: d?.status ?? null,
-        balance_owed: Number(b?.balance_owed ?? 0),
+        balance_owed: 0,
         last_session_at: null,
         next_session_at: null,
         total_sessions: 0,
-        injuries: null,
+        phone: p.phone ?? null,
+        birthday: d?.birthday ?? null,
+        injuries: d?.injuries ?? null,
         lifecycle: (d?.lifecycle ?? "active") as ClientRow["lifecycle"],
         requires_confirmation: d?.requires_confirmation ?? false,
+        trained_since_note: d?.trained_since_note ?? null,
+        accountability: d?.accountability ?? null,
+        education: d?.education ?? null,
+        commitment: d?.commitment ?? null,
+        dire_need_ranking: d?.dire_need_ranking ?? null,
+        time_window_note: d?.time_window_note ?? null,
         form_received_at: d?.form_received_at ?? null,
         form_data: d?.form_data ?? null,
       } satisfies ClientRow;
@@ -87,10 +115,14 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
   // Pull session stats per client (only completed sessions count toward total)
   if (rows.length) {
     const ids = rows.map((r) => r.id);
+    const now = new Date().toISOString();
+
+    // Completed sessions → total_sessions + last_session_at
     const { data: stats } = await supabase
       .from("appointments")
       .select("client_id, starts_at, status")
       .in("client_id", ids)
+      .eq("session_type", "session")
       .eq("status", "completed");
     if (stats) {
       const byClient: Record<string, { total: number; last: string | null }> = {};
@@ -105,6 +137,44 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
           r.total_sessions = s.total;
           r.last_session_at = s.last;
         }
+      });
+    }
+
+    // Upcoming scheduled/change_requested sessions → next_session_at
+    const { data: upcoming } = await supabase
+      .from("appointments")
+      .select("client_id, starts_at")
+      .in("client_id", ids)
+      .eq("session_type", "session")
+      .in("status", ["scheduled", "change_requested"])
+      .gte("starts_at", now)
+      .order("starts_at", { ascending: true });
+    if (upcoming) {
+      const nextByClient: Record<string, string> = {};
+      upcoming.forEach((s: any) => {
+        if (!nextByClient[s.client_id]) nextByClient[s.client_id] = s.starts_at;
+      });
+      rows.forEach((r) => {
+        if (nextByClient[r.id]) r.next_session_at = nextByClient[r.id];
+      });
+    }
+
+    // Unpaid sessions (any non-cancelled status) → balance_owed
+    const { data: unpaid } = await supabase
+      .from("appointments")
+      .select("client_id, rate")
+      .in("client_id", ids)
+      .eq("session_type", "session")
+      .eq("paid", false)
+      .not("status", "in", '("cancelled","no_show")')
+      .not("rate", "is", null);
+    if (unpaid) {
+      const balanceByClient: Record<string, number> = {};
+      unpaid.forEach((s: any) => {
+        balanceByClient[s.client_id] = (balanceByClient[s.client_id] ?? 0) + (s.rate ?? 0);
+      });
+      rows.forEach((r) => {
+        r.balance_owed = balanceByClient[r.id] ?? 0;
       });
     }
   }
@@ -127,7 +197,7 @@ export type ReminderPrefs = {
 export async function getClientReminderPrefs(clientId: string): Promise<ReminderPrefs> {
   const defaults: ReminderPrefs = { client_id: clientId, channel_email: true, channel_sms: false, offsets_min: [1440, 60] };
   if (!hasSupabaseEnv()) return defaults;
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data } = await supabase
     .from("client_reminder_prefs")
     .select("client_id, channel_email, channel_sms, offsets_min")
@@ -180,7 +250,7 @@ const DEMO_PROSPECTS: Prospect[] = [
 
 export async function listProspects(coachId?: string): Promise<Prospect[]> {
   if (!hasSupabaseEnv()) return DEMO_PROSPECTS;
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const query = supabase
     .from("prospects")
     .select("id, coach_id, full_name, phone, email, where_met, connection, last_followed_up, notes, created_at")
@@ -287,7 +357,7 @@ export async function listAppointmentsForWeek(coachId: string, weekStart?: Date)
       return t >= start.getTime() && t < start.getTime() + 7 * 86400000;
     });
   }
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const start = weekStart ?? startOfWeek(new Date());
   const end = new Date(start);
   end.setDate(start.getDate() + 7);
@@ -314,7 +384,7 @@ export async function listAppointmentsForMonth(coachId: string, monthStart: Date
       return t >= start.getTime() && t < end.getTime();
     });
   }
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data } = await supabase
     .from("appointments_with_names")
     .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
@@ -352,7 +422,7 @@ export async function listAppointmentsForClient(clientId: string): Promise<Appoi
     }
     return all;
   }
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("appointments_with_names")
     .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
@@ -373,7 +443,7 @@ export function startOfWeek(d: Date): Date {
 
 export async function countOpenRequests(coachId: string): Promise<number> {
   if (!hasSupabaseEnv()) return 3;
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { count } = await supabase
     .from("appointments")
     .select("id", { count: "exact", head: true })
@@ -401,7 +471,7 @@ const DEMO_REQUESTS: AccountRequest[] = [
 
 export async function listAccountRequests(): Promise<AccountRequest[]> {
   if (!hasSupabaseEnv()) return DEMO_REQUESTS;
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("account_requests")
     .select("id, full_name, email, phone, message, desired_role, status, created_at")
@@ -429,7 +499,7 @@ export async function listCoachThreads(coachId: string): Promise<ThreadPreview[]
       { id: "thread-3", client_id: "demo-client-abbey", client_name: "Abbey Archer", last_message: "Heading out of town next week.", last_at: new Date(Date.now() - 26 * 3600000).toISOString(), unread: true }
     ];
   }
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data } = await supabase
     .from("message_threads")
     .select("id, client_id, profiles:client_id ( full_name ), messages ( body, created_at, read_at )")
@@ -490,7 +560,7 @@ const DEMO_CR_HISTORY: ChangeRequestHistoryRow[] = [
 
 export async function listChangeRequestHistory(coachId?: string): Promise<ChangeRequestHistoryRow[]> {
   if (!hasSupabaseEnv()) return DEMO_CR_HISTORY;
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const query = supabase
     .from("change_request_history")
     .select("id, appointment_id, client_id, action, before_starts_at, after_starts_at, reason, created_at")

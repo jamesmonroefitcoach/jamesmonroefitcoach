@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 
 export type CheckInInput = {
@@ -24,7 +24,7 @@ export async function submitCheckIn(input: CheckInInput): Promise<Result> {
   if (!me) return { ok: false, error: "unauthorized" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   // grab assigned coach to stamp the row
   const { data: cd } = await supabase
     .from("client_details")
@@ -68,7 +68,7 @@ export async function uploadProgressPhoto(formData: FormData): Promise<Result> {
   const checkInId = (formData.get("check_in_id") as string | null) || null;
   if (!file) return { ok: false, error: "no file" };
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const path = `${me.id}/${Date.now()}-${view}-${file.name}`;
   const { error: upErr } = await supabase.storage.from("progress-photos").upload(path, file, {
     upsert: false,

@@ -1,4 +1,4 @@
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 
 export type ThreadMessage = {
   id: string;
@@ -25,7 +25,7 @@ const DEMO_MSGS: Record<string, ThreadMessage[]> = {
 
 export async function loadThreadMessages(threadId: string): Promise<ThreadMessage[]> {
   if (!hasSupabaseEnv()) return DEMO_MSGS[threadId] ?? [];
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data } = await supabase
     .from("messages")
     .select("id, thread_id, sender_id, body, created_at, read_at, profiles:sender_id ( full_name )")
@@ -45,7 +45,7 @@ export async function loadThreadMessages(threadId: string): Promise<ThreadMessag
 
 export async function loadOrCreateClientThread(clientId: string, coachId: string): Promise<{ id: string } | null> {
   if (!hasSupabaseEnv()) return { id: `demo-thread-${clientId}` };
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data: existing } = await supabase
     .from("message_threads")
     .select("id")
