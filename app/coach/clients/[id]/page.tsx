@@ -118,21 +118,52 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <hr className="divider" />
 
-      <div className="card">
-        <h2>Goals & profile</h2>
-        <hr className="divider" />
-        <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.4rem 1rem", margin: 0 }}>
-          <dt className="meta">Goals</dt><dd>{client.goals ?? "—"}</dd>
-          <dt className="meta">Age</dt><dd>{client.age_category ?? "—"}</dd>
-          <dt className="meta">Status</dt><dd>{client.status ?? "—"}</dd>
-          <dt className="meta">Frequency</dt><dd>{client.regular_frequency ?? "—"}</dd>
-          {client.injuries && (
-            <>
-              <dt className="meta">Injuries</dt>
-              <dd style={{ color: "var(--red)", fontSize: "0.84rem", fontWeight: 500 }}>{client.injuries}</dd>
-            </>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
+        <div className="card">
+          <h2>Goals & profile</h2>
+          <hr className="divider" />
+          <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.4rem 1rem", margin: 0 }}>
+            <dt className="meta">Goals</dt><dd>{client.goals ?? "—"}</dd>
+            <dt className="meta">Age</dt><dd>{client.age_category ?? "—"}</dd>
+            <dt className="meta">Status</dt><dd>{client.status ?? "—"}</dd>
+            <dt className="meta">Frequency</dt><dd>{client.regular_frequency ?? "—"}</dd>
+            {client.injuries && (
+              <>
+                <dt className="meta">Injuries</dt>
+                <dd style={{ color: "var(--red)", fontSize: "0.84rem", fontWeight: 500 }}>{client.injuries}</dd>
+              </>
+            )}
+          </dl>
+        </div>
+
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h2>Intake Form</h2>
+            {client.form_received_at ? (
+              <span className="meta" style={{ fontSize: "0.75rem" }}>
+                Received {new Date(client.form_received_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            ) : null}
+          </div>
+          <hr className="divider" />
+          {!client.form_data ? (
+            <p className="meta" style={{ fontStyle: "italic" }}>No form received.</p>
+          ) : (
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, color: "var(--rust)", userSelect: "none" }}>
+                View Response ▾
+              </summary>
+              <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.35rem 0.85rem", margin: "0.65rem 0 0", alignItems: "baseline" }}>
+                {Object.entries(client.form_data).map(([q, a]) => (
+                  <>
+                    <dt key={`q-${q}`} className="meta" style={{ fontSize: "0.76rem", whiteSpace: "nowrap" }}>{q}</dt>
+                    <dd key={`a-${q}`} style={{ margin: 0, fontSize: "0.84rem" }}>{a}</dd>
+                  </>
+                ))}
+              </dl>
+            </details>
           )}
-        </dl>
+        </div>
       </div>
 
       <hr className="divider" />

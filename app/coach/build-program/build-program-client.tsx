@@ -39,6 +39,7 @@ type SetRow = {
   reps: string;
   exertion_score: number;  // 1..10
   variations: Variation[];
+  notes?: string;
 };
 
 type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "dropset";
@@ -170,6 +171,9 @@ export default function BuildProgramClient({
   const [atHomeEditingHeader, setAtHomeEditingHeader] = useState(false);
   const [pickedExistingId, setPickedExistingId] = useState("");
   const [importDayModalUid, setImportDayModalUid] = useState<string | null>(null);
+  const [supersetPickerState, setSupersetPickerState] = useState<{
+    dayUid: string; supersetId: string; search: string;
+  } | null>(null);
   const [days, setDays] = useState<ProgramDay[]>([NEW_DAY(1)]);
 
   const [savePending, startSave] = useTransition();
@@ -410,6 +414,7 @@ export default function BuildProgramClient({
                 reps: it.reps,
                 exertion_score: it.exertion_score,
                 variations: [...it.variations],
+                notes: it.notes,
               }));
               return { ...it, same_format: false, set_rows: rows };
             } else {
@@ -420,6 +425,7 @@ export default function BuildProgramClient({
                 same_format: true,
                 reps: first?.reps ?? it.reps,
                 exertion_score: first?.exertion_score ?? it.exertion_score,
+                notes: first?.notes ?? it.notes,
               };
             }
           }),
@@ -670,6 +676,12 @@ export default function BuildProgramClient({
   function addToSuperset(dayUid: string, itemUid: string, supersetId: string) {
     patchItem(dayUid, itemUid, { superset_id: supersetId });
   }
+  function initSuperset(dayUid: string, itemUid: string): string {
+    const supersetId = `ss-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    patchItem(dayUid, itemUid, { superset_id: supersetId });
+    return supersetId;
+  }
+
   function removeFromSuperset(dayUid: string, itemUid: string) {
     setDays((d) =>
       d.map((day) => {
@@ -1360,8 +1372,6 @@ export default function BuildProgramClient({
                     /* ── Standalone exercise ── */
                     if (group.kind === "exercise") {
                       const { item: it, itemIdx } = group;
-                      const nextItem = day.items[itemIdx + 1];
-                      const canSuperset = !!nextItem && !nextItem.superset_id;
                       return (
                         <ExerciseCard
                           key={it.uid}
@@ -1379,15 +1389,18 @@ export default function BuildProgramClient({
                           onPatch={(p) => patchItem(day.uid, it.uid, p)}
                           onToggleSameFormat={() => toggleSameFormat(day.uid, it.uid)}
                           onPatchSetRow={(si, p) => patchSetRow(day.uid, it.uid, si, p)}
-                          bottomSlot={canSuperset ? (
+                          bottomSlot={
                             <button
                               type="button"
                               className="btn btn-ghost no-print"
-                              style={{ fontSize: "0.62rem", padding: "0.12rem 0.35rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", width: "100%", marginTop: "0.25rem" }}
-                              onClick={() => createSuperset(day.uid, it.uid, nextItem.uid)}
-                              title="Group with next exercise into a superset"
-                            >⊞ Superset with next</button>
-                          ) : null}
+                              style={{ fontSize: "0.62rem", padding: "0.1rem 0.32rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", marginTop: "0.18rem" }}
+                              onClick={() => {
+                                const ssId = initSuperset(day.uid, it.uid);
+                                setSupersetPickerState({ dayUid: day.uid, supersetId: ssId, search: "" });
+                              }}
+                              title="Add another exercise to form a superset"
+                            >⊞ + Superset</button>
+                          }
                         />
                       );
                     }
@@ -1428,7 +1441,7 @@ export default function BuildProgramClient({
                         >
                           <span className="no-print" style={{ color: "var(--amber)", userSelect: "none", fontSize: "0.7rem" }}>⋮⋮</span>
                           <span style={{ fontWeight: 700, fontSize: "0.7rem", color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>
-                            Superset {label}
+                            Super Set
                           </span>
                           <span className="meta" style={{ fontSize: "0.64rem" }}>{entries.length} exercises</span>
                         </div>
@@ -1464,15 +1477,79 @@ export default function BuildProgramClient({
                           ))}
                         </div>
 
-                        {/* Extend superset with next item */}
-                        {canExtend ? (
+                        {/* Inline superset picker (shown after initSuperset) */}
+                        {supersetPickerState?.supersetId === supersetId ? (
+                          <div
+                            className="no-print"
+                            style={{ borderTop: "1px solid rgba(217,119,6,0.25)", padding: "0.35rem 0.5rem", background: "rgba(217,119,6,0.04)" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                              <input
+                                className="input"
+                                autoFocus
+                                placeholder="Search to add exercise…"
+                                value={supersetPickerState.search}
+                                onChange={(e) => setSupersetPickerState(s => s ? { ...s, search: e.target.value } : s)}
+                                style={{ flex: 1, fontSize: "0.72rem", padding: "0.22rem 0.35rem" }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                style={{ fontSize: "0.66rem", padding: "0.18rem 0.4rem", color: "var(--muted)" }}
+                                onClick={() => setSupersetPickerState(null)}
+                              >✕</button>
+                            </div>
+                            {supersetPickerState.search.trim().length > 0 && (() => {
+                              const q = supersetPickerState.search.trim().toLowerCase();
+                              const hits = MOVEMENT_LIBRARY.filter(m => m.name.toLowerCase().includes(q) || m.category.includes(q)).slice(0, 8);
+                              return hits.length ? (
+                                <div style={{ marginTop: "0.3rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                                  {hits.map(m => (
+                                    <button
+                                      key={m.id}
+                                      type="button"
+                                      className="btn btn-ghost"
+                                      style={{ textAlign: "left", fontSize: "0.72rem", padding: "0.2rem 0.4rem", justifyContent: "flex-start" }}
+                                      onClick={() => {
+                                        const { dayUid, supersetId } = supersetPickerState;
+                                        // Build the new item and assign superset_id in one setDays call
+                                        const newUid = `${m.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+                                        setDays(d => d.map(day => {
+                                          if (day.uid !== dayUid) return day;
+                                          const newItem: ProgramItem = {
+                                            uid: newUid,
+                                            movement: m,
+                                            is_warmup: false,
+                                            sets: 3, reps: "8-10", exertion_score: 7,
+                                            same_format: true, set_rows: [], variations: [],
+                                            rest_seconds: 60,
+                                            equipment_list: (m.equipment_list ?? []) as Equipment[],
+                                            equipment_specifics: m.equipment_specifics,
+                                            superset_id: supersetId,
+                                          };
+                                          return { ...day, items: [...day.items, newItem] };
+                                        }));
+                                        setSupersetPickerState(null);
+                                      }}
+                                    >
+                                      <strong>{m.name}</strong>
+                                      <span className="meta" style={{ marginLeft: "0.4rem", fontSize: "0.67rem" }}>{CATEGORY_LABELS[m.category]}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : <p className="meta" style={{ fontSize: "0.72rem", margin: "0.25rem 0 0" }}>No matches</p>;
+                            })()}
+                          </div>
+                        ) : (
+                          /* + Add to superset button */
                           <button
                             type="button"
                             className="btn btn-ghost no-print"
-                            style={{ width: "100%", fontSize: "0.62rem", padding: "0.22rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
-                            onClick={() => addToSuperset(day.uid, afterSuperset.uid, supersetId)}
-                          >+ Add next exercise to superset</button>
-                        ) : null}
+                            style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
+                            onClick={() => setSupersetPickerState({ dayUid: day.uid, supersetId, search: "" })}
+                          >⊞ + Add exercise to Super Set</button>
+                        )}
                       </div>
                     );
                   })}
@@ -1790,18 +1867,17 @@ function VariationDropdown({ value, onChange }: {
 
   return (
     <div
-      style={{ position: "relative", display: "inline-flex", flexDirection: "column", gap: "0.1rem" }}
+      style={{ position: "relative", display: "inline-flex" }}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
       }}
     >
-      <span style={{ fontSize: "0.57rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "center" }}>Spec</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         style={{
           fontSize: "0.67rem",
-          padding: "0.15rem 0.28rem",
+          padding: "0.16rem 0.28rem",
           borderRadius: 3,
           border: value.length > 0 ? "1px solid var(--ink)" : "1px solid var(--line)",
           background: value.length > 0 ? "rgba(0,0,0,0.07)" : "transparent",
@@ -1936,7 +2012,6 @@ function ExerciseCard({
           <div style={{ fontWeight: 600, fontSize: "0.82rem", lineHeight: 1.3, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.25rem" }}>
             <span>{it.movement.name}</span>
             {it.is_warmup ? <span style={{ fontSize: "0.6rem", color: "var(--rust)", fontWeight: 400 }}>warm-up</span> : null}
-            {it.movement.is_core ? <span style={{ fontSize: "0.55rem", padding: "0.02rem 0.22rem", border: "1px solid var(--ink)", borderRadius: 2, fontWeight: 700 }}>CORE</span> : null}
           </div>
           <div className="meta" style={{ fontSize: "0.69rem" }}>
             {CATEGORY_LABELS[it.movement.category]}{it.movement.cues ? ` · ${it.movement.cues}` : ""}
@@ -1969,97 +2044,78 @@ function ExerciseCard({
         </div>
       )}
 
-      {/* Sets / Reps / Exertion — Equipment — Notes (side-by-side) */}
-      <div style={{ marginTop: "0.32rem", display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+      {/* Set controls — all inline, no column headers */}
+      {(() => {
+        const INP: React.CSSProperties = { fontSize: "0.73rem", padding: "0.16rem 0.18rem", textAlign: "center" };
+        return (
+          <div style={{ marginTop: "0.3rem" }}>
+            {/* Toggle + first/shared row */}
+            <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.22rem", cursor: "pointer", flexShrink: 0 }}>
+                <input type="checkbox" checked={it.same_format} onChange={onToggleSameFormat} style={{ cursor: "pointer" }} />
+                <span style={{ fontSize: "0.61rem", color: "var(--muted)", userSelect: "none", whiteSpace: "nowrap" }}>All same</span>
+              </label>
 
-        {/* Left: same-format toggle + set controls */}
-        <div style={{ flexShrink: 0 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer", marginBottom: "0.28rem" }}>
-            <input type="checkbox" checked={it.same_format} onChange={onToggleSameFormat} style={{ cursor: "pointer" }} />
-            <span style={{ fontSize: "0.62rem", color: "var(--muted)", userSelect: "none" }}>All sets same</span>
-          </label>
-
-          {it.same_format ? (
-            <div style={{ display: "flex", gap: "0.3rem", alignItems: "flex-end" }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem" }}>
-                <span style={{ fontSize: "0.57rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Sets</span>
-                <input className="input" style={{ width: 38, fontSize: "0.76rem", padding: "0.15rem 0.2rem", textAlign: "center" }} type="number"
-                  value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 0 })} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem" }}>
-                <span style={{ fontSize: "0.57rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Reps</span>
-                <input className="input" style={{ width: 48, fontSize: "0.76rem", padding: "0.15rem 0.2rem", textAlign: "center" }}
-                  value={it.reps} onChange={(e) => onPatch({ reps: e.target.value })} />
-              </div>
-              <VariationDropdown
-                value={it.variations}
-                onChange={(v) => onPatch({ variations: v })}
-              />
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.1rem" }}>
-                <span style={{ fontSize: "0.57rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Exertion</span>
-                <select className="select" style={{ width: 74, fontSize: "0.67rem", padding: "0.15rem 0.15rem" }}
-                  value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
-                  {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                <span style={{ fontSize: "0.57rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Sets</span>
-                <input className="input" style={{ width: 38, fontSize: "0.76rem", padding: "0.15rem 0.2rem", textAlign: "center" }}
-                  type="number" min={1} max={10} value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} />
-              </div>
-              <div style={{ display: "flex", gap: "0.25rem" }}>
-                <span style={{ minWidth: 36, fontSize: "0.56rem", color: "var(--muted)" }}></span>
-                <span style={{ flex: 1, fontSize: "0.56rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "center" }}>Reps</span>
-                <span style={{ width: 68, fontSize: "0.56rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "center", flexShrink: 0 }}>Spec</span>
-                <span style={{ flex: 1, fontSize: "0.56rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "center" }}>Exertion</span>
-              </div>
-              {it.set_rows.map((row, si) => (
-                <div key={si} style={{ display: "flex", gap: "0.25rem", alignItems: "flex-end" }}>
-                  <span style={{ minWidth: 36, fontSize: "0.67rem", color: "var(--muted)", fontWeight: 600, flexShrink: 0, paddingBottom: "0.18rem" }}>Set {si + 1}</span>
-                  <input className="input" style={{ flex: 1, fontSize: "0.73rem", padding: "0.15rem 0.2rem", textAlign: "center" }}
-                    value={row.reps} onChange={(e) => onPatchSetRow(si, { reps: e.target.value })} />
-                  <div style={{ flexShrink: 0 }}>
-                    <VariationDropdown
-                      value={row.variations ?? []}
-                      onChange={(v) => onPatchSetRow(si, { variations: v })}
-                    />
-                  </div>
-                  <select className="select" style={{ flex: 1, fontSize: "0.65rem", padding: "0.15rem 0.15rem" }}
-                    value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
-                    {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k} — {v}</option>)}
+              {it.same_format ? (
+                <>
+                  <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={20}
+                    value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 0 })} title="Sets" placeholder="sets" />
+                  <input className="input" style={{ ...INP, width: 46 }}
+                    value={it.reps} onChange={(e) => onPatch({ reps: e.target.value })} title="Reps" placeholder="reps" />
+                  <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
+                  <EquipmentMultiSelect
+                    value={it.equipment_list} specifics={it.equipment_specifics}
+                    onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
+                    compact
+                  />
+                  <input className="input" style={{ flex: "1 1 52px", minWidth: 0, fontSize: "0.72rem", padding: "0.16rem 0.2rem" }}
+                    placeholder="Notes…" value={it.notes ?? ""} onChange={(e) => onPatch({ notes: e.target.value })} />
+                  <select className="select" style={{ ...INP, width: 72 }}
+                    value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
+                    {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
                   </select>
-                </div>
-              ))}
+                </>
+              ) : (
+                <>
+                  <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={10}
+                    value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} title="Sets" />
+                  <EquipmentMultiSelect
+                    value={it.equipment_list} specifics={it.equipment_specifics}
+                    onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
+                    compact
+                  />
+                </>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Right: Equipment + Notes */}
-        <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: "0.28rem" }}>
-          <EquipmentMultiSelect
-            value={it.equipment_list}
-            specifics={it.equipment_specifics}
-            onChange={(equipment_list, specifics) => onPatch({ equipment_list, equipment_specifics: specifics })}
-          />
-          <input
-            className="input"
-            style={{ width: "100%", fontSize: "0.71rem", padding: "0.18rem 0.28rem", boxSizing: "border-box" }}
-            placeholder="Notes…"
-            value={it.notes ?? ""}
-            onChange={(e) => onPatch({ notes: e.target.value })}
-          />
-        </div>
+            {/* Per-set rows */}
+            {!it.same_format && (
+              <div style={{ marginTop: "0.2rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                {it.set_rows.map((row, si) => (
+                  <div key={si} style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                    <span style={{ minWidth: 30, fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>S{si + 1}</span>
+                    <input className="input" style={{ ...INP, width: 46 }}
+                      value={row.reps} onChange={(e) => onPatchSetRow(si, { reps: e.target.value })} title="Reps" placeholder="reps" />
+                    <VariationDropdown value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
+                    <input className="input" style={{ flex: "1 1 50px", minWidth: 0, fontSize: "0.71rem", padding: "0.16rem 0.2rem" }}
+                      placeholder="Notes…" value={row.notes ?? ""} onChange={(e) => onPatchSetRow(si, { notes: e.target.value })} />
+                    <select className="select" style={{ ...INP, width: 70 }}
+                      value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
+                      {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
-      </div>
-
-      {/* Overall movement notes */}
+      {/* Coaching notes */}
       <textarea
         className="input"
-        style={{ marginTop: "0.3rem", width: "100%", fontSize: "0.71rem", padding: "0.18rem 0.3rem", boxSizing: "border-box", resize: "vertical", minHeight: 34, display: "block" }}
-        placeholder="Movement notes…"
+        style={{ marginTop: "0.28rem", width: "100%", fontSize: "0.71rem", padding: "0.16rem 0.28rem", boxSizing: "border-box", resize: "vertical", minHeight: 32, display: "block" }}
+        placeholder="Coaching notes…"
         value={it.movement_notes ?? ""}
         onChange={(e) => onPatch({ movement_notes: e.target.value })}
         rows={2}
@@ -2265,15 +2321,19 @@ function LibraryLeafRow({
 function EquipmentMultiSelect({
   value,
   specifics,
-  onChange
+  onChange,
+  compact = false,
 }: {
   value: Equipment[];
   specifics?: string;
   onChange: (next: Equipment[], specifics: string | undefined) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const showSpecifics = value.includes("machine") || value.includes("other");
-  const label = value.length === 0 ? "none specified" : value.length <= 2 ? value.map(v => EQUIPMENT_OPTIONS.find(o => o.value === v)?.label ?? v).join(", ") : `${value.length} selected`;
+  const fullLabel = value.length === 0 ? "Equipment" : value.length <= 2 ? value.map(v => EQUIPMENT_OPTIONS.find(o => o.value === v)?.label ?? v).join(", ") : `${value.length} equip.`;
+  const compactLabel = value.length === 0 ? "Equip." : value.length <= 1 ? (EQUIPMENT_OPTIONS.find(o => o.value === value[0])?.label ?? value[0]).slice(0, 7) : `${value.length} eq.`;
+  const label = compact ? compactLabel : fullLabel;
 
   function toggle(eq: Equipment) {
     const has = value.includes(eq);
@@ -2282,15 +2342,25 @@ function EquipmentMultiSelect({
   }
 
   return (
-    <div style={{ position: "relative", minWidth: 160 }}>
+    <div style={{ position: "relative", minWidth: compact ? 0 : 160, flexShrink: compact ? 1 : 0 }}>
       <button
         type="button"
         className="btn btn-ghost"
-        style={{ padding: "0.35rem 0.5rem", fontSize: "0.74rem", textAlign: "left", width: "100%", justifyContent: "space-between", display: "flex", alignItems: "center", gap: "0.4rem" }}
+        style={{
+          padding: compact ? "0.16rem 0.28rem" : "0.35rem 0.5rem",
+          fontSize: compact ? "0.67rem" : "0.74rem",
+          textAlign: "left",
+          width: compact ? "auto" : "100%",
+          justifyContent: "space-between",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.3rem",
+          whiteSpace: "nowrap",
+        }}
         onClick={() => setOpen((o) => !o)}
       >
         <span style={{ fontWeight: value.length ? 600 : 400, color: value.length ? undefined : "var(--muted)" }}>{label}</span>
-        <span style={{ fontSize: "0.65rem" }}>▾</span>
+        <span style={{ fontSize: "0.58rem" }}>▾</span>
       </button>
       {open ? (
         <div
