@@ -191,10 +191,20 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
     <tr>
       {/* Client */}
       <td>
-        <strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong>
-        {c.requires_confirmation && (
-          <><br /><span className="badge" style={{ fontSize: "0.67rem", background: "var(--amber-light, #fff8e1)", color: "#8a6200" }}>confirm</span></>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <button
+            className="btn btn-ghost"
+            title="Edit"
+            style={{ fontSize: "1rem", padding: "0.1rem 0.4rem", lineHeight: 1, flexShrink: 0 }}
+            onClick={() => setEditing(true)}
+          >✎</button>
+          <div>
+            <strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong>
+            {c.requires_confirmation && (
+              <><br /><span className="badge" style={{ fontSize: "0.67rem", background: "var(--amber-light, #fff8e1)", color: "#8a6200" }}>confirm</span></>
+            )}
+          </div>
+        </div>
       </td>
       {/* Goal */}
       <td className="meta" style={{ maxWidth: 180, fontSize: "0.82rem" }}>{c.goals ?? "—"}</td>
@@ -278,15 +288,7 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
       <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
       {/* Actions */}
       <td>
-        <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
-          <button
-            className="btn btn-ghost"
-            title="Edit"
-            style={{ fontSize: "1rem", padding: "0.1rem 0.4rem", lineHeight: 1 }}
-            onClick={() => setEditing(true)}
-          >✎</button>
-          <Link href={`/coach/clients/${c.id}`} style={{ fontSize: "0.78rem", whiteSpace: "nowrap" }}>→</Link>
-        </div>
+        <Link href={`/coach/clients/${c.id}`} style={{ fontSize: "0.78rem", whiteSpace: "nowrap" }}>→</Link>
       </td>
     </tr>
   );
