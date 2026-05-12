@@ -13,6 +13,7 @@ import {
   LIBRARY_HIERARCHY,
   hierarchyLeaves,
   leafToMovement,
+  REST_MOVEMENT,
   type Category,
   type Movement,
   type Equipment,
@@ -37,25 +38,45 @@ export type WeekSession = {
 
 type SetRow = {
   reps: string;
+  reps_type?: "reps" | "time";
+  reps_unit?: "s" | "min";
   exertion_score: number;  // 1..10
   variations: Variation[];
   notes?: string;
   equipment_list?: Equipment[];
   equipment_specifics?: string;
+  // Optional fields
+  tempo?: string;
+  rir?: number;
+  half_reps?: number;
+  rest_seconds?: number;   // rest after this specific set (seconds)
 };
 
-type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "dropset";
-const VARIATIONS: Variation[] = ["stretch", "plyometric", "isometric", "single_sided", "dropset"];
+type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
+const VARIATIONS: Variation[] = ["stretch", "plyometric", "isometric", "single_sided", "bilateral", "dropset"];
 const VARIATION_LABELS: Record<Variation, string> = {
-  stretch: "Stretch", plyometric: "Plyo", isometric: "Iso", single_sided: "Single", dropset: "Dropset",
+  stretch: "Stretch", plyometric: "Plyo", isometric: "Iso",
+  single_sided: "Unilateral", bilateral: "Bilateral", dropset: "Dropset",
 };
 const VARIATION_COLORS: Record<Variation, string> = {
   stretch: "rgba(59,130,246,0.12)", plyometric: "rgba(249,115,22,0.12)",
-  isometric: "rgba(139,92,246,0.12)", single_sided: "rgba(34,197,94,0.12)", dropset: "rgba(168,61,43,0.12)",
+  isometric: "rgba(139,92,246,0.12)", single_sided: "rgba(34,197,94,0.12)",
+  bilateral: "rgba(6,182,212,0.12)", dropset: "rgba(168,61,43,0.12)",
 };
 const VARIATION_TEXT: Record<Variation, string> = {
   stretch: "rgb(37,99,235)", plyometric: "rgb(194,65,12)",
-  isometric: "rgb(109,40,217)", single_sided: "rgb(21,128,57)", dropset: "var(--rust)",
+  isometric: "rgb(109,40,217)", single_sided: "rgb(21,128,57)",
+  bilateral: "rgb(14,116,144)", dropset: "var(--rust)",
+};
+
+// ─── Optional per-set fields ─────────────────────────────────────────────
+type OptionalField = "tempo" | "rir" | "half_reps" | "rest_after";
+const ALL_OPTIONAL_FIELDS: OptionalField[] = ["tempo", "rir", "half_reps", "rest_after"];
+const OPTIONAL_FIELD_CONFIG: Record<OptionalField, { label: string; shortLabel: string; width: string }> = {
+  tempo:      { label: "Tempo",     shortLabel: "Tempo", width: "56px" },
+  rir:        { label: "RIR",       shortLabel: "RIR",   width: "44px" },
+  half_reps:  { label: "½ Reps",    shortLabel: "½",     width: "44px" },
+  rest_after: { label: "Rest (s)",  shortLabel: "Rest",  width: "50px" },
 };
 
 type ProgramItem = {
@@ -65,16 +86,25 @@ type ProgramItem = {
   sets: number;
   reps: string;
   exertion_score: number;          // 1..10
+  reps_type?: "reps" | "time";    // "reps" (default) or timed set
+  reps_unit?: "s" | "min";        // used when reps_type === "time"
   same_format: boolean;            // true = all sets identical (default)
   set_rows: SetRow[];              // per-set data when same_format=false
   variations: Variation[];         // modifier tags
   superset_id?: string;            // shared id groups items into a superset block
   rest_seconds?: number;
+  rest_duration?: number;     // for rest-block items (movement.id === "rest")
+  rest_unit?: "s" | "min";    // "s" | "min"
   notes?: string;
   equipment_list: Equipment[];
   equipment_specifics?: string;
   movement_notes?: string;
   last_log?: { reps: number; weight_lb: number };
+  // Optional column config
+  optional_fields?: OptionalField[];
+  tempo?: string;
+  rir?: number;
+  half_reps?: number;
 };
 
 type RenderGroup =
@@ -377,8 +407,16 @@ export default function BuildProgramClient({
     hierarchyLeaves().filter((l) => !inProgramIds.has(leafMoveIdMap.get(l.id) ?? l.id)),
   [inProgramIds, leafMoveIdMap]);
 
+  // ─── auto-collapse days on mobile ───────────────────────────────
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth <= 640) {
+      setDays((d) => d.map((x) => ({ ...x, collapsed: true })));
+    }
+  }, []); // once on mount
+
   // ─── day actions ────────────────────────────────────────────────
-  function addDay() { setDays((d) => [...d, NEW_DAY(d.length + 1)]); }
+  function isMobile() { return typeof window !== "undefined" && window.innerWidth <= 640; }
+  function addDay() { setDays((d) => [...d, { ...NEW_DAY(d.length + 1), collapsed: isMobile() }]); }
   function removeDay(uid: string) { setDays((d) => d.filter((x) => x.uid !== uid)); }
   function toggleCollapse(uid: string) {
     setDays((d) => d.map((x) => (x.uid === uid ? { ...x, collapsed: !x.collapsed } : x)));
@@ -397,7 +435,7 @@ export default function BuildProgramClient({
           is_warmup: asWarmup,
           sets: 3,
           reps: "8-10",
-          exertion_score: 7,
+          exertion_score: 5,
           same_format: true,
           set_rows: [],
           variations: [],
@@ -419,6 +457,12 @@ export default function BuildProgramClient({
           items: day.items.map((it) => {
             if (it.uid !== itemUid) return it;
             const next = { ...it, ...patch };
+            // Auto-switch to time input when isometric variation is applied
+            if ("variations" in patch && next.variations.includes("isometric") && next.reps_type !== "time") {
+              next.reps_type = "time";
+              next.reps_unit = next.reps_unit ?? "s";
+              if (!next.reps || isNaN(Number(next.reps))) next.reps = "30";
+            }
             // When sets count changes while broken-out, resize set_rows to match
             if ("sets" in patch && !next.same_format) {
               const newCount = Math.max(1, next.sets);
@@ -445,14 +489,20 @@ export default function BuildProgramClient({
           items: day.items.map((it) => {
             if (it.uid !== itemUid) return it;
             if (it.same_format) {
-              // Expand: build one row per set from current values (including equipment)
+              // Expand: build one row per set from current values (including equipment + optional fields)
               const rows: SetRow[] = Array.from({ length: it.sets }, () => ({
                 reps: it.reps,
+                reps_type: it.reps_type,
+                reps_unit: it.reps_unit,
                 exertion_score: it.exertion_score,
                 variations: [...it.variations],
                 notes: it.notes,
                 equipment_list: [...it.equipment_list],
                 equipment_specifics: it.equipment_specifics,
+                tempo: it.tempo,
+                rir: it.rir,
+                half_reps: it.half_reps,
+                rest_seconds: it.rest_seconds,
               }));
               return { ...it, same_format: false, set_rows: rows };
             } else {
@@ -466,6 +516,10 @@ export default function BuildProgramClient({
                 notes: first?.notes ?? it.notes,
                 equipment_list: first?.equipment_list ?? it.equipment_list,
                 equipment_specifics: first?.equipment_specifics ?? it.equipment_specifics,
+                tempo: first?.tempo ?? it.tempo,
+                rir: first?.rir ?? it.rir,
+                half_reps: first?.half_reps ?? it.half_reps,
+                rest_seconds: first?.rest_seconds ?? it.rest_seconds,
               };
             }
           }),
@@ -557,7 +611,7 @@ export default function BuildProgramClient({
             is_warmup: false,
             sets: it.sets,
             reps: it.reps,
-            exertion_score: 7,
+            exertion_score: 5,
             same_format: true,
             set_rows: [],
             variations: [],
@@ -591,7 +645,7 @@ export default function BuildProgramClient({
             is_warmup: false,
             sets: it.sets,
             reps: it.reps,
-            exertion_score: 7,
+            exertion_score: 5,
             same_format: true,
             set_rows: [],
             variations: [],
@@ -635,8 +689,8 @@ export default function BuildProgramClient({
               ? it.reps
               : it.set_rows.map((r, i) => `Set ${i + 1}: ${r.reps}`).join(" / "),
             exertion: it.same_format
-              ? `${it.exertion_score} — ${EXERTION_SHORT[it.exertion_score]}`
-              : it.set_rows.map((r, i) => `Set ${i + 1}: ${r.exertion_score}`).join(", "),
+              ? (EXERTION_LABELS[it.exertion_score] ?? String(it.exertion_score))
+              : it.set_rows.map((r, i) => `Set ${i + 1}: ${EXERTION_SHORT[r.exertion_score] ?? r.exertion_score}`).join(", "),
             rest_seconds: it.rest_seconds ?? null,
             notes: it.notes ?? null
           }))
@@ -655,9 +709,10 @@ export default function BuildProgramClient({
   }
 
   function daySummary(day: ProgramDay): string {
-    if (day.items.length === 0) return "no movements yet";
+    const exercises = day.items.filter((it) => it.movement.id !== "rest");
+    if (exercises.length === 0) return "no movements yet";
     const counts: Partial<Record<Category, number>> = {};
-    day.items.forEach((it) => { counts[it.movement.category] = (counts[it.movement.category] ?? 0) + 1; });
+    exercises.forEach((it) => { counts[it.movement.category] = (counts[it.movement.category] ?? 0) + 1; });
     return Object.entries(counts)
       .map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`)
       .join(" · ");
@@ -681,6 +736,30 @@ export default function BuildProgramClient({
     addMovementToDay(dayUid, leafToMovement(leaf), false);
   }
 
+  function addRestToDay(dayUid: string) {
+    setDays((d) =>
+      d.map((day) => {
+        if (day.uid !== dayUid) return day;
+        const item: ProgramItem = {
+          uid: `rest-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          movement: REST_MOVEMENT,
+          is_warmup: false,
+          sets: 1,
+          reps: "",
+          exertion_score: 5,
+          same_format: true,
+          set_rows: [],
+          variations: [],
+          rest_seconds: 0,
+          equipment_list: [],
+          rest_duration: 60,
+          rest_unit: "s",
+        };
+        return { ...day, items: [...day.items, item], collapsed: false };
+      })
+    );
+  }
+
   function addMovementToSuperset(dayUid: string, m: Movement, supersetId: string) {
     setDays((d) =>
       d.map((day) => {
@@ -688,7 +767,7 @@ export default function BuildProgramClient({
         const newItem: ProgramItem = {
           uid: `${m.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           movement: m, is_warmup: false,
-          sets: 3, reps: "8-10", exertion_score: 7,
+          sets: 3, reps: "8-10", exertion_score: 5,
           same_format: true, set_rows: [], variations: [],
           rest_seconds: 60,
           equipment_list: (m.equipment_list ?? []) as Equipment[],
@@ -761,6 +840,16 @@ export default function BuildProgramClient({
       })
     );
   }
+  function removeSuperset(dayUid: string, supersetId: string) {
+    setDays((d) =>
+      d.map((day) =>
+        day.uid !== dayUid
+          ? day
+          : { ...day, items: day.items.filter((it) => it.superset_id !== supersetId) }
+      )
+    );
+  }
+
   function moveSupersetAcross(srcDayUid: string, supersetId: string, dstDayUid: string, targetIdx?: number) {
     setDays((d) => {
       const src = d.find((day) => day.uid === srcDayUid);
@@ -1315,6 +1404,29 @@ export default function BuildProgramClient({
           })}
               {filteredHierarchy.length === 0 ? <p className="meta" style={{ fontSize: "0.78rem" }}>No matches.</p> : null}
             </div>
+
+            {/* ── Rest block — always at bottom ── */}
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: "0.4rem", paddingTop: "0.4rem" }}>
+              <div
+                style={{
+                  padding: "0.26rem 0.4rem",
+                  borderRadius: 3,
+                  marginBottom: "0.12rem",
+                }}
+                title="Add a timed rest block to the active day"
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost no-print"
+                    style={{ padding: "0.04rem 0.32rem", fontSize: "0.72rem", flexShrink: 0, color: "var(--muted)" }}
+                    onClick={() => addRestToDay(activeDayUid)}
+                    title="Add rest block to active day"
+                  >+</button>
+                  <span style={{ fontWeight: 600, fontSize: "0.82rem" }}>Rest</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </aside>
@@ -1508,8 +1620,35 @@ export default function BuildProgramClient({
                         onRowDrop(day.uid, lastEntry.itemIdx + 1, e);
                       }
                     }}
-                    style={{ borderRadius: 5, border: "2px solid var(--amber)", overflow: "hidden" }}
+                    style={{ borderRadius: 5, border: "2px solid var(--amber)", overflow: "hidden", position: "relative" }}
                   >
+                    {/* Remove entire superset — sits outside the amber border */}
+                    <button
+                      type="button"
+                      className="no-print"
+                      title="Remove superset"
+                      onClick={() => removeSuperset(day.uid, supersetId)}
+                      style={{
+                        position: "absolute",
+                        top: -9,
+                        right: -9,
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        border: "1.5px solid var(--amber)",
+                        background: "var(--paper)",
+                        color: "var(--amber)",
+                        fontSize: "0.6rem",
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 0,
+                        zIndex: 5,
+                      }}
+                    >✕</button>
                     <div
                       draggable
                       onDragStart={(e) => onDragStartSuperset(day.uid, supersetId, e)}
@@ -1576,14 +1715,13 @@ export default function BuildProgramClient({
         {/* ── at_home: multi-day card grid ── */}
         {programKind === "at_home" && (
           <>
-          <div style={{
+          <div className="day-grid-2col" style={{
             marginTop: "1rem",
             display: "grid",
-            gridTemplateColumns: `repeat(${days.length}, minmax(${Math.max(210, Math.min(380, Math.floor(900 / days.length)))}px, 1fr))`,
+            gridTemplateColumns: "repeat(2, 1fr)",
             gap: "0.75rem",
             alignItems: "start",
             paddingBottom: "0.75rem",
-            overflowX: "auto",
           }}>
             {days.map((day) => {
               const renderGroups = toRenderGroups(day.items);
@@ -1602,39 +1740,50 @@ export default function BuildProgramClient({
                   {/* Day header */}
                   <div style={{
                     padding: "0.55rem 0.7rem", display: "flex", alignItems: "center", gap: "0.4rem",
-                    borderBottom: "1px solid var(--line)",
+                    borderBottom: day.collapsed ? "none" : "1px solid var(--line)",
                     background: day.uid === activeDayUid ? "rgba(168,61,43,0.04)" : undefined,
                   }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost no-print"
+                      style={{ padding: "0.1rem 0.3rem", fontSize: "0.65rem", flexShrink: 0, color: "var(--muted)", border: "none" }}
+                      onClick={() => toggleCollapse(day.uid)}
+                      title={day.collapsed ? "Expand" : "Collapse"}
+                    >{day.collapsed ? "▶" : "▼"}</button>
                     <input
                       className="input"
                       style={{ flex: 1, fontWeight: 700, fontSize: "0.88rem", border: "none", background: "transparent", padding: "0.15rem 0" }}
                       value={day.title}
                       onChange={(e) => patchDay(day.uid, { title: e.target.value })}
                     />
-                    <button
-                      type="button"
-                      className="btn btn-ghost no-print"
-                      style={{ padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0, color: "var(--muted)" }}
-                      onClick={() => setImportDayModalUid(day.uid)}
-                      title="Import exercises from a past program into this day"
-                    >↓ Import</button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost no-print"
-                      style={{
-                        padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0,
-                        color: day.uid === activeDayUid ? "var(--rust)" : "var(--muted)",
-                        borderColor: day.uid === activeDayUid ? "var(--rust)" : undefined,
-                        background: day.uid === activeDayUid ? "rgba(168,61,43,0.08)" : undefined,
-                        fontWeight: day.uid === activeDayUid ? 700 : undefined,
-                      }}
-                      onClick={() => setSelectedDayUid(day.uid)}
-                      title={day.uid === activeDayUid ? "Active — library additions go here" : "Set as active day for library"}
-                    >
-                      {day.uid === activeDayUid ? "✎ active" : "✎"}
-                    </button>
+                    {!day.collapsed && <>
+                      <button
+                        type="button"
+                        className="btn btn-ghost no-print"
+                        style={{ padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0, color: "var(--muted)" }}
+                        onClick={() => setImportDayModalUid(day.uid)}
+                        title="Import exercises from a past program into this day"
+                      >↓ Import</button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost no-print"
+                        style={{
+                          padding: "0.1rem 0.35rem", fontSize: "0.6rem", flexShrink: 0,
+                          color: day.uid === activeDayUid ? "var(--rust)" : "var(--muted)",
+                          borderColor: day.uid === activeDayUid ? "var(--rust)" : undefined,
+                          background: day.uid === activeDayUid ? "rgba(168,61,43,0.08)" : undefined,
+                          fontWeight: day.uid === activeDayUid ? 700 : undefined,
+                        }}
+                        onClick={() => setSelectedDayUid(day.uid)}
+                        title={day.uid === activeDayUid ? "Active — library additions go here" : "Set as active day for library"}
+                      >
+                        {day.uid === activeDayUid ? "✎ active" : "✎"}
+                      </button>
+                    </>}
                     <button className="btn btn-ghost no-print" style={{ padding: "0.1rem 0.35rem", fontSize: "0.65rem", color: "var(--red)", flexShrink: 0 }} onClick={() => removeDay(day.uid)} title="Delete day">✕</button>
                   </div>
+
+                  {!day.collapsed && <>
                   <div className="meta" style={{ fontSize: "0.68rem", padding: "0.25rem 0.7rem", borderBottom: "1px solid var(--line)", color: "var(--muted)" }}>
                     {daySummary(day)}
                   </div>
@@ -1765,6 +1914,7 @@ export default function BuildProgramClient({
                       );
                     })}
                   </div>
+                  </>}
                 </div>
               );
             })}
@@ -2219,7 +2369,7 @@ function VariationDropdown({ value, onChange }: {
           cursor: "pointer",
           fontFamily: "inherit",
           whiteSpace: "nowrap",
-          width: 68,
+          width: 78,
           overflow: "hidden",
           textOverflow: "ellipsis",
           textAlign: "left",
@@ -2269,6 +2419,158 @@ function VariationDropdown({ value, onChange }: {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Reps / Time toggle input ─────────────────────────────────────────────
+function RepsInput({
+  reps, repsType, repsUnit, onChange,
+}: {
+  reps: string;
+  repsType?: "reps" | "time";
+  repsUnit?: "s" | "min";
+  onChange: (patch: { reps?: string; reps_type?: "reps" | "time"; reps_unit?: "s" | "min" }) => void;
+}) {
+  const isTime = repsType === "time";
+  const unit = repsUnit ?? "s";
+  const INP: React.CSSProperties = { fontSize: "0.73rem", padding: "0.16rem 0.14rem", textAlign: "center" };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <button
+        type="button"
+        title={isTime ? "Switch to reps" : "Switch to timed set"}
+        onClick={() => onChange({ reps_type: isTime ? "reps" : "time", reps_unit: unit, reps: isTime ? "" : (reps || "30") })}
+        style={{
+          fontSize: "0.55rem", padding: "0.1rem 0.2rem",
+          border: "1px solid var(--line)", borderRadius: 2,
+          background: isTime ? "rgba(0,0,0,0.08)" : "transparent",
+          cursor: "pointer", color: isTime ? "var(--ink)" : "var(--muted)",
+          flexShrink: 0, lineHeight: 1, fontFamily: "inherit",
+        }}
+      >{isTime ? "#" : "⏱"}</button>
+      {isTime ? (
+        <>
+          <input
+            className="input" type="number" min={1} step={unit === "min" ? 1 : 5}
+            value={reps || "30"}
+            onChange={(e) => onChange({ reps: e.target.value })}
+            style={{ ...INP, width: 34 }}
+          />
+          <select
+            className="select" value={unit}
+            onChange={(e) => onChange({ reps_unit: e.target.value as "s" | "min" })}
+            style={{ fontSize: "0.65rem", padding: "0.14rem 0.08rem", width: 32 }}
+          >
+            <option value="s">s</option>
+            <option value="min">m</option>
+          </select>
+        </>
+      ) : (
+        <input
+          className="input"
+          style={{ ...INP, flex: 1, minWidth: 0 }}
+          value={reps}
+          onChange={(e) => onChange({ reps: e.target.value })}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Optional field add-button (dropdown) ────────────────────────────────
+function AddOptionalFieldButton({
+  activeFields,
+  onAdd,
+}: {
+  activeFields: OptionalField[];
+  onAdd: (f: OptionalField) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const available = ALL_OPTIONAL_FIELDS.filter((f) => !activeFields.includes(f));
+  if (available.length === 0) return null;
+  return (
+    <div style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        title="Add optional field"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          background: "transparent",
+          border: "1px solid var(--line)",
+          borderRadius: 3,
+          fontSize: "0.62rem",
+          padding: "0.06rem 0.22rem",
+          cursor: "pointer",
+          color: "var(--muted)",
+          lineHeight: 1,
+          fontFamily: "inherit",
+        }}
+      >+</button>
+      {open && (
+        <div
+          style={{
+            position: "absolute", top: "100%", right: 0, zIndex: 30,
+            background: "var(--paper)", border: "1px solid var(--line)",
+            borderRadius: 3, padding: "0.2rem", minWidth: 110,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.10)", marginTop: 2,
+          }}
+          onMouseLeave={() => setOpen(false)}
+        >
+          {available.map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => { onAdd(f); setOpen(false); }}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                background: "transparent", border: "none", borderRadius: 2,
+                fontSize: "0.72rem", padding: "0.2rem 0.35rem",
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(168,61,43,0.08)"; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              {OPTIONAL_FIELD_CONFIG[f].label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Single optional-field input cell ─────────────────────────────────────
+function OptionalFieldInput({
+  field, value, onChange, style,
+}: {
+  field: OptionalField;
+  value: string | number | undefined;
+  onChange: (v: string | number | undefined) => void;
+  style?: React.CSSProperties;
+}) {
+  if (field === "tempo") {
+    return (
+      <input
+        className="input"
+        style={style}
+        placeholder="3-1-3"
+        value={(value as string) ?? ""}
+        onChange={(e) => onChange(e.target.value || undefined)}
+      />
+    );
+  }
+  // rir, half_reps, rest_after are all numeric
+  return (
+    <input
+      className="input"
+      type="number"
+      min={0}
+      max={field === "rir" ? 10 : undefined}
+      style={style}
+      placeholder={field === "rest_after" ? "s" : "0"}
+      value={(value as number) ?? ""}
+      onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+    />
   );
 }
 
@@ -2334,6 +2636,58 @@ function ExerciseCard({
     });
   }
 
+  // ── Rest block rendering ─────────────────────────────────────────
+  if (it.movement.id === "rest") {
+    const dur = it.rest_duration ?? 60;
+    const unit = it.rest_unit ?? "s";
+    return (
+      <div
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={(e) => { if (drag) e.preventDefault(); }}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+        style={{
+          padding: "0.35rem 0.45rem",
+          borderRadius: 4,
+          border: "1px dashed rgba(0,0,0,0.18)",
+          background: "rgba(0,0,0,0.025)",
+          cursor: "grab",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <span className="no-print" style={{ color: "var(--muted)", userSelect: "none", fontSize: "0.68rem", flexShrink: 0 }}>⋮⋮</span>
+          <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>⏱</span>
+          <span style={{ fontWeight: 600, fontSize: "0.82rem" }}>Rest</span>
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={unit === "min" ? 60 : 600}
+            step={unit === "min" ? 1 : 5}
+            value={dur}
+            onChange={(e) => onPatch({ rest_duration: Number(e.target.value) || 1 })}
+            style={{ width: 52, fontSize: "0.78rem", padding: "0.15rem 0.25rem", textAlign: "center" }}
+          />
+          <select
+            className="select"
+            value={unit}
+            onChange={(e) => onPatch({ rest_unit: e.target.value as "s" | "min" })}
+            style={{ fontSize: "0.75rem", padding: "0.15rem 0.2rem", width: 54 }}
+          >
+            <option value="s">sec</option>
+            <option value="min">min</option>
+          </select>
+          <div className="no-print" style={{ marginLeft: "auto", display: "flex", gap: "0.15rem" }}>
+            <button className="btn btn-ghost" style={{ padding: "0.08rem 0.28rem", fontSize: "0.62rem" }} onClick={onMoveUp}>↑</button>
+            <button className="btn btn-ghost" style={{ padding: "0.08rem 0.28rem", fontSize: "0.62rem" }} onClick={onMoveDown}>↓</button>
+            <button className="btn btn-ghost" style={{ padding: "0.08rem 0.28rem", fontSize: "0.65rem", color: "var(--red)" }} onClick={onRemove}>×</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       draggable
@@ -2396,9 +2750,18 @@ function ExerciseCard({
           paddingBottom: "0.12rem", userSelect: "none",
         };
         const INP: React.CSSProperties = { fontSize: "0.73rem", padding: "0.16rem 0.18rem", textAlign: "center" };
-        // Same-format: 6 data columns. Per-set: row-label col + 5 data columns.
-        const SF_COLS = "36px 46px 68px 72px 1fr 72px";
-        const PS_COLS = "28px 46px 68px 72px 1fr 70px";
+        const activeFields: OptionalField[] = it.optional_fields ?? [];
+        const optColStr = activeFields.map((f) => OPTIONAL_FIELD_CONFIG[f].width).join(" ");
+        // Base cols + optional cols + 22px for the add-field button
+        const SF_COLS = `36px 90px 80px 72px 1fr 84px${optColStr ? ` ${optColStr}` : ""} 22px`;
+        const PS_COLS = `28px 90px 80px 72px 1fr 84px${optColStr ? ` ${optColStr}` : ""} 22px`;
+
+        function removeOptField(f: OptionalField) {
+          onPatch({ optional_fields: activeFields.filter((x) => x !== f) });
+        }
+        function addOptField(f: OptionalField) {
+          onPatch({ optional_fields: [...activeFields, f] });
+        }
 
         return (
           <div style={{ marginTop: "0.3rem" }}>
@@ -2412,18 +2775,42 @@ function ExerciseCard({
             {it.same_format ? (
               /* ── Same-format grid: header row + single input row ── */
               <div style={{ display: "grid", gridTemplateColumns: SF_COLS, gap: "0.35rem", alignItems: "center" }}>
-                {/* Headers */}
+                {/* Core headers */}
                 <span style={HDR}>Sets</span>
                 <span style={HDR}>Reps</span>
-                <span style={HDR}>Spec</span>
-                <span style={HDR}>Equip.</span>
+                <span style={HDR}>
+                  <span className="hdr-full">Specification</span>
+                  <span className="hdr-short">Spec</span>
+                </span>
+                <span style={HDR}>
+                  <span className="hdr-full">Equipment</span>
+                  <span className="hdr-short">Equip</span>
+                </span>
                 <span style={HDR}>Notes</span>
                 <span style={HDR}>Exertion</span>
-                {/* Inputs */}
+                {/* Optional field headers (each has a × to remove) */}
+                {activeFields.map((f) => (
+                  <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                    <button
+                      type="button"
+                      style={{ background: "transparent", border: "none", padding: "0 1px", cursor: "pointer", fontSize: "0.5rem", color: "var(--muted)", lineHeight: 1 }}
+                      title={`Remove ${OPTIONAL_FIELD_CONFIG[f].label}`}
+                      onClick={() => removeOptField(f)}
+                    >×</button>
+                    {OPTIONAL_FIELD_CONFIG[f].shortLabel}
+                  </span>
+                ))}
+                {/* Add-field button lives in header row */}
+                <span style={{ alignSelf: "center", textAlign: "center" }}>
+                  <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
+                </span>
+                {/* Core inputs */}
                 <input className="input" style={INP} type="number" min={1} max={20}
                   value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 0 })} />
-                <input className="input" style={INP}
-                  value={it.reps} onChange={(e) => onPatch({ reps: e.target.value })} />
+                <RepsInput
+                  reps={it.reps} repsType={it.reps_type} repsUnit={it.reps_unit}
+                  onChange={(p) => onPatch(p as Partial<ProgramItem>)}
+                />
                 <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
                 <EquipmentMultiSelect
                   value={it.equipment_list} specifics={it.equipment_specifics}
@@ -2434,8 +2821,19 @@ function ExerciseCard({
                   placeholder="Notes…" value={it.notes ?? ""} onChange={(e) => onPatch({ notes: e.target.value })} />
                 <select className="select" style={INP}
                   value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
-                  {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
+                  {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
+                {/* Optional field inputs */}
+                {activeFields.map((f) => (
+                  <OptionalFieldInput
+                    key={`inp-${f}`}
+                    field={f}
+                    value={f === "rest_after" ? it.rest_seconds : f === "tempo" ? it.tempo : f === "rir" ? it.rir : it.half_reps}
+                    onChange={(v) => onPatch(f === "rest_after" ? { rest_seconds: v as number | undefined } : { [f]: v } as Partial<ProgramItem>)}
+                    style={{ ...INP, width: "100%", boxSizing: "border-box" as const }}
+                  />
+                ))}
+                <span /> {/* spacer under the + column */}
               </div>
             ) : (
               /* ── Per-set: sets count + grid with header row + one row per set ── */
@@ -2449,16 +2847,43 @@ function ExerciseCard({
                   {/* Headers — single row above all set rows */}
                   <span style={HDR}></span>{/* blank over S1/S2 labels */}
                   <span style={HDR}>Reps</span>
-                  <span style={HDR}>Spec</span>
-                  <span style={HDR}>Equip.</span>
+                  <span style={HDR}>
+                    <span className="hdr-full">Specification</span>
+                    <span className="hdr-short">Spec</span>
+                  </span>
+                  <span style={HDR}>
+                    <span className="hdr-full">Equipment</span>
+                    <span className="hdr-short">Equip</span>
+                  </span>
                   <span style={HDR}>Notes</span>
                   <span style={HDR}>Exertion</span>
+                  {/* Optional field headers */}
+                  {activeFields.map((f) => (
+                    <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                      <button
+                        type="button"
+                        style={{ background: "transparent", border: "none", padding: "0 1px", cursor: "pointer", fontSize: "0.5rem", color: "var(--muted)", lineHeight: 1 }}
+                        title={`Remove ${OPTIONAL_FIELD_CONFIG[f].label}`}
+                        onClick={() => removeOptField(f)}
+                      >×</button>
+                      {OPTIONAL_FIELD_CONFIG[f].shortLabel}
+                    </span>
+                  ))}
+                  {/* Add-field button */}
+                  <span style={{ alignSelf: "center", textAlign: "center" }}>
+                    <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
+                  </span>
                   {/* Set rows */}
                   {it.set_rows.map((row, si) => (
                     <>
                       <span key={`lbl-${si}`} style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600, textAlign: "center" }}>S{si + 1}</span>
-                      <input key={`reps-${si}`} className="input" style={INP}
-                        value={row.reps} onChange={(e) => onPatchSetRow(si, { reps: e.target.value })} />
+                      <RepsInput
+                        key={`reps-${si}`}
+                        reps={row.reps}
+                        repsType={row.reps_type ?? it.reps_type}
+                        repsUnit={row.reps_unit ?? it.reps_unit}
+                        onChange={(p) => onPatchSetRow(si, p as Partial<SetRow>)}
+                      />
                       <VariationDropdown key={`spec-${si}`} value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
                       <EquipmentMultiSelect
                         key={`eq-${si}`}
@@ -2471,8 +2896,19 @@ function ExerciseCard({
                         placeholder="Notes…" value={row.notes ?? ""} onChange={(e) => onPatchSetRow(si, { notes: e.target.value })} />
                       <select key={`exr-${si}`} className="select" style={INP}
                         value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
-                        {Object.entries(EXERTION_SHORT).map(([k, v]) => <option key={k} value={k}>{k}–{v}</option>)}
+                        {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
+                      {/* Optional field inputs per set */}
+                      {activeFields.map((f) => (
+                        <OptionalFieldInput
+                          key={`opt-${f}-${si}`}
+                          field={f}
+                          value={f === "rest_after" ? row.rest_seconds : f === "tempo" ? row.tempo : f === "rir" ? row.rir : row.half_reps}
+                          onChange={(v) => onPatchSetRow(si, f === "rest_after" ? { rest_seconds: v as number | undefined } : { [f]: v } as Partial<SetRow>)}
+                          style={{ ...INP, width: "100%", boxSizing: "border-box" as const }}
+                        />
+                      ))}
+                      <span key={`plus-sp-${si}`} /> {/* spacer under the + column for each row */}
                     </>
                   ))}
                 </div>
@@ -2637,7 +3073,7 @@ function CoverageHierarchy({
   );
 }
 
-// ─── Library leaf row: checkbox + drag handle + add-to-selected-day btn ──
+// ─── Library leaf row: add btn + label + in-program indicator ─────────────
 function LibraryLeafRow({
   leaf,
   inProgram,
@@ -2666,16 +3102,6 @@ function LibraryLeafRow({
       title="Drag into a day, or click + to add to the active day"
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: "0.4rem" }}>
-        <input
-          type="checkbox"
-          readOnly
-          checked={inProgram}
-          aria-label="In program"
-          style={{ cursor: "default", marginTop: "0.15rem", flexShrink: 0 }}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: "0.82rem" }}>{leaf.label}</div>
-        </div>
         <button
           type="button"
           className="btn btn-ghost no-print"
@@ -2683,6 +3109,15 @@ function LibraryLeafRow({
           onClick={(e) => { e.stopPropagation(); onAdd(); }}
           title="Add to active day"
         >+</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: "0.82rem" }}>{leaf.label}</div>
+        </div>
+        {inProgram && (
+          <span
+            aria-label="In program"
+            style={{ flexShrink: 0, marginTop: "0.15rem", color: "var(--rust)", fontSize: "0.82rem", lineHeight: 1 }}
+          >✓</span>
+        )}
       </div>
     </div>
   );

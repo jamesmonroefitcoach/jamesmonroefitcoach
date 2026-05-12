@@ -155,6 +155,61 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
   return { ok: true, data };
 }
 
+export type EditSeriesInput = {
+  series_id: string;
+  from_date: string;          // ISO — update this appointment and all future ones in the series
+  rate?: number | null;
+  notes?: string | null;
+  time_offset_min?: number;   // shift starts_at/ends_at by this many minutes (0 = no change)
+};
+
+export async function editSeries(input: EditSeriesInput): Promise<Result<{ count: number }>> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  const supabase = createSupabaseAdmin();
+
+  const baseUpdates: Record<string, unknown> = {};
+  if (input.rate !== undefined) baseUpdates.rate = input.rate;
+  if (input.notes !== undefined) baseUpdates.notes = input.notes;
+
+  if (input.time_offset_min) {
+    // Time shift: fetch each appointment and update individually
+    const { data: rows, error: fetchErr } = await supabase
+      .from("appointments")
+      .select("id, starts_at, ends_at")
+      .eq("series_id", input.series_id)
+      .eq("coach_id", me.id)
+      .gte("starts_at", input.from_date)
+      .not("status", "in", '("cancelled","no_show")');
+    if (fetchErr) return { ok: false, error: fetchErr.message };
+    for (const a of rows ?? []) {
+      const newStart = new Date(new Date(a.starts_at).getTime() + input.time_offset_min * 60000);
+      const newEnd = new Date(new Date(a.ends_at).getTime() + input.time_offset_min * 60000);
+      const { error } = await supabase.from("appointments").update({
+        ...baseUpdates,
+        starts_at: newStart.toISOString(),
+        ends_at: newEnd.toISOString()
+      }).eq("id", a.id);
+      if (error) return { ok: false, error: error.message };
+    }
+  } else if (Object.keys(baseUpdates).length > 0) {
+    const { error } = await supabase
+      .from("appointments")
+      .update(baseUpdates)
+      .eq("series_id", input.series_id)
+      .eq("coach_id", me.id)
+      .gte("starts_at", input.from_date)
+      .not("status", "in", '("cancelled","no_show")');
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/coach/schedule");
+  revalidatePath("/coach");
+  revalidatePath("/coach/clients", "layout");
+  return { ok: true, data: { count: 0 } };
+}
+
 export async function cancelSeries(seriesId: string, opts: { fromDate?: string } = {}): Promise<Result<{ count: number }>> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
-import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
+import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, editSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
 import { CANCEL_REASONS, CANCEL_REASON_LABELS } from "@/lib/cancel-reasons";
 
 const HOUR_HEIGHT = 56; // px per hour cell
@@ -37,6 +37,7 @@ const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }
 };
 
 const PERSONAL_COLOR = { bg: "#3a342f", fg: "#f5efe4" };
+const ONLINE_COLOR   = { bg: "#1e6a8c", fg: "#ffffff" };
 
 // ─── side-panel form state ──────────────────────────────────────────
 type Draft = {
@@ -56,6 +57,7 @@ type Draft = {
   cancel_reason_other: string;
   change_count: number;
   series_id?: string | null;
+  call_type: "voice" | "video" | null;
   // repeat config (only used when creating new)
   repeat_enabled: boolean;
   repeat_cadence: 1 | 2;
@@ -78,6 +80,7 @@ function newDraft(starts_at: Date, ends_at: Date): Draft {
     cancel_reason: "",
     cancel_reason_other: "",
     change_count: 0,
+    call_type: null,
     repeat_enabled: false,
     repeat_cadence: 1,
     repeat_count: 8
@@ -101,6 +104,7 @@ function fromAppt(a: AppointmentRow): Draft {
     cancel_reason: (a as any).cancel_reason ?? "",
     cancel_reason_other: (a as any).cancel_reason_other ?? "",
     change_count: a.change_count,
+    call_type: a.call_type ?? null,
     series_id: a.series_id ?? null,
     repeat_enabled: false,
     repeat_cadence: 1,
@@ -176,8 +180,14 @@ export default function ScheduleView({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dragClientId, setDragClientId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ day: number; hour: number } | null>(null);
+  const [editingChangeCount, setEditingChangeCount] = useState(false);
+  const [seriesScope, setSeriesScope] = useState<"series" | null>(null);
+  const touchDragRef = useRef<{ clientId: string; startX: number; startY: number; moved: boolean } | null>(null);
 
   const today = new Date();
+
+  // Reset edit modes when switching between appointments
+  useEffect(() => { setEditingChangeCount(false); setSeriesScope(null); }, [draft?.appt_id]);
 
   function shiftWeek(deltaDays: number) {
     const next = new Date(ws);
@@ -230,7 +240,7 @@ export default function ScheduleView({
     setDraft(newDraft(d, e));
   }
   function openEdit(a: AppointmentRow) { setDraft(fromAppt(a)); }
-  function close() { setDraft(null); setSaveError(null); setPickerOpen(false); setPickerQuery(""); }
+  function close() { setDraft(null); setSaveError(null); setPickerOpen(false); setPickerQuery(""); setEditingChangeCount(false); setSeriesScope(null); }
   function openNewBooking() {
     const now = new Date();
     // Default to the next full hour, clamped to 7am–6pm, on today (or Monday of current week)
@@ -243,30 +253,119 @@ export default function ScheduleView({
     setDraft(newDraft(base, end));
   }
 
+  function openNewBookingForClient(clientId: string) {
+    const now = new Date();
+    const base = sameDay(now, today) ? new Date(now) : new Date(ws);
+    base.setMinutes(0, 0, 0);
+    if (sameDay(now, today)) base.setHours(Math.min(18, Math.max(7, now.getHours() + 1)));
+    else base.setHours(9, 0, 0, 0);
+    const end = new Date(base);
+    end.setHours(end.getHours() + 1);
+    const nd = newDraft(base, end);
+    const client = clients.find((c) => c.id === clientId);
+    setDraft({ ...nd, client_id: clientId, rate: client?.session_rate?.toString() ?? nd.rate });
+  }
+
+  // ─── Touch drag: pill → time cell ──────────────────────────────────
+  function onPillTouchStart(e: React.TouchEvent<HTMLElement>, clientId: string) {
+    const t = e.touches[0];
+    touchDragRef.current = { clientId, startX: t.clientX, startY: t.clientY, moved: false };
+  }
+  function onPillTouchMove(e: React.TouchEvent<HTMLElement>) {
+    if (!touchDragRef.current) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - touchDragRef.current.startX) > 10 ||
+        Math.abs(t.clientY - touchDragRef.current.startY) > 10) {
+      touchDragRef.current.moved = true;
+    }
+  }
+  function onPillTouchEnd(e: React.TouchEvent<HTMLElement>) {
+    const state = touchDragRef.current;
+    touchDragRef.current = null;
+    if (!state) return;
+    const { clientId, moved } = state;
+    const touch = e.changedTouches[0];
+    if (moved) {
+      // Briefly hide the pill so elementFromPoint sees what's beneath it
+      const el = e.currentTarget as HTMLElement;
+      el.style.pointerEvents = "none";
+      const under = document.elementFromPoint(touch.clientX, touch.clientY);
+      el.style.pointerEvents = "";
+      const cell = under?.closest("[data-timecell]") as HTMLElement | null;
+      if (cell) {
+        const dayIdx = parseInt(cell.getAttribute("data-day") ?? "0");
+        const hour   = parseInt(cell.getAttribute("data-hour") ?? "9");
+        const d = new Date(ws);
+        d.setDate(d.getDate() + dayIdx);
+        d.setHours(hour, 0, 0, 0);
+        const end = new Date(d.getTime() + 3600000);
+        const nd = newDraft(d, end);
+        const c = clients.find((cl) => cl.id === clientId);
+        setDraft({ ...nd, client_id: clientId, rate: c?.session_rate?.toString() ?? nd.rate });
+        return;
+      }
+    }
+    // Tap (or drag that missed a cell): open booking with client pre-filled
+    openNewBookingForClient(clientId);
+  }
+
   function applyLocalSave() {
     if (!draft) return;
     if (draft.appt_id) {
+      const isSeriesEdit = seriesScope === "series" && !!draft.series_id;
+      // Compute time delta for series propagation
+      const origAppt = isSeriesEdit ? appts.find((a) => a.id === draft.appt_id) : null;
+      const timeOffsetMs = origAppt
+        ? new Date(draft.starts_at).getTime() - new Date(origAppt.starts_at).getTime()
+        : 0;
+      const newDurMs = new Date(draft.ends_at).getTime() - new Date(draft.starts_at).getTime();
+
       setAppts((cur) =>
         cur.map((a) => {
-          if (a.id !== draft.appt_id) return a;
-          const movedTime = a.starts_at !== draft.starts_at;
-          return {
-            ...a,
-            starts_at: draft.starts_at,
-            ends_at: draft.ends_at,
-            session_type: draft.session_type,
-            personal_label: draft.session_type === "personal" ? draft.personal_label || null : null,
-            is_blocking: draft.session_type === "personal",
-            client_id: draft.session_type === "personal" ? null : draft.client_id || null,
-            client_name: draft.session_type === "personal" ? null : clients.find((c) => c.id === draft.client_id)?.full_name ?? null,
-            rate: draft.session_type === "personal" ? null : (Number(draft.rate) || null),
-            paid: draft.paid,
-            status: draft.status,
-            notes: draft.notes || null,
-            session_program_id: draft.session_program_id || null,
-            program_status: draft.session_type === "personal" ? "n/a" : draft.program_status,
-            change_count: movedTime ? a.change_count + 1 : a.change_count
-          } satisfies AppointmentRow;
+          const isSelf = a.id === draft.appt_id;
+          const isFutureSeries = isSeriesEdit
+            && a.series_id === draft.series_id
+            && a.starts_at >= draft.starts_at
+            && !isSelf;
+
+          if (isSelf) {
+            const movedTime = a.starts_at !== draft.starts_at;
+            return {
+              ...a,
+              starts_at: draft.starts_at,
+              ends_at: draft.ends_at,
+              session_type: draft.session_type,
+              personal_label: draft.session_type === "personal" ? draft.personal_label || null : null,
+              is_blocking: draft.session_type === "personal",
+              client_id: draft.session_type === "personal" ? null : draft.client_id || null,
+              client_name: draft.session_type === "personal" ? null : clients.find((c) => c.id === draft.client_id)?.full_name ?? null,
+              rate: draft.session_type === "personal" ? null : (Number(draft.rate) || null),
+              paid: draft.paid,
+              status: draft.status,
+              notes: draft.notes || null,
+              session_program_id: draft.session_program_id || null,
+              program_status: draft.session_type === "personal" ? "n/a" : draft.program_status,
+              call_type: draft.session_type === "session" ? (draft.call_type ?? null) : null,
+              change_count: movedTime ? a.change_count + 1 : a.change_count
+            } satisfies AppointmentRow;
+          }
+
+          if (isFutureSeries) {
+            // Propagate rate, notes, and time shift to all future series appointments
+            const aStartMs = new Date(a.starts_at).getTime();
+            const aEndMs   = new Date(a.ends_at).getTime();
+            const newStart = timeOffsetMs !== 0 ? new Date(aStartMs + timeOffsetMs) : new Date(a.starts_at);
+            const newEnd   = timeOffsetMs !== 0 ? new Date(newStart.getTime() + newDurMs) : new Date(aEndMs);
+            return {
+              ...a,
+              starts_at: newStart.toISOString(),
+              ends_at:   newEnd.toISOString(),
+              rate: Number(draft.rate) || null,
+              notes: draft.notes || null,
+            };
+          }
+
+          return a;
         })
       );
     } else {
@@ -286,7 +385,8 @@ export default function ScheduleView({
         personal_label: draft.session_type === "personal" ? (draft.personal_label || null) : null,
         is_blocking: draft.session_type === "personal",
         session_program_id: draft.session_program_id || null,
-        program_status: draft.session_type === "personal" ? "n/a" : draft.program_status
+        program_status: draft.session_type === "personal" ? "n/a" : draft.program_status,
+        call_type: draft.session_type === "session" ? (draft.call_type ?? null) : null,
       }]);
     }
   }
@@ -295,6 +395,33 @@ export default function ScheduleView({
     if (!draft) return;
     setSaveError(null);
     startSave(async () => {
+      // Series edit: propagate rate/notes/time to this and all future series appointments
+      if (draft.appt_id && seriesScope === "series" && draft.series_id) {
+        const origAppt = appts.find((a) => a.id === draft.appt_id);
+        const timeOffsetMin = origAppt
+          ? Math.round((new Date(draft.starts_at).getTime() - new Date(origAppt.starts_at).getTime()) / 60000)
+          : 0;
+        const res = await editSeries({
+          series_id: draft.series_id,
+          from_date: draft.starts_at,
+          rate: draft.rate ? Number(draft.rate) : null,
+          notes: draft.notes || null,
+          time_offset_min: timeOffsetMin || undefined,
+        });
+        if (!res.ok) {
+          if (res.error.startsWith("Supabase not configured")) {
+            applyLocalSave();
+            close();
+            return;
+          }
+          setSaveError(res.error);
+          return;
+        }
+        applyLocalSave();
+        close();
+        return;
+      }
+
       const res = await saveAppointment({
         appt_id: draft.appt_id,
         starts_at: draft.starts_at,
@@ -356,11 +483,8 @@ export default function ScheduleView({
         setSaveError(res.error);
         return;
       }
-      setAppts((cur) =>
-        cur.map((a) =>
-          a.series_id === seriesId && a.starts_at >= fromDate ? { ...a, status: "cancelled" } : a
-        )
-      );
+      // Remove all future series appointments from local state
+      setAppts((cur) => cur.filter((a) => !(a.series_id === seriesId && a.starts_at >= fromDate)));
       close();
     });
   }
@@ -461,15 +585,33 @@ export default function ScheduleView({
     return { completed, scheduled, unpaid };
   }, [monthCache]);
 
-  // Active clients with no session in the currently-displayed week
-  const noSessionClients = useMemo(() => {
-    const sessionClientIds = new Set(
-      appts
-        .filter((a) => a.status !== "cancelled" && a.status !== "no_show" && a.session_type === "session" && a.client_id)
-        .map((a) => a.client_id!)
-    );
-    return clients.filter((c) => c.lifecycle === "active" && !sessionClientIds.has(c.id));
-  }, [clients, appts]);
+  // Which clients have at least one non-cancelled session this week
+  const sessionClientIdsThisWeek = useMemo(() => new Set(
+    appts
+      .filter((a) => a.status !== "cancelled" && a.status !== "no_show" && a.session_type === "session" && a.client_id)
+      .map((a) => a.client_id!)
+  ), [appts]);
+
+  const activeClients = useMemo(() =>
+    clients.filter((c) => c.lifecycle === "active" || c.lifecycle === "online"),
+  [clients]);
+
+  // Used elsewhere (drag hint etc.) — kept for convenience
+  const noSessionClients = useMemo(() =>
+    activeClients.filter((c) => !sessionClientIdsThisWeek.has(c.id)),
+  [activeClients, sessionClientIdsThisWeek]);
+
+  // Per-client session counts for the current calendar month, derived live from monthCache
+  const clientMonthlyStats = useMemo(() => {
+    const stats: Record<string, { done: number; sched: number }> = {};
+    monthCache.forEach((a) => {
+      if (a.session_type !== "session" || !a.client_id) return;
+      if (a.status === "cancelled" || a.status === "no_show") return;
+      const s = (stats[a.client_id] ??= { done: 0, sched: 0 });
+      if (a.status === "completed") s.done++; else s.sched++;
+    });
+    return stats;
+  }, [monthCache]);
 
   // Hide the original block while editing (we render a ghost in its place)
   const editingId = draft?.appt_id;
@@ -536,62 +678,80 @@ export default function ScheduleView({
         )}
       </div>
 
-      {/* ─── Active clients session status this week ─── */}
+      {/* ─── Scheduling bar: drag/tap client pills onto the calendar ─── */}
       {view === "week" && (
-        <div style={{
+        <div className="no-print" style={{
           marginTop: "1rem",
-          padding: "0.55rem 0.85rem",
-          background: noSessionClients.length === 0 ? "rgba(90,107,74,0.07)" : "rgba(0,0,0,0.025)",
-          border: `1px solid ${noSessionClients.length === 0 ? "var(--sage)" : "var(--line)"}`,
+          padding: "0.45rem 0.75rem",
+          background: "rgba(0,0,0,0.02)",
+          border: "1px solid var(--line)",
           borderRadius: 4,
-          display: "flex",
-          alignItems: "baseline",
-          flexWrap: "wrap",
-          gap: "0.5rem",
         }}>
-          {noSessionClients.length === 0 ? (
-            <span style={{ fontSize: "0.76rem", color: "var(--sage)", fontWeight: 600 }}>
-              All active clients are scheduled this week 🙂
-            </span>
-          ) : (
-            <>
-              <span style={{
-                fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase",
-                letterSpacing: "0.08em", color: "var(--muted)", flexShrink: 0,
-              }}>
-                No session this week
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
+            {noSessionClients.length === 0 && (
+              <span style={{ fontSize: "0.72rem", color: "var(--sage)", fontWeight: 600, marginRight: "0.2rem", flexShrink: 0 }}>
+                ✓ All scheduled
               </span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-                {noSessionClients.map((c) => (
-                  <a
-                    key={c.id}
-                    href={`/coach/clients/${c.id}`}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("text/plain", c.id);
-                      e.dataTransfer.effectAllowed = "copy";
-                      setDragClientId(c.id);
-                    }}
-                    onDragEnd={() => { setDragClientId(null); setDropTarget(null); }}
-                    onClick={(e) => { if (dragClientId) e.preventDefault(); }}
-                    style={{
-                      fontSize: "0.76rem", padding: "0.18rem 0.5rem",
-                      borderRadius: 3, border: "1px solid var(--line)",
-                      background: "var(--paper)", color: "var(--ink)",
-                      textDecoration: "none", cursor: "grab", userSelect: "none",
-                    }}
-                  >
-                    ⠿ {c.full_name}
-                  </a>
-                ))}
-              </div>
-              {dragClientId && (
-                <span style={{ fontSize: "0.72rem", color: "var(--muted)", fontStyle: "italic", flexBasis: "100%" }}>
-                  Drop onto a time slot to schedule a session
-                </span>
-              )}
-            </>
-          )}
+            )}
+            {activeClients.map((c) => {
+              const stats = clientMonthlyStats[c.id] ?? { done: 0, sched: 0 };
+              const monthTotal = stats.done + stats.sched;
+              const monthlyTarget = c.regular_frequency ? Math.round(parseFloat(c.regular_frequency)) : null;
+              const hasSessionThisWeek = sessionClientIdsThisWeek.has(c.id);
+              return (
+                <div
+                  key={c.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", c.id);
+                    e.dataTransfer.effectAllowed = "copy";
+                    setDragClientId(c.id);
+                  }}
+                  onDragEnd={() => { setDragClientId(null); setDropTarget(null); }}
+                  onTouchStart={(e) => onPillTouchStart(e, c.id)}
+                  onTouchMove={onPillTouchMove}
+                  onTouchEnd={onPillTouchEnd}
+                  onClick={() => { if (!dragClientId) openNewBookingForClient(c.id); }}
+                  style={{
+                    fontSize: "0.76rem",
+                    padding: "0.2rem 0.45rem 0.2rem 0.38rem",
+                    borderRadius: 3,
+                    border: `1px solid ${!hasSessionThisWeek ? "var(--amber)" : "rgba(90,107,74,0.35)"}`,
+                    background: !hasSessionThisWeek ? "rgba(217,119,6,0.05)" : "rgba(90,107,74,0.05)",
+                    color: "var(--ink)",
+                    cursor: "grab",
+                    userSelect: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.3rem",
+                    WebkitUserSelect: "none",
+                    touchAction: "none",
+                  }}
+                >
+                  <span style={{ color: "var(--muted)", fontSize: "0.68rem", lineHeight: 1 }}>⠿</span>
+                  <span>{c.full_name}</span>
+                  {monthlyTarget != null && (
+                    <span style={{
+                      fontSize: "0.64rem",
+                      color: monthTotal >= monthlyTarget ? "var(--sage)" : "var(--muted)",
+                      background: "rgba(0,0,0,0.07)",
+                      borderRadius: 2,
+                      padding: "0.05rem 0.22rem",
+                      fontVariantNumeric: "tabular-nums",
+                      lineHeight: 1.4,
+                    }}>
+                      {monthTotal}/{monthlyTarget}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            {dragClientId && (
+              <span style={{ fontSize: "0.72rem", color: "var(--muted)", fontStyle: "italic", flexBasis: "100%", marginTop: "0.15rem" }}>
+                Drop onto a time slot to schedule a session
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -679,6 +839,9 @@ export default function ScheduleView({
                     return (
                       <div
                         key={h}
+                        data-timecell="1"
+                        data-day={dayIdx}
+                        data-hour={h}
                         onDragOver={(e) => {
                           if (dragId || dragClientId) {
                             e.preventDefault();
@@ -786,7 +949,10 @@ export default function ScheduleView({
                     const heightPx = Math.max(20, minToPx((end.getTime() - start.getTime()) / 60000));
                     const widthPct = 100 / e.lanes;
                     const leftPct = e.lane * widthPct;
-                    const colors = e.session_type === "personal" ? PERSONAL_COLOR : STATUS_COLORS[e.status];
+                    const eventClient = e.client_id ? clients.find((c) => c.id === e.client_id) : null;
+                    const colors = e.session_type === "personal" ? PERSONAL_COLOR
+                      : eventClient?.lifecycle === "online" ? ONLINE_COLOR
+                      : STATUS_COLORS[e.status];
                     const cancelled = e.status === "cancelled";
                     return (
                       <div
@@ -817,7 +983,12 @@ export default function ScheduleView({
                       >
                         <div style={{ fontWeight: 700, textDecoration: cancelled ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {e.status === "change_requested" && <span style={{ marginRight: 3 }}>↻</span>}
-                          {e.session_type === "personal" ? `⛔ ${e.personal_label ?? "Personal"}` : (e.client_name ?? "Client")}
+                          {e.session_type === "personal"
+                            ? `⛔ ${e.personal_label ?? "Personal"}`
+                            : eventClient?.lifecycle === "online"
+                              ? `${e.call_type === "video" ? "🎥" : e.call_type === "voice" ? "📞" : "🌐"} ${e.client_name ?? "Client"}`
+                              : (e.client_name ?? "Client")
+                          }
                         </div>
                         <div style={{ opacity: 0.9, display: "flex", justifyContent: "space-between", gap: 4, fontSize: "0.7rem" }}>
                           <span>
@@ -923,7 +1094,6 @@ export default function ScheduleView({
             <h2>
               {new Date(draft.starts_at).toLocaleString("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
             </h2>
-            {draft.change_count > 0 ? <p className="meta" style={{ marginTop: "-0.25rem" }}>Moved {draft.change_count}×</p> : null}
 
             <div>
               <label className="stat-label">Type</label>
@@ -971,7 +1141,7 @@ export default function ScheduleView({
                       {pickerOpen && (() => {
                         const q = pickerQuery.trim().toLowerCase();
                         const filtered = clients
-                          .filter((c) => c.lifecycle === "active" && (q === "" || c.full_name.toLowerCase().includes(q)))
+                          .filter((c) => (c.lifecycle === "active" || c.lifecycle === "online") && (q === "" || c.full_name.toLowerCase().includes(q)))
                           .sort((a, b) => a.full_name.localeCompare(b.full_name));
                         return filtered.length > 0 ? (
                           <div style={{
@@ -991,7 +1161,7 @@ export default function ScheduleView({
                               <div
                                 key={c.id}
                                 onMouseDown={() => {
-                                  setDraft({ ...draft, client_id: c.id, rate: c.session_rate?.toString() ?? draft.rate });
+                                  setDraft({ ...draft, client_id: c.id, rate: c.session_rate?.toString() ?? draft.rate, call_type: null });
                                   setPickerOpen(false);
                                   setPickerQuery("");
                                 }}
@@ -1001,11 +1171,17 @@ export default function ScheduleView({
                                   cursor: "pointer",
                                   background: draft.client_id === c.id ? "rgba(90,107,74,0.1)" : undefined,
                                   borderBottom: "1px solid var(--line)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.4rem",
                                 }}
                                 onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "rgba(90,107,74,0.08)"; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = draft.client_id === c.id ? "rgba(90,107,74,0.1)" : ""; }}
                               >
                                 {c.full_name}
+                                {c.lifecycle === "online" && (
+                                  <span style={{ fontSize: "0.66rem", background: "rgba(30,106,140,0.12)", color: "#1e6a8c", borderRadius: 3, padding: "0.05rem 0.3rem", fontWeight: 600 }}>online</span>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -1034,6 +1210,33 @@ export default function ScheduleView({
                     ) : null}
                   </div>
                 </div>
+
+                {/* Voice/video toggle — only for online clients */}
+                {draft.client_id && clients.find((c) => c.id === draft.client_id)?.lifecycle === "online" && (
+                  <div>
+                    <label className="stat-label">Call type</label>
+                    <div style={{ display: "inline-flex", marginTop: "0.3rem", border: "1px solid var(--line)", borderRadius: 4, overflow: "hidden" }}>
+                      {(["voice", "video"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setDraft({ ...draft, call_type: draft.call_type === t ? null : t })}
+                          style={{
+                            padding: "0.3rem 0.75rem",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            border: "none",
+                            borderRadius: 0,
+                            cursor: "pointer",
+                            background: draft.call_type === t ? ONLINE_COLOR.bg : "transparent",
+                            color: draft.call_type === t ? ONLINE_COLOR.fg : "var(--ink)",
+                          }}
+                        >
+                          {t === "voice" ? "📞 Voice" : "🎥 Video"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                   <div>
@@ -1086,6 +1289,48 @@ export default function ScheduleView({
                   </button>
                 ))}
               </div>
+              {/* Reschedule count */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.4rem" }}>
+                {editingChangeCount ? (
+                  <>
+                    <span style={{ fontSize: "0.71rem", color: "var(--muted)" }}>Rescheduled</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      autoFocus
+                      value={draft.change_count}
+                      onChange={(e) => setDraft({ ...draft, change_count: Math.max(0, Number(e.target.value) || 0) })}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingChangeCount(false); }}
+                      style={{ width: 52, fontSize: "0.75rem", padding: "0.12rem 0.22rem", textAlign: "center" }}
+                    />
+                    <span style={{ fontSize: "0.71rem", color: "var(--muted)" }}>×</span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: "0.65rem", padding: "0.1rem 0.32rem" }}
+                      onClick={() => setEditingChangeCount(false)}
+                    >✓</button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
+                      Rescheduled {draft.change_count}×
+                    </span>
+                    <button
+                      type="button"
+                      style={{
+                        background: "transparent", border: "none",
+                        cursor: "pointer", fontSize: "0.7rem",
+                        color: "var(--muted)", padding: "0.05rem 0.15rem",
+                        lineHeight: 1,
+                      }}
+                      title="Edit reschedule count"
+                      onClick={() => setEditingChangeCount(true)}
+                    >✏</button>
+                  </>
+                )}
+              </div>
             </div>
 
             {(draft.status === "cancelled" || draft.status === "no_show") && (
@@ -1121,11 +1366,58 @@ export default function ScheduleView({
 
             <div>
               <label className="stat-label">Times</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.3rem" }}>
-                <input className="input" type="datetime-local" value={toLocalInput(draft.starts_at)} onChange={(e) => setDraft({ ...draft, starts_at: fromLocalInput(e.target.value) })} />
-                <input className="input" type="datetime-local" value={toLocalInput(draft.ends_at)} onChange={(e) => setDraft({ ...draft, ends_at: fromLocalInput(e.target.value) })} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.3rem" }}>
+                {/* Date — shared for start and end */}
+                <div>
+                  <label style={{ fontSize: "0.6rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>Date</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={toLocalDate(draft.starts_at)}
+                    onChange={(e) => {
+                      const d = e.target.value;
+                      if (!d) return;
+                      setDraft({
+                        ...draft,
+                        starts_at: setDateOnIso(draft.starts_at, d),
+                        ends_at:   setDateOnIso(draft.ends_at,   d),
+                      });
+                    }}
+                    style={{ marginTop: "0.2rem" }}
+                  />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                  <div>
+                    <label style={{ fontSize: "0.6rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>Start time</label>
+                    <input
+                      className="input"
+                      type="time"
+                      value={toLocalTime(draft.starts_at)}
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        if (!t) return;
+                        const newStart = setTimeOnIso(draft.starts_at, t);
+                        setDraft({ ...draft, starts_at: newStart, ends_at: addOneHourToIso(newStart) });
+                      }}
+                      style={{ marginTop: "0.2rem" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.6rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>End time</label>
+                    <input
+                      className="input"
+                      type="time"
+                      value={toLocalTime(draft.ends_at)}
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        if (!t) return;
+                        setDraft({ ...draft, ends_at: setTimeOnIso(draft.ends_at, t) });
+                      }}
+                      style={{ marginTop: "0.2rem" }}
+                    />
+                  </div>
+                </div>
               </div>
-              <p className="meta" style={{ fontSize: "0.72rem", marginTop: "0.3rem" }}>Adjust either side — the calendar block resizes as you type.</p>
             </div>
 
             {!draft.appt_id && draft.session_type === "session" ? (
@@ -1157,9 +1449,44 @@ export default function ScheduleView({
 
             {draft.appt_id && draft.series_id ? (
               <div style={{ background: "rgba(0,0,0,0.025)", padding: "0.55rem 0.7rem", borderRadius: 3, border: "1px solid var(--line)", fontSize: "0.82rem" }}>
-                <strong>Part of a series.</strong> "Delete" removes only this session. To cancel this and all future sessions in the series:
-                <div style={{ marginTop: "0.4rem" }}>
-                  <button className="btn btn-ghost" style={{ padding: "0.3rem 0.55rem", fontSize: "0.72rem", color: "var(--red)" }} onClick={cancelDraftSeries} disabled={savePending}>Cancel series from this date forward</button>
+                <strong>Part of a recurring series.</strong>
+                {seriesScope === "series" && (
+                  <div style={{
+                    marginTop: "0.35rem", padding: "0.25rem 0.5rem",
+                    background: "rgba(168,61,43,0.1)", borderRadius: 3,
+                    fontSize: "0.74rem", color: "var(--rust)", fontWeight: 600
+                  }}>
+                    ↻ Changes will apply to this session and all future sessions in this series
+                  </div>
+                )}
+                <div style={{ marginTop: "0.45rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                  {seriesScope !== "series" ? (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ padding: "0.3rem 0.55rem", fontSize: "0.72rem" }}
+                      onClick={() => setSeriesScope("series")}
+                      disabled={savePending}
+                    >
+                      ✎ Edit series
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ padding: "0.3rem 0.55rem", fontSize: "0.72rem" }}
+                      onClick={() => setSeriesScope(null)}
+                      disabled={savePending}
+                    >
+                      Edit this session only
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: "0.3rem 0.55rem", fontSize: "0.72rem", color: "var(--red)" }}
+                    onClick={cancelDraftSeries}
+                    disabled={savePending}
+                  >
+                    Cancel series from this date forward
+                  </button>
                 </div>
               </div>
             ) : null}
@@ -1190,4 +1517,32 @@ function toLocalInput(iso: string): string {
 }
 function fromLocalInput(s: string): string {
   return new Date(s).toISOString();
+}
+/** Returns "YYYY-MM-DD" in local time */
+function toLocalDate(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => `${n}`.padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+/** Returns "HH:MM" in local time */
+function toLocalTime(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => `${n}`.padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+/** Replace only the date portion of an ISO string, keeping local time */
+function setDateOnIso(iso: string, dateStr: string): string {
+  const d = new Date(iso);
+  const [y, m, day] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, day, d.getHours(), d.getMinutes(), 0, 0).toISOString();
+}
+/** Replace only the time portion of an ISO string, keeping local date */
+function setTimeOnIso(iso: string, timeStr: string): string {
+  const d = new Date(iso);
+  const [h, min] = timeStr.split(":").map(Number);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, min, 0, 0).toISOString();
+}
+/** Add exactly one hour to an ISO string */
+function addOneHourToIso(iso: string): string {
+  return new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString();
 }

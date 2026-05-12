@@ -142,7 +142,7 @@ export async function setRequiresConfirmation(
 
 export async function setLifecycle(
   clientId: string,
-  lifecycle: "active" | "inactive" | "paused" | "prospective"
+  lifecycle: "active" | "inactive" | "paused" | "prospective" | "online"
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
@@ -158,6 +158,35 @@ export async function setLifecycle(
     .update({ lifecycle })
     .eq("profile_id", clientId);
 
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/coach/clients/${clientId}`);
+  return { ok: true };
+}
+
+// ── High Level Plan ───────────────────────────────────────────────────────────
+export type HighLevelPlanInput = {
+  recommended_monthly_sessions: number | null;
+  strategy: string;
+};
+
+export async function saveHighLevelPlan(
+  clientId: string,
+  input: HighLevelPlanInput
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin" && !user.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) { revalidatePath(`/coach/clients/${clientId}`); return { ok: true }; }
+
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase.from("high_level_plans").upsert(
+    {
+      client_id: clientId,
+      recommended_monthly_sessions: input.recommended_monthly_sessions,
+      strategy: input.strategy?.trim() || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "client_id" }
+  );
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/coach/clients/${clientId}`);
   return { ok: true };

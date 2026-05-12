@@ -1,11 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
-import { getClient, listAppointmentsForClient, getClientReminderPrefs } from "@/lib/data";
+import { getClient, listAppointmentsForClient, getClientReminderPrefs, getHighLevelPlan } from "@/lib/data";
 import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, PROGRAM_KIND_LABEL, type Category, type PastProgramFull } from "@/lib/programs";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import ClientSettings from "./client-settings";
 import { CoachProfileCard, ClientProfileCard } from "./client-profile-edit";
+import { HighLevelPlanSection } from "./high-level-plan";
 
 const FORM_SECTIONS: { title: string; keys: string[] }[] = [
   {
@@ -101,9 +102,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   if (user.role !== "coach" && user.role !== "admin" && !user.is_admin) redirect("/");
 
   const { id } = await params;
-  const [client, reminderPrefs] = await Promise.all([
+  const [client, reminderPrefs, highLevelPlan] = await Promise.all([
     getClient(id),
     getClientReminderPrefs(id),
+    getHighLevelPlan(id),
   ]);
   if (!client) notFound();
   const appts = await listAppointmentsForClient(id);
@@ -147,7 +149,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <div className="stat">
           <div className="stat-label">Cadence</div>
           <div className="stat-value">{client.regular_frequency ?? "—"}</div>
-          <div className="stat-sub">sessions / week</div>
+          <div className="stat-sub">
+            {client.regular_frequency && !isNaN(parseFloat(client.regular_frequency))
+              ? `~${Math.max(1, Math.round(parseFloat(client.regular_frequency) / 4.33))}×/wk`
+              : "sessions / mo"}
+          </div>
         </div>
         <div className="stat">
           <div className="stat-label">Current rate</div>
@@ -176,6 +182,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <CoachProfileCard client={client} />
         <ClientProfileCard client={client} />
       </div>
+
+      <HighLevelPlanSection
+        clientId={client.id}
+        initialPlan={highLevelPlan}
+        currentMonthlyFreq={client.regular_frequency}
+      />
 
       <hr className="divider" />
 

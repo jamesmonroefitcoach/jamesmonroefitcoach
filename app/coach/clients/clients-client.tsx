@@ -15,11 +15,12 @@ function daysAgo(iso: string | null): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
-/** Parse monthly session count from form data or frequency string for sorting */
+/** Parse monthly session count from frequency string for sorting.
+ *  regular_frequency now stores sessions/month directly (e.g. "4"). */
 function monthlyNum(c: ClientRow): number {
   const form = c.form_data?.["Sessions per month (preferred)"] ?? c.form_data?.["Sessions per month"];
   if (form) { const n = parseInt(form); if (!isNaN(n)) return n; }
-  if (c.regular_frequency) { const n = parseFloat(c.regular_frequency); if (!isNaN(n)) return n * 4; }
+  if (c.regular_frequency) { const n = parseFloat(c.regular_frequency); if (!isNaN(n)) return n; }
   return 0;
 }
 
@@ -114,9 +115,12 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
   });
   const [saving, startSave] = useTransition();
 
-  // Monthly sessions: form value first, then coach frequency
+  // Monthly sessions: regular_frequency stores sessions/month; per-week is auto-calculated
   const formMonthly = c.form_data?.["Sessions per month (preferred)"] ?? c.form_data?.["Sessions per month"] ?? null;
-  const coachFreq = c.regular_frequency ? `${c.regular_frequency}×/wk` : null;
+  const coachMonthly = c.regular_frequency ? parseFloat(c.regular_frequency) : null;
+  const coachPerWk = (coachMonthly != null && !isNaN(coachMonthly))
+    ? `~${Math.max(1, Math.round(coachMonthly / 4.33))}×/wk`
+    : null;
 
   function saveEdit() {
     startSave(async () => {
@@ -166,12 +170,16 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
             value={draft.session_rate} placeholder="$"
             onChange={(e) => setDraft((d) => ({ ...d, session_rate: e.target.value }))} />
         </td>
-        {/* Monthly Sessions — form value read-only, coach freq editable */}
+        {/* Monthly Sessions — form value read-only, coach monthly freq editable */}
         <td>
           {formMonthly && <div className="meta" style={{ fontSize: "0.72rem", marginBottom: "0.2rem" }}>Form: {formMonthly}</div>}
-          <input className="input" style={{ ...INPUT_SM, maxWidth: 60 }}
-            value={draft.regular_frequency} placeholder="2×/wk"
-            onChange={(e) => setDraft((d) => ({ ...d, regular_frequency: e.target.value }))} />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+            <input className="input" style={{ ...INPUT_SM, maxWidth: 52 }}
+              type="number" min={1} step={1}
+              value={draft.regular_frequency} placeholder="4"
+              onChange={(e) => setDraft((d) => ({ ...d, regular_frequency: e.target.value }))} />
+            <span className="meta" style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>/mo</span>
+          </div>
         </td>
         {/* Completed this mo */}
         <td style={{ fontVariantNumeric: "tabular-nums", textAlign: "center" }}>{c.sessions_this_month_completed}</td>
@@ -203,6 +211,9 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
           >✎</button>
           <div>
             <strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong>
+            {c.lifecycle === "online" && (
+              <><br /><span className="badge" style={{ fontSize: "0.67rem", background: "rgba(30,106,140,0.12)", color: "#1e6a8c" }}>online</span></>
+            )}
             {c.requires_confirmation && (
               <><br /><span className="badge" style={{ fontSize: "0.67rem", background: "var(--amber-light, #fff8e1)", color: "#8a6200" }}>confirm</span></>
             )}
@@ -223,12 +234,14 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
       </td>
       {/* Monthly Sessions */}
       <td>
-        {formMonthly
-          ? <div style={{ fontSize: "0.85rem", fontWeight: 500 }}>{formMonthly}<span className="meta" style={{ fontWeight: 400 }}>/mo</span></div>
-          : null}
-        {coachFreq
-          ? <div className="meta" style={{ fontSize: "0.74rem" }}>{coachFreq}</div>
-          : (!formMonthly ? <span className="meta">—</span> : null)}
+        {(coachMonthly != null && !isNaN(coachMonthly))
+          ? <div style={{ fontSize: "0.85rem", fontWeight: 500 }}>{coachMonthly}<span className="meta" style={{ fontWeight: 400 }}>/mo</span></div>
+          : formMonthly
+            ? <div style={{ fontSize: "0.85rem", fontWeight: 500 }}>{formMonthly}<span className="meta" style={{ fontWeight: 400 }}>/mo</span></div>
+            : null}
+        {coachPerWk
+          ? <div className="meta" style={{ fontSize: "0.74rem" }}>{coachPerWk}</div>
+          : (coachMonthly == null && !formMonthly ? <span className="meta">—</span> : null)}
       </td>
       {/* Completed this mo */}
       <td style={{ fontVariantNumeric: "tabular-nums", textAlign: "center" }}>
@@ -599,7 +612,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  const active = clients.filter((c) => c.lifecycle === "active");
+  const active = clients.filter((c) => c.lifecycle === "active" || c.lifecycle === "online");
   const inactive = clients.filter((c) => c.lifecycle === "inactive" || c.lifecycle === "paused" || c.lifecycle === "prospective");
 
   function toggleSort(key: SortKey) {

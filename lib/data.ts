@@ -1,4 +1,5 @@
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
+import { MOVEMENT_LIBRARY } from "@/lib/programs";
 
 // Extract injury info from the specific intake form field
 function extractInjuriesFromForm(formData: Record<string, string> | null): string | null {
@@ -34,7 +35,7 @@ export type ClientRow = {
   phone: string | null;
   birthday: string | null;
   injuries: string | null;
-  lifecycle: "active" | "inactive" | "paused" | "prospective";
+  lifecycle: "active" | "inactive" | "paused" | "prospective" | "online";
   requires_confirmation: boolean;
   // spreadsheet coaching assessment fields
   trained_since_note: string | null;
@@ -51,12 +52,12 @@ export type ClientRow = {
 const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0 };
 
 const DEMO_CLIENTS: ClientRow[] = [
-  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-abbey",   full_name: "Abbey Archer",      email: null, age_category: "22",  goals: "Form & knowledge",               regular_frequency: "1", session_rate: 100, test_rate: 100, monthly_revenue: 200,  current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 4 * 86400000).toISOString(), total_sessions: 4,  injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
-  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-acacia",  full_name: "Acacia Chan",       email: null, age_category: "30",  goals: "Weight Loss, muscle, posture",   regular_frequency: "2", session_rate: 70,  test_rate: 100, monthly_revenue: 280,  current_weight_lb: 198,  goal_weight_lb: 150,  tier: "tier_2", member_since: "2025-03-01", status: "current", balance_owed: 280, last_session_at: new Date(Date.now() - 2 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 1 * 86400000).toISOString(), total_sessions: 96, injuries: "Mild low-back tightness — avoid heavy spinal-loading", lifecycle: "active", requires_confirmation: true,  trained_since_note: "March 2025", accountability: "Low", education: "Medium", commitment: "Low", dire_need_ranking: "High", form_received_at: "2025-03-02T10:00:00Z", form_data: { "Primary goal": "Weight loss and muscle building", "Motivation": "Feel confident in my body again", "Previous training": "2 years gym, mostly cardio", "Injuries / pain": "Mild low back tightness — worse after long sitting", "Available days": "Mon, Wed, Fri", "Sessions per month": "8", "Commitment (1-10)": "8" } },
-  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-david",   full_name: "David Syndicongo",  email: null, age_category: "32",  goals: "Weight loss, muscle, posture",   regular_frequency: "1", session_rate: 65,  test_rate: 100, monthly_revenue: 260,  current_weight_lb: 229,  goal_weight_lb: 180,  tier: "tier_2", member_since: "2024-10-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 6 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 71, injuries: null, lifecycle: "active", requires_confirmation: false, trained_since_note: "Oct 2024", accountability: "Low", education: "Low", commitment: "Medium", dire_need_ranking: "High", form_received_at: "2024-10-02T09:00:00Z", form_data: { "Primary goal": "Lose weight, build muscle, improve posture", "Motivation": "Wedding coming up — want to look and feel my best", "Previous training": "Occasional gym visits, no program", "Injuries / pain": "None", "Available days": "Tues, Thurs", "Commitment (1-10)": "7" } },
-  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-jen",     full_name: "Jen Loving",        email: null, age_category: "48",  goals: "Body Recomp – 1 Pull Up",        regular_frequency: "2", session_rate: 65,  test_rate: 100, monthly_revenue: 1040, current_weight_lb: null, goal_weight_lb: 145,  tier: "tier_1", member_since: "2025-11-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 1 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 2 * 86400000).toISOString(), total_sessions: 48, injuries: "R-shoulder impingement — no behind-the-neck work", lifecycle: "active", requires_confirmation: false, trained_since_note: "November 2025", accountability: "High", education: "High", commitment: "High", dire_need_ranking: "Low", form_received_at: "2025-11-02T14:00:00Z", form_data: { "Primary goal": "Body recomp + do 1 unassisted pull-up", "Motivation": "Prove to myself I can do it", "Injuries / pain": "R-shoulder impingement — no behind-neck pressing", "Available days": "Mon, Wed + whenever", "Commitment (1-10)": "9" } },
-  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-rowland", full_name: "Rowland Bella",     email: null, age_category: "24",  goals: "100 LB weight loss",             regular_frequency: "2", session_rate: null, test_rate: 100, monthly_revenue: null, current_weight_lb: 294, goal_weight_lb: 280,  tier: "tier_3", member_since: "2025-07-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 35 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 32, injuries: "Knee — keep hinge-dominant, low-impact cardio",      lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
-  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-marcus",  full_name: "Marcus Halpern",    email: null, age_category: "44",  goals: "Marathon prep — paused",         regular_frequency: "1", session_rate: 80,  test_rate: 100, monthly_revenue: 0,    current_weight_lb: 168, goal_weight_lb: null, tier: "tier_2", member_since: "2024-06-01", status: "paused",   balance_owed: 0,   last_session_at: new Date(Date.now() - 92 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 22, injuries: null, lifecycle: "inactive", requires_confirmation: false, form_received_at: null, form_data: null },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-abbey",   full_name: "Abbey Archer",      email: null, age_category: "22",  goals: "Form & knowledge",               regular_frequency: "4", session_rate: 100, test_rate: 100, monthly_revenue: 200,  current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 4 * 86400000).toISOString(), total_sessions: 4,  injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-acacia",  full_name: "Acacia Chan",       email: null, age_category: "30",  goals: "Weight Loss, muscle, posture",   regular_frequency: "4", session_rate: 70,  test_rate: 100, monthly_revenue: 280,  current_weight_lb: 198,  goal_weight_lb: 150,  tier: "tier_2", member_since: "2025-03-01", status: "current", balance_owed: 280, last_session_at: new Date(Date.now() - 2 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 1 * 86400000).toISOString(), total_sessions: 96, injuries: "Mild low-back tightness — avoid heavy spinal-loading", lifecycle: "active", requires_confirmation: true,  trained_since_note: "March 2025", accountability: "Low", education: "Medium", commitment: "Low", dire_need_ranking: "High", form_received_at: "2025-03-02T10:00:00Z", form_data: { "Primary goal": "Weight loss and muscle building", "Motivation": "Feel confident in my body again", "Previous training": "2 years gym, mostly cardio", "Injuries / pain": "Mild low back tightness — worse after long sitting", "Available days": "Mon, Wed, Fri", "Sessions per month": "8", "Commitment (1-10)": "8" } },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-david",   full_name: "David Syndicongo",  email: null, age_category: "32",  goals: "Weight loss, muscle, posture",   regular_frequency: "4", session_rate: 65,  test_rate: 100, monthly_revenue: 260,  current_weight_lb: 229,  goal_weight_lb: 180,  tier: "tier_2", member_since: "2024-10-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 6 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 71, injuries: null, lifecycle: "active", requires_confirmation: false, trained_since_note: "Oct 2024", accountability: "Low", education: "Low", commitment: "Medium", dire_need_ranking: "High", form_received_at: "2024-10-02T09:00:00Z", form_data: { "Primary goal": "Lose weight, build muscle, improve posture", "Motivation": "Wedding coming up — want to look and feel my best", "Previous training": "Occasional gym visits, no program", "Injuries / pain": "None", "Available days": "Tues, Thurs", "Commitment (1-10)": "7" } },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-jen",     full_name: "Jen Loving",        email: null, age_category: "48",  goals: "Body Recomp – 1 Pull Up",        regular_frequency: "4", session_rate: 65,  test_rate: 100, monthly_revenue: 1040, current_weight_lb: null, goal_weight_lb: 145,  tier: "tier_1", member_since: "2025-11-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 1 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 2 * 86400000).toISOString(), total_sessions: 48, injuries: "R-shoulder impingement — no behind-the-neck work", lifecycle: "active", requires_confirmation: false, trained_since_note: "November 2025", accountability: "High", education: "High", commitment: "High", dire_need_ranking: "Low", form_received_at: "2025-11-02T14:00:00Z", form_data: { "Primary goal": "Body recomp + do 1 unassisted pull-up", "Motivation": "Prove to myself I can do it", "Injuries / pain": "R-shoulder impingement — no behind-neck pressing", "Available days": "Mon, Wed + whenever", "Commitment (1-10)": "9" } },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-rowland", full_name: "Rowland Bella",     email: null, age_category: "24",  goals: "100 LB weight loss",             regular_frequency: "4", session_rate: 80,  test_rate: 100, monthly_revenue: null, current_weight_lb: 294, goal_weight_lb: 280,  tier: "tier_3", member_since: "2025-07-01", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 35 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 32, injuries: "Knee — keep hinge-dominant, low-impact cardio",      lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
+  { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-marcus",  full_name: "Marcus Halpern",    email: null, age_category: "44",  goals: "Marathon prep — paused",         regular_frequency: "4", session_rate: 80,  test_rate: 100, monthly_revenue: 0,    current_weight_lb: 168, goal_weight_lb: null, tier: "tier_2", member_since: "2024-06-01", status: "paused",   balance_owed: 0,   last_session_at: new Date(Date.now() - 92 * 86400000).toISOString(), next_session_at: null,                                              total_sessions: 22, injuries: null, lifecycle: "inactive", requires_confirmation: false, form_received_at: null, form_data: null },
 ];
 
 export async function listClients(coachId?: string): Promise<ClientRow[]> {
@@ -111,7 +112,7 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         phone: p.phone ?? null,
         birthday: d?.birthday ?? null,
         injuries: extractInjuriesFromForm(d?.form_data ?? null),
-        lifecycle: (d?.lifecycle ?? "active") as "active" | "inactive" | "paused" | "prospective",
+        lifecycle: (d?.lifecycle ?? "active") as "active" | "inactive" | "paused" | "prospective" | "online",
         requires_confirmation: d?.requires_confirmation ?? false,
         trained_since_note: d?.trained_since_note ?? null,
         accountability: d?.accountability ?? null,
@@ -317,74 +318,140 @@ export type AppointmentRow = {
   is_blocking: boolean;
   session_program_id?: string | null;
   program_status: "programmed" | "needs_programming" | "n/a";  // n/a for personal blocks
+  call_type?: "voice" | "video" | null;  // for online client sessions
   series_id?: string | null;
   requested_starts_at?: string | null;
   requested_ends_at?: string | null;
   requested_reason?: string | null;
 };
 
+// Recurring weekly slots — each has a stable series_id.
+// Mirrors current-week schedule across: 2 past weeks + current + 3 future weeks.
+const RECURRING_SLOTS = [
+  { sid: "series-acacia-mon",  d: 0, h: 7,  c: "demo-client-acacia",  n: "Acacia Chan",      r: 70  },
+  { sid: "series-jen-mon",     d: 0, h: 9,  c: "demo-client-jen",     n: "Jen Loving",       r: 65  },
+  { sid: "series-david-tue",   d: 1, h: 6,  c: "demo-client-david",   n: "David Syndicongo", r: 65  },
+  { sid: "series-abbey-tue",   d: 1, h: 17, c: "demo-client-abbey",   n: "Abbey Archer",     r: 100 },
+  { sid: "series-rowland-wed", d: 2, h: 8,  c: "demo-client-rowland", n: "Rowland Bella",    r: 80  },
+  { sid: "series-acacia-thu",  d: 3, h: 7,  c: "demo-client-acacia",  n: "Acacia Chan",      r: 70  },
+  { sid: "series-jen-fri",     d: 4, h: 9,  c: "demo-client-jen",     n: "Jen Loving",       r: 65  },
+  { sid: "series-acacia-fri",  d: 4, h: 9,  c: "demo-client-acacia",  n: "Acacia Chan",      r: 70  },
+  { sid: "series-abbey-sat",   d: 5, h: 8,  c: "demo-client-abbey",   n: "Abbey Archer",     r: 100 },
+] as const;
+
+// Per-slot status for the *current* week only (past = completed/paid, future = scheduled).
+type SlotSid = typeof RECURRING_SLOTS[number]["sid"];
+const THIS_WEEK_STATUS: Record<SlotSid, { st: AppointmentRow["status"]; paid: boolean; changes?: number }> = {
+  "series-acacia-mon":  { st: "completed",        paid: true  },
+  "series-jen-mon":     { st: "completed",        paid: false },
+  "series-david-tue":   { st: "completed",        paid: true  },
+  "series-abbey-tue":   { st: "scheduled",        paid: false },
+  "series-rowland-wed": { st: "scheduled",        paid: false, changes: 2 },
+  "series-acacia-thu":  { st: "change_requested", paid: false },
+  "series-jen-fri":     { st: "scheduled",        paid: false },
+  "series-acacia-fri":  { st: "scheduled",        paid: false },
+  "series-abbey-sat":   { st: "scheduled",        paid: false },
+};
+
 function demoAppointments(): AppointmentRow[] {
   const now = new Date();
-  const start = startOfWeek(now);
-  const slots = [
-    { d: 0, h: 7, c: "demo-client-acacia", n: "Acacia Chan", r: 70, st: "completed", paid: true },
-    { d: 0, h: 9, c: "demo-client-jen", n: "Jen Loving", r: 65, st: "completed", paid: false },
-    { d: 1, h: 6, c: "demo-client-david", n: "David Syndicongo", r: 65, st: "completed", paid: true },
-    { d: 1, h: 17, c: "demo-client-abbey", n: "Abbey Archer", r: 100, st: "scheduled", paid: false },
-    { d: 2, h: 8, c: "demo-client-rowland", n: "Rowland Bella", r: 80, st: "scheduled", paid: false, changes: 2 },
-    { d: 2, h: 12, c: null, n: null, r: null, st: "scheduled", paid: false, personal: "Lunch + admin" },
-    { d: 3, h: 7, c: "demo-client-acacia", n: "Acacia Chan", r: 70, st: "scheduled", paid: false },
-    { d: 3, h: 10, c: "demo-client-david", n: "David Syndicongo", r: 65, st: "cancelled", paid: false },
-    { d: 4, h: 9, c: "demo-client-jen", n: "Jen Loving", r: 65, st: "scheduled", paid: false },
-    { d: 4, h: 9, c: "demo-client-acacia", n: "Acacia Chan", r: 70, st: "scheduled", paid: false }, // overlap with cancelled — actually new block
-    { d: 5, h: 8, c: "demo-client-abbey", n: "Abbey Archer", r: 100, st: "scheduled", paid: false }
-  ];
-  // Demo "programmed" lookup — Acacia & Jen have current programs, others don't.
-  const programmed = new Set(["demo-client-acacia", "demo-client-jen", "demo-client-abbey"]);
-  const rows = slots.map((s, i) => {
-    const startsAt = new Date(start);
-    startsAt.setDate(start.getDate() + s.d);
-    startsAt.setHours(s.h, 0, 0, 0);
-    const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
-    const isPersonal = !!(s as any).personal;
-    return {
-      id: `demo-appt-${i}`,
-      client_id: s.c,
-      client_name: s.n,
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      status: s.st as AppointmentRow["status"],
-      rate: s.r,
-      paid: s.paid,
-      notes: null,
-      change_count: (s as any).changes ?? 0,
-      session_type: isPersonal ? "personal" : "session",
-      personal_label: (s as any).personal ?? null,
-      is_blocking: isPersonal,
-      program_status: isPersonal ? "n/a" : (s.c && programmed.has(s.c) ? "programmed" : "needs_programming"),
-      series_id: null,
-      requested_starts_at: null,
-      requested_ends_at: null,
-      requested_reason: null
-    } as AppointmentRow;
-  });
+  const thisWeekStart = startOfWeek(now);
+  const programmed = new Set<string>(["demo-client-acacia", "demo-client-jen", "demo-client-abbey"]);
+  const rows: AppointmentRow[] = [];
 
-  // Demo: a couple of change-requests to populate James's schedule with light grey blocks
-  // Find a David scheduled session and turn one into a change request proposing a different day/time
-  const acaciaIdx = rows.findIndex((a) => a.client_id === "demo-client-acacia" && a.status === "scheduled");
-  if (acaciaIdx >= 0) {
-    const r = rows[acaciaIdx];
-    const proposed = new Date(r.starts_at);
-    proposed.setDate(proposed.getDate() + 1);
-    proposed.setHours(8, 0, 0, 0);
-    rows[acaciaIdx] = {
-      ...r,
-      status: "change_requested",
-      requested_starts_at: proposed.toISOString(),
-      requested_ends_at: new Date(proposed.getTime() + 60 * 60 * 1000).toISOString(),
-      requested_reason: "Tuesday won't work — could we do Wednesday 8a?"
-    };
+  // 2 past weeks (offset -2, -1) + current (0) + 3 future (+1, +2, +3)
+  for (let weekOffset = -2; weekOffset <= 3; weekOffset++) {
+    const weekStart = new Date(thisWeekStart);
+    weekStart.setDate(thisWeekStart.getDate() + weekOffset * 7);
+
+    for (const slot of RECURRING_SLOTS) {
+      const startsAt = new Date(weekStart);
+      startsAt.setDate(weekStart.getDate() + slot.d);
+      startsAt.setHours(slot.h, 0, 0, 0);
+      const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+
+      let status: AppointmentRow["status"];
+      let paid: boolean;
+      let changes = 0;
+      let requested_starts_at: string | null = null;
+      let requested_ends_at: string | null = null;
+      let requested_reason: string | null = null;
+
+      if (weekOffset < 0) {
+        // Past weeks — all completed and paid
+        status = "completed";
+        paid = true;
+      } else if (weekOffset === 0) {
+        // Current week — use per-slot statuses
+        const cfg = THIS_WEEK_STATUS[slot.sid];
+        status = cfg.st;
+        paid = cfg.paid;
+        changes = cfg.changes ?? 0;
+        // Populate change-request details for Acacia Thursday
+        if (slot.sid === "series-acacia-thu") {
+          const proposed = new Date(startsAt);
+          proposed.setDate(proposed.getDate() + 1);
+          proposed.setHours(8, 0, 0, 0);
+          requested_starts_at = proposed.toISOString();
+          requested_ends_at = new Date(proposed.getTime() + 60 * 60 * 1000).toISOString();
+          requested_reason = "Tuesday won't work — could we do Wednesday 8a?";
+        }
+      } else {
+        // Future weeks — all scheduled, unpaid
+        status = "scheduled";
+        paid = false;
+      }
+
+      rows.push({
+        id: `demo-appt-w${weekOffset >= 0 ? "+" : ""}${weekOffset}-${slot.sid}`,
+        client_id: slot.c,
+        client_name: slot.n,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        status,
+        rate: slot.r,
+        paid,
+        notes: null,
+        change_count: changes,
+        session_type: "session",
+        personal_label: null,
+        is_blocking: false,
+        program_status: programmed.has(slot.c) ? "programmed" : "needs_programming",
+        series_id: slot.sid,
+        requested_starts_at,
+        requested_ends_at,
+        requested_reason,
+      });
+    }
+
+    // Personal block (Wed 12pm "Lunch + admin") — current week only, no series
+    if (weekOffset === 0) {
+      const personalStart = new Date(weekStart);
+      personalStart.setDate(weekStart.getDate() + 2); // Wednesday
+      personalStart.setHours(12, 0, 0, 0);
+      rows.push({
+        id: "demo-appt-personal-lunch",
+        client_id: null,
+        client_name: null,
+        starts_at: personalStart.toISOString(),
+        ends_at: new Date(personalStart.getTime() + 60 * 60 * 1000).toISOString(),
+        status: "scheduled",
+        rate: null,
+        paid: false,
+        notes: null,
+        change_count: 0,
+        session_type: "personal",
+        personal_label: "Lunch + admin",
+        is_blocking: true,
+        program_status: "n/a",
+        series_id: null,
+        requested_starts_at: null,
+        requested_ends_at: null,
+        requested_reason: null,
+      });
+    }
   }
+
   return rows;
 }
 
@@ -610,4 +677,84 @@ export async function listChangeRequestHistory(coachId?: string): Promise<Change
   if (error || !data) return DEMO_CR_HISTORY;
   // client_name not stored in history table — enrich from profiles if needed
   return (data as any[]).map((r) => ({ ...r, client_name: null })) as ChangeRequestHistoryRow[];
+}
+
+// ─── High Level Plan ─────────────────────────────────────────────────────────
+export type HighLevelPlan = {
+  client_id: string;
+  recommended_monthly_sessions: number | null;
+  strategy: string | null;
+  updated_at: string | null;
+};
+
+const DEMO_HIGH_LEVEL_PLANS: HighLevelPlan[] = [
+  {
+    client_id: "demo-client-acacia",
+    recommended_monthly_sessions: 8,
+    strategy: "Focus on progressive overload in compound lifts (squat, hinge, push). Pair with sustainable nutrition habits. Prioritize consistency over intensity given low accountability score — build habits first. Address low back via hip mobility work pre-session.",
+    updated_at: new Date(Date.now() - 14 * 86400000).toISOString(),
+  },
+  {
+    client_id: "demo-client-jen",
+    recommended_monthly_sessions: 4,
+    strategy: "Body recomp focus: progressive strength 2×/wk, target 1 unassisted pull-up by Q3. Protect right shoulder — no behind-neck pressing; sub face pulls + band pull-aparts. High accountability and commitment — push intensity when form is solid.",
+    updated_at: new Date(Date.now() - 7 * 86400000).toISOString(),
+  },
+];
+
+export async function getHighLevelPlan(clientId: string): Promise<HighLevelPlan | null> {
+  if (!hasSupabaseEnv()) {
+    return DEMO_HIGH_LEVEL_PLANS.find((p) => p.client_id === clientId) ?? null;
+  }
+  const supabase = createSupabaseAdmin();
+  const { data } = await supabase
+    .from("high_level_plans")
+    .select("client_id, recommended_monthly_sessions, strategy, updated_at")
+    .eq("client_id", clientId)
+    .maybeSingle();
+  return (data as HighLevelPlan | null) ?? null;
+}
+
+// ── Exercise / Movement library ──────────────────────────────────────────────
+
+export type MovementRow = {
+  id: string;
+  name: string;
+  category: string;
+  subcategory: string | null;
+  muscles: string[];
+  equipment_list: string[];
+  equipment_specifics: string | null;
+  cues: string | null;
+  demo_url: string | null;
+  is_core: boolean;
+  archived: boolean;
+  created_at: string;
+};
+
+export async function listMovements(): Promise<MovementRow[]> {
+  if (!hasSupabaseEnv()) {
+    return MOVEMENT_LIBRARY.map((m) => ({
+      id: m.id,
+      name: m.name,
+      category: m.category,
+      subcategory: m.subcategory ?? null,
+      muscles: m.muscles ?? [],
+      equipment_list: m.equipment_list ?? [],
+      equipment_specifics: m.equipment_specifics ?? null,
+      cues: m.cues ?? null,
+      demo_url: m.demo_url ?? null,
+      is_core: m.is_core ?? false,
+      archived: false,
+      created_at: new Date().toISOString(),
+    }));
+  }
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("movements")
+    .select("id, name, category, subcategory, muscles, equipment_list, equipment_specifics, cues, demo_url, is_core, archived, created_at")
+    .eq("archived", false)
+    .order("name");
+  if (error || !data) return [];
+  return data as MovementRow[];
 }
