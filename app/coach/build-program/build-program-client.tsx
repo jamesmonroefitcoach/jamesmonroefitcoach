@@ -1185,9 +1185,9 @@ export default function BuildProgramClient({
     {/* ─── BUILDER grid: library + main ─── */}
     {((programKind === "in_gym" && inGymStep === "builder") || (programKind === "at_home" && atHomeProgramStep === "builder")) && (
     <>
-    <div style={{ display: "grid", gridTemplateColumns: libOpen ? "220px 1fr" : "36px 1fr", gap: "1.25rem", transition: "grid-template-columns 0.15s" }}>
+    <div className="builder-layout" style={{ display: "grid", gridTemplateColumns: libOpen ? "220px 1fr" : "36px 1fr", gap: "1.25rem", transition: "grid-template-columns 0.15s" }}>
       {/* ─── library accordion (left) ─── */}
-      <aside className="no-print" style={{ position: "sticky", top: "1rem", alignSelf: "start" }}>
+      <aside className="builder-library-aside no-print" style={{ position: "sticky", top: "1rem", alignSelf: "start" }}>
         {!libOpen ? (
           /* Collapsed strip */
           <div className="card" style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "0.5rem 0.3rem", gap: "0.5rem" }}>

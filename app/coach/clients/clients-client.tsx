@@ -635,7 +635,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
     <main className="shell">
       {showModal && <ProspectModal onClose={() => setShowModal(false)} />}
 
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header className="page-hdr">
         <div>
           <span className="badge">Clients</span>
           <h1 style={{ marginTop: "0.5rem" }}>Roster</h1>

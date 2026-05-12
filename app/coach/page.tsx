@@ -96,7 +96,7 @@ export default async function CoachDashboard() {
 
   return (
     <main className="shell">
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header className="page-hdr">
         <div>
           <span className="badge">Coach Dashboard</span>
           <h1 style={{ marginTop: "0.5rem" }}>Week of {weekStartLabel}</h1>
@@ -106,7 +106,7 @@ export default async function CoachDashboard() {
 
       <hr className="divider" />
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+      <section className="grid-stats">
         <div className="stat">
           <div className="stat-label">Hours this week</div>
           <div className="stat-value">{hours.toFixed(1)}</div>
@@ -131,7 +131,7 @@ export default async function CoachDashboard() {
 
       <hr className="divider" />
 
-      <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1.25rem" }}>
+      <section className="grid-main">
         <div className="card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2>This week</h2>

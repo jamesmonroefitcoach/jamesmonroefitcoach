@@ -234,6 +234,12 @@ a:hover { text-decoration: underline; }
   .btn { display: none !important; }
 }
 
+/* Responsive layout utilities — used across page components */
+.grid-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.grid-2col  { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: start; }
+.grid-main  { display: grid; grid-template-columns: 2fr 1fr; gap: 1.25rem; }
+.page-hdr   { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 0.5rem; }
+
 /* Mobile nav — sidebar moves to a collapsible top bar on small screens */
 .sidebar-mobile { display: none; }
 
@@ -275,4 +281,32 @@ a:hover { text-decoration: underline; }
     width: 100%;
     padding: 1rem 0.85rem 2.5rem;
   }
+
+  /* Scale down headings */
+  h1 { font-size: 1.55rem; }
+  h2 { font-size: 1.15rem; }
+
+  /* Responsive grid utilities */
+  .grid-stats { grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+  .grid-2col  { grid-template-columns: 1fr; gap: 1rem; }
+  .grid-main  { grid-template-columns: 1fr; }
+  .page-hdr   { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+
+  /* Make stat tiles more compact */
+  .stat { padding: 0.75rem 0.9rem; }
+  .stat-value { font-size: 1.55rem; }
+
+  /* Build-program: stack library panel above builder on narrow screens */
+  .builder-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .builder-library-aside {
+    position: static !important;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  /* Prevent horizontal overflow blowout on narrow screens */
+  .app-main { overflow-x: hidden; }
+  .card { overflow-x: auto; }
 }

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Oswald, Inter } from "next/font/google";
 import { getSessionUser } from "@/lib/session";
 import Sidebar from "@/components/sidebar";
@@ -9,7 +9,12 @@ const body = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variable
 
 export const metadata: Metadata = {
   title: "Monroe Fit Coach",
-  description: "Programming, scheduling, and check-ins for James Monroe's coaching practice."
+  description: "Programming, scheduling, and check-ins for James Monroe's coaching practice.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

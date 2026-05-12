@@ -117,7 +117,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   return (
     <main className="shell">
       <Link href="/coach/clients" className="meta">← All clients</Link>
-      <header style={{ marginTop: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <header className="page-hdr" style={{ marginTop: "0.5rem" }}>
         <div>
           <span className="badge">Client</span>
           <h1 style={{ marginTop: "0.5rem" }}>{client.full_name}</h1>
@@ -143,7 +143,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <hr className="divider" />
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+      <section className="grid-stats">
         <div className="stat">
           <div className="stat-label">Cadence</div>
           <div className="stat-value">{client.regular_frequency ?? "—"}</div>
@@ -172,7 +172,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       <hr className="divider" />
 
       {/* ── Coach Profile + Client Profile ──────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", alignItems: "start" }}>
+      <div className="grid-2col">
         <CoachProfileCard client={client} />
         <ClientProfileCard client={client} />
       </div>
@@ -263,7 +263,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         </div>
         <hr className="divider" />
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", alignItems: "start" }}>
+        <div className="grid-2col" style={{ gap: "0.85rem" }}>
           <ProgramCard label="Sessions" prog={currentInGym} clientId={client.id} />
           <ProgramCard label="Program" prog={currentAtHome} clientId={client.id} />
         </div>
@@ -299,7 +299,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <hr className="divider" />
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginBottom: "1.5rem", alignItems: "start" }}>
+      <section className="grid-2col" style={{ marginBottom: "1.5rem" }}>
         <ClientSettings client={client} reminderPrefs={reminderPrefs} />
         <div className="card">
           <h2>Check-ins</h2>
@@ -311,7 +311,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <hr className="divider" />
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
+      <section className="grid-2col">
         <div className="card">
           <h2>Upcoming sessions</h2>
           <hr className="divider" />
