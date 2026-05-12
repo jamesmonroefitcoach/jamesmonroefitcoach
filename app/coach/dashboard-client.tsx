@@ -308,10 +308,14 @@ export default function DashboardClient({
   }
 
   // ── Derived week data ────────────────────────────────────────────────────
-  const hours = displayAppts.reduce((acc, a) => {
-    return acc + (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 3_600_000;
-  }, 0);
-  const weekRevenue = displayAppts.reduce((acc, a) => acc + (a.rate ?? 0), 0);
+  const hours = displayAppts
+    .filter((a) => a.session_type === "session")
+    .reduce((acc, a) => {
+      return acc + (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 3_600_000;
+    }, 0);
+  const weekRevenue = displayAppts
+    .filter((a) => a.session_type === "session")
+    .reduce((acc, a) => acc + (a.rate ?? 0), 0);
 
   const weekSessions: WeekSessionItem[] = displayAppts
     .filter((a) => a.session_type === "session" && a.status !== "cancelled" && a.status !== "no_show" && !!a.client_id)
