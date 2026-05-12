@@ -73,7 +73,7 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
   }, [monthAppts]);
 
   const maxVal = Math.max(...weeks.map((w) => w.bookings), 1);
-  const chartH = 80;
+  const chartH = 100;
 
   return (
     <div style={{ marginTop: "0.85rem" }}>
@@ -95,6 +95,9 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
                 borderRadius: "2px 2px 0 0",
                 position: "relative",
                 alignSelf: "flex-end",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}>
                 {/* Earned overlay */}
                 {earnedH > 0 && (
@@ -104,6 +107,18 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
                     background: isCurrentWeek ? "var(--sage)" : "rgba(90,107,74,0.4)",
                     borderRadius: "2px 2px 0 0",
                   }} />
+                )}
+                {/* Session count inside bar */}
+                {w.count > 0 && barH >= 16 && (
+                  <span style={{
+                    position: "relative", zIndex: 1,
+                    fontSize: "0.6rem", fontWeight: 700,
+                    color: isCurrentWeek ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.45)",
+                    lineHeight: 1,
+                    userSelect: "none",
+                  }}>
+                    {w.count}
+                  </span>
                 )}
               </div>
               {/* Week label */}
@@ -115,7 +130,7 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
         })}
       </div>
       {/* Legend */}
-      <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.35rem" }}>
+      <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "var(--rust)", borderRadius: 2 }} />
           <span className="meta" style={{ fontSize: "0.68rem" }}>Bookings</span>
@@ -123,6 +138,10 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "var(--sage)", borderRadius: 2 }} />
           <span className="meta" style={{ fontSize: "0.68rem" }}>Earned (paid)</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "rgba(255,255,255,0.9)", background: "var(--rust)", borderRadius: 2, padding: "0 3px", lineHeight: "14px" }}>n</span>
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Sessions</span>
         </div>
       </div>
     </div>
@@ -257,15 +276,6 @@ export default function DashboardClient({
 
   return (
     <>
-      {/* ── Top stat strip ──────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
-        <div className="stat" style={{ flex: "1 1 140px" }}>
-          <div className="stat-label">Active Clients</div>
-          <div className="stat-value">{clients.filter((c) => c.lifecycle === "active").length}</div>
-          <div className="stat-sub">{clients.filter((c) => c.balance_owed > 0).length} with balance</div>
-        </div>
-      </div>
-
       {/* ── Two-pane grid ────────────────────────────────────────────── */}
       <div className="grid-main">
         {/* ─ LEFT: Week + Month groups ─ */}
@@ -309,7 +319,7 @@ export default function DashboardClient({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
               <div className="stat">
                 <div className="stat-label">Hours</div>
-                <div className="stat-value">{hours.toFixed(1)}</div>
+                <div className="stat-value">{Math.round(hours)}</div>
                 <div className="stat-sub">{displayAppts.length} sessions</div>
               </div>
               <div className="stat">
