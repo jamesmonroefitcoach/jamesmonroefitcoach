@@ -1116,7 +1116,7 @@ export default function BuildProgramClient({
                 >← Back</button>
                 <span className="stat-label" style={{ margin: 0 }}>Program details</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: "0.75rem", alignItems: "end" }}>
+              <div className="form-grid-5col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: "0.75rem", alignItems: "end" }}>
                 <div>
                   <label className="stat-label">Program name</label>
                   <input className="input" value={programName} onChange={(e) => setProgramName(e.target.value)} style={{ marginTop: "0.3rem" }} />
@@ -1146,7 +1146,7 @@ export default function BuildProgramClient({
       {programKind === "at_home" && atHomeProgramStep === "builder" && (
         <div className="card no-print" style={{ marginBottom: "1rem" }}>
           {atHomeEditingHeader ? (
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: "0.75rem", alignItems: "end" }}>
+            <div className="form-grid-5col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: "0.75rem", alignItems: "end" }}>
               <div>
                 <label className="stat-label">Program name</label>
                 <input className="input" value={programName} onChange={(e) => setProgramName(e.target.value)} style={{ marginTop: "0.3rem" }} />
@@ -2228,18 +2228,18 @@ function SessionsThisWeekBanner({
         onClick={() => setOpen((v) => !v)}
         style={{
           width: "100%", background: "none", border: "none", padding: 0,
-          cursor: "pointer", display: "flex", alignItems: "center", flexWrap: "wrap",
-          justifyContent: "space-between", gap: "0.3rem", fontFamily: "inherit", textAlign: "left",
+          cursor: "pointer", display: "flex", flexDirection: "column",
+          alignItems: "flex-start", gap: "0.12rem", fontFamily: "inherit", textAlign: "left",
         }}
       >
         <h3 style={{ margin: 0, fontSize: "0.88rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", textAlign: "left" }}>
           {open ? "▾" : "▸"} Sessions This Week
         </h3>
-        <span className="meta" style={{ fontSize: "0.76rem" }}>
+        <span className="meta" style={{ fontSize: "0.74rem" }}>
           {sessions.length} total · {programmed.length} programmed · {needs.length} pending
         </span>
       </button>
-      {open && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "0.75rem" }}>
+      {open && <div className="sessions-banner-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "0.75rem" }}>
         {/* Programmed column */}
         <div>
           <div style={{
@@ -3002,7 +3002,7 @@ function CoverageHierarchy({
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem", marginTop: "0.5rem", alignItems: "start" }}>
+    <div className="coverage-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem", marginTop: "0.5rem", alignItems: "start" }}>
       {LIBRARY_HIERARCHY.map((group) => {
         const { used, total } = groupStats(group);
         const anyUsed = used > 0;

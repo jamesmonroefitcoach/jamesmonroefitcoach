@@ -417,7 +417,7 @@ export default function DashboardClient({
             />
 
             {/* Sessions table — collapsible */}
-            <details style={{ marginTop: "0.75rem" }}>
+            <details style={{ marginTop: "0.75rem", overflow: "hidden" }}>
               <summary style={{
                 cursor: "pointer", userSelect: "none",
                 fontSize: "0.78rem", fontWeight: 700,

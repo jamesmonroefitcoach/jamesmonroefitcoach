@@ -334,8 +334,18 @@ a:hover { text-decoration: underline; }
   /* Dashboard banners: stack two-col layout */
   .banner-two-col { grid-template-columns: 1fr !important; }
 
-  /* Sessions table inside collapsible: keep it scrollable, never blow out page */
-  .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  /* Sessions table inside collapsible: keep it scrollable, never blow out page.
+     display:block + width:100% ensure the wrapper is sized to the viewport, not its child table. */
+  .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; display: block; width: 100%; }
+
+  /* Build-program coverage grid: 5 columns on desktop → 2 on mobile */
+  .coverage-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Build-program at-home form: 5-col → single column stack */
+  .form-grid-5col { grid-template-columns: 1fr !important; }
+
+  /* Sessions this week banner: 2-col programmed/pending → single col */
+  .sessions-banner-cols { grid-template-columns: 1fr !important; }
 
   /* Clients table: sticky first + last columns */
   .tbl-sticky-first { position: sticky !important; left: 0; z-index: 1; background: var(--paper) !important; }
