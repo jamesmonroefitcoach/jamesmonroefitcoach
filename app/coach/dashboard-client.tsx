@@ -37,28 +37,35 @@ function weekLabel(ws: Date): string {
 
 // ── Week-over-week bar chart ──────────────────────────────────────────────────
 
+/** "Apr 28–May 4" for cross-month, "5–11" for same-month weeks */
+function weekRangeLabel(start: Date, endExcl: Date): string {
+  const last = new Date(endExcl.getTime() - 86400000);
+  if (start.getMonth() !== last.getMonth()) {
+    const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${fmt(start)}–${fmt(last)}`;
+  }
+  return `${start.getDate()}–${last.getDate()}`;
+}
+
 function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
+  const now = new Date();
+
   const weeks = useMemo(() => {
-    const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    // Build 5 buckets: find Monday-anchored week that contains day 1, then +7 each
     const firstWeek = startOfWeekLocal(monthStart);
-    const buckets: { label: string; start: Date; end: Date }[] = [];
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const buckets: { rangeLabel: string; start: Date; end: Date }[] = [];
     for (let i = 0; i < 6; i++) {
       const s = new Date(firstWeek);
       s.setDate(firstWeek.getDate() + i * 7);
+      if (s >= monthEnd) break;
       const e = new Date(s);
       e.setDate(s.getDate() + 7);
-      // Only include weeks that overlap the current month
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      if (s >= monthEnd) break;
-      buckets.push({
-        label: s.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        start: s,
-        end: e,
-      });
+      buckets.push({ rangeLabel: weekRangeLabel(s, e), start: s, end: e });
     }
     return buckets.map((b) => {
+      const isCurrentWeek = b.start <= now && now < b.end;
+      const isPast = b.end <= now;
       const appts = monthAppts.filter((a) => {
         const t = new Date(a.starts_at).getTime();
         return t >= b.start.getTime() && t < b.end.getTime()
@@ -68,69 +75,136 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
       });
       const bookings = appts.reduce((s, a) => s + (a.rate ?? 0), 0);
       const earned = appts.filter((a) => a.paid).reduce((s, a) => s + (a.rate ?? 0), 0);
-      return { ...b, bookings, earned, count: appts.length };
+      // How far through this week is "today" (0–1), used to draw the progress split
+      const weekPct = isCurrentWeek
+        ? Math.min(1, (now.getTime() - b.start.getTime()) / (b.end.getTime() - b.start.getTime()))
+        : isPast ? 1 : 0;
+      return { ...b, bookings, earned, count: appts.length, isCurrentWeek, isPast, weekPct };
     });
   }, [monthAppts]);
 
   const maxVal = Math.max(...weeks.map((w) => w.bookings), 1);
-  const chartH = 100;
+  const chartH = 96;
 
   return (
-    <div style={{ marginTop: "0.85rem" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem", height: chartH + 24 }}>
+    <div style={{ marginTop: "0.75rem" }}>
+      {/* Per-week summary chips above each bar column */}
+      <div style={{ display: "flex", gap: "0.35rem", marginBottom: "0.4rem" }}>
+        {weeks.map((w, i) => (
+          <div key={i} style={{
+            flex: 1, textAlign: "center",
+            padding: "0.18rem 0",
+            borderRadius: 3,
+            background: w.isCurrentWeek ? "rgba(168,61,43,0.07)" : "transparent",
+            border: w.isCurrentWeek ? "1px solid rgba(168,61,43,0.18)" : "1px solid transparent",
+          }}>
+            {w.count > 0 ? (
+              <>
+                <div style={{ fontSize: "0.64rem", fontWeight: 700, color: w.isCurrentWeek ? "var(--rust)" : "var(--ink)", lineHeight: 1.2 }}>
+                  {fmtMoney(w.bookings)}
+                </div>
+                <div style={{ fontSize: "0.58rem", color: "var(--muted)", lineHeight: 1.1 }}>
+                  {w.count} {w.count === 1 ? "session" : "sessions"}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: "0.58rem", color: "var(--line)", lineHeight: 1.8 }}>—</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Bars */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem", height: chartH }}>
         {weeks.map((w, i) => {
           const barH = Math.max(3, Math.round((w.bookings / maxVal) * chartH));
           const earnedH = Math.max(0, Math.round((w.earned / maxVal) * chartH));
-          const isCurrentWeek = w.start <= new Date() && new Date() < w.end;
+          const futureW = w.isCurrentWeek ? `${Math.round((1 - w.weekPct) * 100)}%` : "0%";
           return (
-            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.2rem" }}>
-              {/* Value label */}
-              <span style={{ fontSize: "0.62rem", color: "var(--muted)", lineHeight: 1 }}>
-                {w.bookings > 0 ? fmtMoney(w.bookings) : ""}
-              </span>
-              {/* Bar stack */}
+            <div
+              key={i}
+              style={{ flex: 1, height: barH, alignSelf: "flex-end", position: "relative", borderRadius: "2px 2px 0 0", overflow: "hidden" }}
+              title={w.count > 0 ? `${w.count} sessions · ${fmtMoney(w.bookings)} booked · ${fmtMoney(w.earned)} earned` : "No sessions"}
+            >
+              {/* Base bar (bookings) */}
               <div style={{
-                width: "100%", height: barH,
-                background: isCurrentWeek ? "var(--rust)" : "rgba(168,61,43,0.25)",
-                borderRadius: "2px 2px 0 0",
-                position: "relative",
-                alignSelf: "flex-end",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}>
-                {/* Earned overlay */}
-                {earnedH > 0 && (
-                  <div style={{
-                    position: "absolute", bottom: 0, left: 0, right: 0,
-                    height: earnedH,
-                    background: isCurrentWeek ? "var(--sage)" : "rgba(90,107,74,0.4)",
-                    borderRadius: "2px 2px 0 0",
-                  }} />
-                )}
-                {/* Session count inside bar */}
-                {w.count > 0 && barH >= 16 && (
-                  <span style={{
-                    position: "relative", zIndex: 1,
-                    fontSize: "0.6rem", fontWeight: 700,
-                    color: isCurrentWeek ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.45)",
-                    lineHeight: 1,
-                    userSelect: "none",
-                  }}>
-                    {w.count}
-                  </span>
-                )}
-              </div>
-              {/* Week label */}
-              <span style={{ fontSize: "0.6rem", color: isCurrentWeek ? "var(--ink)" : "var(--muted)", fontWeight: isCurrentWeek ? 700 : 400, lineHeight: 1, textAlign: "center" }}>
-                {w.label}
-              </span>
+                position: "absolute", inset: 0,
+                background: w.isCurrentWeek
+                  ? "var(--rust)"
+                  : w.isPast
+                    ? "rgba(168,61,43,0.28)"
+                    : "rgba(168,61,43,0.08)",
+              }} />
+              {/* Earned overlay (green, bottom-up) */}
+              {earnedH > 0 && (
+                <div style={{
+                  position: "absolute", bottom: 0, left: 0, right: 0,
+                  height: earnedH,
+                  background: w.isCurrentWeek ? "var(--sage)" : "rgba(90,107,74,0.45)",
+                }} />
+              )}
+              {/* Future-days fade for current week — right portion is lighter */}
+              {w.isCurrentWeek && (
+                <div style={{
+                  position: "absolute", top: 0, bottom: 0, right: 0,
+                  width: futureW,
+                  background: "rgba(255,255,255,0.45)",
+                  borderLeft: "1px dashed rgba(168,61,43,0.35)",
+                }} />
+              )}
+              {/* Session count centred */}
+              {w.count > 0 && barH >= 18 && (
+                <span style={{
+                  position: "absolute", top: "50%", left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  zIndex: 2,
+                  fontSize: "0.6rem", fontWeight: 700,
+                  color: w.isCurrentWeek ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.48)",
+                  lineHeight: 1, userSelect: "none",
+                }}>
+                  {w.count}
+                </span>
+              )}
+              {/* Dashed border on current week */}
+              {w.isCurrentWeek && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  border: "1px dashed rgba(255,255,255,0.55)",
+                  borderRadius: "2px 2px 0 0",
+                  pointerEvents: "none",
+                }} />
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Baseline */}
+      <div style={{ height: 1, background: "var(--line)", marginBottom: "0.35rem" }} />
+
+      {/* Date-range labels */}
+      <div style={{ display: "flex", gap: "0.35rem" }}>
+        {weeks.map((w, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center" }}>
+            <span style={{
+              fontSize: "0.57rem",
+              color: w.isCurrentWeek ? "var(--rust)" : "var(--muted)",
+              fontWeight: w.isCurrentWeek ? 700 : 400,
+              lineHeight: 1.2,
+              whiteSpace: "nowrap",
+              display: "block",
+            }}>
+              {w.rangeLabel}
+            </span>
+            {w.isCurrentWeek && (
+              <span style={{ fontSize: "0.54rem", color: "var(--muted)", lineHeight: 1 }}>in progress</span>
+            )}
+          </div>
+        ))}
+      </div>
+
       {/* Legend */}
-      <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.65rem", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "var(--rust)", borderRadius: 2 }} />
           <span className="meta" style={{ fontSize: "0.68rem" }}>Bookings</span>
@@ -140,8 +214,8 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
           <span className="meta" style={{ fontSize: "0.68rem" }}>Earned (paid)</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-          <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "rgba(255,255,255,0.9)", background: "var(--rust)", borderRadius: 2, padding: "0 3px", lineHeight: "14px" }}>n</span>
-          <span className="meta" style={{ fontSize: "0.68rem" }}>Sessions</span>
+          <div style={{ width: 10, height: 10, background: "rgba(255,255,255,0.45)", border: "1px dashed rgba(168,61,43,0.4)", borderRadius: 2 }} />
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Days remaining</span>
         </div>
       </div>
     </div>
@@ -449,7 +523,7 @@ export default function DashboardClient({
 
             {/* Week-over-week chart */}
             <div style={{ marginTop: "1rem" }}>
-              <div className="stat-label" style={{ marginBottom: "0.25rem" }}>Week over week</div>
+              <div className="stat-label" style={{ marginBottom: "0" }}>Week by week</div>
               <WoWChart monthAppts={monthAppts} />
             </div>
           </GroupShell>
