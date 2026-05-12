@@ -25,7 +25,7 @@ function matchExercises(movements: MovementRow[], nodeLabel: string): MovementRo
 const BLANK: MovementInput = {
   name: "", category: "push", subcategory: "",
   muscles: [], equipment_list: [], equipment_specifics: "",
-  cues: "", demo_url: "", is_core: false,
+  cues: "", demo_url: "",
 };
 
 function movementToInput(m: MovementRow): MovementInput {
@@ -38,7 +38,6 @@ function movementToInput(m: MovementRow): MovementInput {
     equipment_specifics: m.equipment_specifics ?? "",
     cues: m.cues ?? "",
     demo_url: m.demo_url ?? "",
-    is_core: m.is_core,
   };
 }
 
@@ -152,16 +151,11 @@ function ExerciseForm({
             placeholder="Key cues or notes…" />
         </label>
 
-        {/* Demo URL + Core checkbox */}
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+        {/* Demo URL */}
+        <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
           <span className="meta" style={{ fontSize: "0.74rem" }}>Demo URL</span>
           <input className="input" type="url" value={draft.demo_url ?? ""}
             onChange={(e) => set("demo_url", e.target.value)} placeholder="https://…" />
-        </label>
-
-        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.88rem", alignSelf: "flex-end" }}>
-          <input type="checkbox" checked={!!draft.is_core} onChange={(e) => set("is_core", e.target.checked)} />
-          <span>Core movement</span>
         </label>
       </div>
 
@@ -196,9 +190,6 @@ function ExerciseRow({ m, onEdit, onArchive }: {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
           <strong style={{ fontSize: "0.88rem" }}>{m.name}</strong>
-          {m.is_core && (
-            <span style={{ fontSize: "0.62rem", fontWeight: 700, background: "rgba(90,107,74,0.12)", color: "var(--sage)", borderRadius: 3, padding: "0.05rem 0.3rem", textTransform: "uppercase" }}>core</span>
-          )}
         </div>
         {(equipLabel || (m.muscles ?? []).length > 0 || m.cues) && (
           <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.12rem", flexWrap: "wrap" }}>
@@ -441,7 +432,6 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
   }, [movements, search]);
 
   const searchActive = !!search.trim();
-  const coreCount = movements.filter((m) => m.is_core).length;
 
   async function handleGlobalAdd(input: MovementInput) {
     const res = await addMovement(input);
@@ -454,7 +444,7 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
         <div>
           <span className="badge">Coach</span>
           <h1 style={{ marginTop: "0.5rem" }}>Exercise Library</h1>
-          <p className="meta">{movements.length} exercises · {coreCount} core movements</p>
+          <p className="meta">{movements.length} exercises</p>
         </div>
         <button className="btn btn-primary" onClick={() => setAddingGlobal((o) => !o)}>
           {addingGlobal ? "Cancel" : "+ Add Exercise"}

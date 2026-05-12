@@ -14,7 +14,6 @@ export type MovementInput = {
   equipment_specifics?: string;
   cues?: string;
   demo_url?: string;
-  is_core?: boolean;
 };
 
 export async function addMovement(
@@ -40,7 +39,7 @@ export async function addMovement(
       equipment_specifics: input.equipment_specifics?.trim() || null,
       cues: input.cues?.trim() || null,
       demo_url: input.demo_url?.trim() || null,
-      is_core: input.is_core ?? false,
+      is_core: false,
       created_by: user.id,
     })
     .select("id")
@@ -76,7 +75,7 @@ export async function updateMovement(
       equipment_specifics: input.equipment_specifics?.trim() || null,
       cues: input.cues?.trim() || null,
       demo_url: input.demo_url?.trim() || null,
-      is_core: input.is_core ?? false,
+      is_core: false,
     })
     .eq("id", id);
 
