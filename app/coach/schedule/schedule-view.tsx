@@ -182,6 +182,7 @@ export default function ScheduleView({
   const [dropTarget, setDropTarget] = useState<{ day: number; hour: number } | null>(null);
   const [editingChangeCount, setEditingChangeCount] = useState(false);
   const [seriesScope, setSeriesScope] = useState<"series" | null>(null);
+  const [clientsBarOpen, setClientsBarOpen] = useState(false);
   const touchDragRef = useRef<{ clientId: string; startX: number; startY: number; moved: boolean } | null>(null);
 
   const today = new Date();
@@ -682,11 +683,39 @@ export default function ScheduleView({
       {view === "week" && (
         <div className="no-print" style={{
           marginTop: "1rem",
-          padding: "0.45rem 0.75rem",
-          background: "rgba(0,0,0,0.02)",
           border: "1px solid var(--line)",
           borderRadius: 4,
+          overflow: "hidden",
         }}>
+          {/* Collapsible header */}
+          <button
+            type="button"
+            onClick={() => setClientsBarOpen((o) => !o)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: "rgba(0,0,0,0.02)",
+              border: "none",
+              borderBottom: clientsBarOpen ? "1px solid var(--line)" : "none",
+              padding: "0.4rem 0.75rem",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--muted)" }}>
+              {clientsBarOpen ? "▾" : "▸"} Clients &amp; Status
+            </span>
+            <span style={{ fontSize: "0.69rem", color: "var(--muted)" }}>
+              {noSessionClients.length === 0
+                ? <span style={{ color: "var(--sage)", fontWeight: 600 }}>✓ All scheduled</span>
+                : `${noSessionClients.length} unscheduled`}
+            </span>
+          </button>
+
+          {clientsBarOpen && (
+          <div style={{ padding: "0.45rem 0.75rem" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
             {noSessionClients.length === 0 && (
               <span style={{ fontSize: "0.72rem", color: "var(--sage)", fontWeight: 600, marginRight: "0.2rem", flexShrink: 0 }}>
@@ -752,6 +781,8 @@ export default function ScheduleView({
               </span>
             )}
           </div>
+          </div>
+          )}
         </div>
       )}
 

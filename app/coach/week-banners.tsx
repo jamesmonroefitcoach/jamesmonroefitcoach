@@ -62,7 +62,7 @@ function BannerShell({
         <span style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
           {open ? "▾" : "▸"} {title}
         </span>
-        <span className="meta" style={{ fontSize: "0.72rem" }}>{summary}</span>
+        <span className="meta banner-summary" style={{ fontSize: "0.72rem" }}>{summary}</span>
       </button>
       {open && <div style={{ marginTop: "0.6rem" }}>{children}</div>}
     </div>
@@ -72,7 +72,7 @@ function BannerShell({
 // ─── Two-column grid inside a banner ───────────────────────────────────────
 function TwoCol({ left, right }: { left: React.ReactNode; right: React.ReactNode }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+    <div className="banner-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
       {left}
       {right}
     </div>

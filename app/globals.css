@@ -122,7 +122,9 @@ a:hover { text-decoration: underline; }
 .card + .card { margin-top: 1rem; }
 /* Inside grid/flex containers the gap prop handles spacing — reset the sibling margin */
 [style*="grid-template-columns"] > .card,
-[style*="grid-template-rows"] > .card { margin-top: 0; }
+[style*="grid-template-rows"] > .card,
+.grid-2col > .card,
+.grid-main > .card { margin-top: 0; }
 
 /* Stat tiles */
 .stat {
@@ -253,10 +255,13 @@ a:hover { text-decoration: underline; }
   /* Hide the desktop left-rail sidebar */
   .sidebar-desktop { display: none !important; }
 
-  /* Mobile top bar */
+  /* Mobile top bar — fixed so content never scrolls under it */
   .sidebar-mobile {
     display: block;
     width: 100%;
+    left: 0;
+    right: 0;
+    position: fixed !important;
     background: #181513;
     border-bottom: 1px solid #2a2522;
     position: sticky;
@@ -279,6 +284,9 @@ a:hover { text-decoration: underline; }
   .sidebar-mobile-nav .sidebar-link {
     padding: 0.55rem 0.55rem;
   }
+
+  /* Push main content below the fixed nav bar (≈ 48px) */
+  .app-main { padding-top: 48px; }
 
   /* Tighten page padding on mobile */
   .shell {
@@ -322,4 +330,8 @@ a:hover { text-decoration: underline; }
   /* Prevent horizontal overflow blowout on narrow screens */
   .app-main { overflow-x: hidden; }
   .card { overflow-x: auto; }
+
+  /* Dashboard banners: stack two-col layout and hide summary text */
+  .banner-two-col { grid-template-columns: 1fr !important; }
+  .banner-summary { display: none; }
 }
