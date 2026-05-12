@@ -234,6 +234,10 @@ a:hover { text-decoration: underline; }
   .btn { display: none !important; }
 }
 
+/* Responsive column header labels — show full name on desktop, short on mobile */
+.hdr-full  { display: inline; }
+.hdr-short { display: none; }
+
 /* Responsive layout utilities — used across page components */
 .grid-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
 .grid-2col  { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: start; }
@@ -286,6 +290,10 @@ a:hover { text-decoration: underline; }
   h1 { font-size: 1.55rem; }
   h2 { font-size: 1.15rem; }
 
+  /* Column header labels — swap full ↔ short */
+  .hdr-full  { display: none; }
+  .hdr-short { display: inline; }
+
   /* Responsive grid utilities */
   .grid-stats { grid-template-columns: 1fr 1fr; gap: 0.65rem; }
   .grid-2col  { grid-template-columns: 1fr; gap: 1rem; }
@@ -304,6 +312,11 @@ a:hover { text-decoration: underline; }
     position: static !important;
     max-height: 260px;
     overflow-y: auto;
+  }
+
+  /* Build-program day grid: single column on mobile (days are collapsed) */
+  .day-grid-2col {
+    grid-template-columns: 1fr !important;
   }
 
   /* Prevent horizontal overflow blowout on narrow screens */

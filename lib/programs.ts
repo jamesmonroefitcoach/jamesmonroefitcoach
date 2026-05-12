@@ -70,23 +70,25 @@ export const EQUIPMENT_OPTIONS: { value: Equipment; label: string; allowsSpecifi
   { value: "other", label: "Other", allowsSpecifics: true }
 ];
 
+// RPE bands: 3 options represented by values 2, 5, 8
 export const EXERTION_LABELS: Record<number, string> = {
-  1: "1 — very easy",
-  2: "2 — easy",
-  3: "3 — light",
-  4: "4 — comfortable",
-  5: "5 — moderate",
-  6: "6 — somewhat hard",
-  7: "7 — challenging",
-  8: "8 — hard",
-  9: "9 — very hard",
-  10: "10 — max effort"
+  2: "1–3 Warmup",
+  5: "3–6 Working",
+  8: "7–10 Maximum",
 };
 
 export const EXERTION_SHORT: Record<number, string> = {
-  1: "very easy", 2: "easy", 3: "light", 4: "comfortable", 5: "moderate",
-  6: "somewhat hard", 7: "challenging", 8: "hard", 9: "very hard", 10: "max"
+  2: "Warmup",
+  5: "Working",
+  8: "Maximum",
 };
+
+/** Map any legacy 1-10 score to the nearest RPE band value */
+export function toRpeBand(score: number): number {
+  if (score <= 3) return 2;
+  if (score <= 6) return 5;
+  return 8;
+}
 
 export const PROGRAM_KIND_LABEL: Record<ProgramKind, string> = {
   in_gym: "Sessions",
@@ -134,6 +136,7 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
   {
     id: "accessory", label: "Accessory",
     nodes: [
+      { id: "bicep-curl",     label: "Bicep curl",    category: "arm_accessory" },
       { id: "tricep-ext",     label: "Tricep ext.",   category: "arm_accessory" },
       { id: "lateral-raise",  label: "Lateral raise", category: "shoulder" },
       { id: "rear-delt",      label: "Rear delt",     category: "shoulder" },
@@ -184,6 +187,13 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
     ],
   },
 ];
+
+/** Special movement used to insert a timed rest block into a program. */
+export const REST_MOVEMENT: Movement = {
+  id: "rest",
+  name: "Rest",
+  category: "cardio",
+};
 
 /** All leaf nodes (individual movements) from the hierarchy. */
 export function hierarchyLeaves(): LibraryLeaf[] {

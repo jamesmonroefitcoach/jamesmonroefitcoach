@@ -10,6 +10,7 @@ const COACH_NAV: NavLink[] = [
   { href: "/coach", label: "Dashboard" },
   { href: "/coach/clients", label: "Clients" },
   { href: "/coach/build-program", label: "Build Program" },
+  { href: "/coach/exercise-library", label: "Exercise Library" },
   { href: "/coach/schedule", label: "Schedule" },
   { href: "/coach/availability", label: "Availability" },
   { href: "/coach/appointments", label: "Appointments" },
@@ -73,7 +74,7 @@ export default function Sidebar({ user }: { user: SessionUser }) {
             textTransform: "uppercase",
             letterSpacing: "0.1em",
           }}>
-            Monroe <span style={{ color: "var(--clay)" }}>Fit</span>
+            Monroe <span style={{ color: "var(--clay)" }}>Fit Coach</span>
           </div>
           <button
             onClick={() => setMobileOpen((o) => !o)}

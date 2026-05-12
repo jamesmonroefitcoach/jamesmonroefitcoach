@@ -39,7 +39,7 @@ function defaultDraft(): SlotOffer {
 
 // ── Week view panel ───────────────────────────────────────────────────────
 
-type SlotState = "booked" | "offered-claimable" | "offered-notify" | "free";
+type SlotState = "booked" | "booked-personal" | "booked-online" | "offered-claimable" | "offered-notify" | "free";
 
 interface HourSlot {
   slotStart: Date;
@@ -52,9 +52,11 @@ interface HourSlot {
 function WeekViewPanel({
   offers,
   weekAppointments,
+  clients,
 }: {
   offers: SlotOffer[];
   weekAppointments: AppointmentRow[];
+  clients: ClientRow[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -106,10 +108,17 @@ function WeekViewPanel({
 
         if (bookedAppt) {
           totalBooked++;
-          const clientName = bookedAppt.session_type === "personal"
-            ? (bookedAppt.personal_label ?? "Personal")
-            : (bookedAppt.client_name ?? "Client");
-          daySlots.push({ slotStart, hour: h, state: "booked", offer: null, clientName });
+          let slotState: SlotState;
+          let clientName: string | null;
+          if (bookedAppt.session_type === "personal") {
+            slotState = "booked-personal";
+            clientName = bookedAppt.personal_label ?? "Personal";
+          } else {
+            const apptClient = bookedAppt.client_id ? clients.find((c) => c.id === bookedAppt.client_id) : null;
+            slotState = apptClient?.lifecycle === "online" ? "booked-online" : "booked";
+            clientName = bookedAppt.client_name ?? "Client";
+          }
+          daySlots.push({ slotStart, hour: h, state: slotState, offer: null, clientName });
           continue;
         }
 
@@ -159,21 +168,27 @@ function WeekViewPanel({
     whiteSpace: "nowrap",
     background:
       state === "booked"              ? "rgba(0,0,0,0.07)"
+      : state === "booked-personal"   ? "rgba(58,52,47,0.12)"
+      : state === "booked-online"     ? "rgba(30,106,140,0.14)"
       : state === "offered-claimable" ? "rgba(90,107,74,0.14)"
       : state === "offered-notify"    ? "rgba(217,119,6,0.11)"
       : "rgba(0,0,0,0.04)",
     border: `1px solid ${
       state === "booked"              ? "rgba(0,0,0,0.35)"
+      : state === "booked-personal"   ? "rgba(58,52,47,0.5)"
+      : state === "booked-online"     ? "rgba(30,106,140,0.6)"
       : state === "offered-claimable" ? "var(--sage)"
       : state === "offered-notify"    ? "var(--amber)"
       : "var(--line)"
     }`,
     color:
       state === "booked"              ? "var(--ink)"
+      : state === "booked-personal"   ? "var(--ink)"
+      : state === "booked-online"     ? "rgb(10,60,90)"
       : state === "offered-claimable" ? "rgb(60,80,50)"
       : state === "offered-notify"    ? "rgb(146,64,14)"
       : "var(--muted)",
-    fontWeight: state === "booked" ? 600 : undefined,
+    fontWeight: (state === "booked" || state === "booked-personal" || state === "booked-online") ? 600 : undefined,
   });
 
   return (
@@ -267,8 +282,11 @@ function WeekViewPanel({
                         }
                       >
                         {fmtHour(slot.hour)}
-                        {slot.state === "booked" && slot.clientName && (
+                        {(slot.state === "booked" || slot.state === "booked-online") && slot.clientName && (
                           <span style={{ marginLeft: "0.25rem" }}>{slot.clientName}</span>
+                        )}
+                        {slot.state === "booked-personal" && slot.clientName && (
+                          <span style={{ marginLeft: "0.25rem" }}>⛔ {slot.clientName}</span>
                         )}
                         {slot.state === "offered-claimable" && <span style={{ opacity: 0.6, marginLeft: "0.2rem" }}>·c</span>}
                         {slot.state === "offered-notify"    && <span style={{ opacity: 0.6, marginLeft: "0.2rem" }}>·n</span>}
@@ -292,7 +310,9 @@ function WeekViewPanel({
             }}
           >
             {[
-              { label: "Booked session", color: "rgba(0,0,0,0.07)", border: "rgba(0,0,0,0.35)" },
+              { label: "Booked — in-person", color: "rgba(0,0,0,0.07)", border: "rgba(0,0,0,0.35)" },
+              { label: "Booked — online client", color: "rgba(30,106,140,0.14)", border: "rgba(30,106,140,0.6)" },
+              { label: "Personal block ⛔", color: "rgba(58,52,47,0.12)", border: "rgba(58,52,47,0.5)" },
               { label: "Claimable offer (·c)", color: "rgba(90,107,74,0.3)", border: "var(--sage)" },
               { label: "Notify-only offer (·n)", color: "rgba(217,119,6,0.2)", border: "var(--amber)" },
               { label: "Open — not offered", color: "rgba(0,0,0,0.06)", border: "var(--line)" },
@@ -352,7 +372,7 @@ export default function AvailabilityClient({
         .filter((a) => a.status !== "cancelled" && a.status !== "no_show" && a.session_type === "session" && a.client_id)
         .map((a) => a.client_id!)
     );
-    return clients.filter((c) => c.lifecycle === "active" && !sessionClientIds.has(c.id));
+    return clients.filter((c) => (c.lifecycle === "active" || c.lifecycle === "online") && !sessionClientIds.has(c.id));
   }, [clients, weekAppointments]);
 
   function openNew()  { setMode({ kind: "new" }); setDraft(defaultDraft()); setErr(null); }
@@ -421,7 +441,7 @@ export default function AvailabilityClient({
   return (
     <>
       {/* ── Week view panel ─────────────────────────────────────── */}
-      <WeekViewPanel offers={offers} weekAppointments={weekAppointments} />
+      <WeekViewPanel offers={offers} weekAppointments={weekAppointments} clients={clients} />
 
       {/* ── Active clients session status this week ─────────────── */}
       <div style={{

@@ -15,6 +15,7 @@ const GENDER_OPTIONS = ["", "Male", "Female", "Non-binary", "Prefer not to say"]
 
 const LIFECYCLE_COLORS: Record<string, { bg: string; color: string }> = {
   active:      { bg: "rgba(90,107,74,0.12)",  color: "var(--sage)" },
+  online:      { bg: "rgba(30,106,140,0.12)", color: "#1e6a8c"    },
   paused:      { bg: "#e8f0fe",               color: "#1a56db"    },
   inactive:    { bg: "#fce8e8",               color: "var(--red)" },
   prospective: { bg: "#fef9e7",               color: "#8a6200"    },
@@ -130,6 +131,7 @@ export function CoachProfileCard({ client }: { client: ClientRow }) {
         <Field label="Status">
           <select className="select" value={lifecycleDraft} onChange={(e) => setLifecycleDraft(e.target.value as typeof lifecycleDraft)}>
             <option value="active">Active</option>
+            <option value="online">Online</option>
             <option value="paused">Paused</option>
             <option value="inactive">Inactive</option>
             <option value="prospective">Prospective</option>
