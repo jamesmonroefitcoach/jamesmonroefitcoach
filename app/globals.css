@@ -331,7 +331,14 @@ a:hover { text-decoration: underline; }
   .app-main { overflow-x: hidden; }
   .card { overflow-x: auto; }
 
-  /* Dashboard banners: stack two-col layout and hide summary text */
+  /* Dashboard banners: stack two-col layout */
   .banner-two-col { grid-template-columns: 1fr !important; }
-  .banner-summary { display: none; }
+
+  /* Sessions table inside collapsible: keep it scrollable, never blow out page */
+  .table-scroll-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+
+  /* Clients table: sticky first + last columns */
+  .tbl-sticky-first { position: sticky !important; left: 0; z-index: 1; background: var(--paper) !important; }
+  .tbl-sticky-last  { position: sticky !important; right: 0; z-index: 1; background: var(--paper) !important; }
+  th.tbl-sticky-first, th.tbl-sticky-last { z-index: 2; background: var(--paper) !important; }
 }

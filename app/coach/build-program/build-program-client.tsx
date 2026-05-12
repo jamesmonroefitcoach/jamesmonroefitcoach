@@ -2321,11 +2321,11 @@ function SessionsThisWeekBanner({
         onClick={() => setOpen((v) => !v)}
         style={{
           width: "100%", background: "none", border: "none", padding: 0,
-          cursor: "pointer", display: "flex", alignItems: "center",
-          justifyContent: "space-between", fontFamily: "inherit",
+          cursor: "pointer", display: "flex", alignItems: "center", flexWrap: "wrap",
+          justifyContent: "space-between", gap: "0.3rem", fontFamily: "inherit", textAlign: "left",
         }}
       >
-        <h3 style={{ margin: 0, fontSize: "0.88rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
+        <h3 style={{ margin: 0, fontSize: "0.88rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", textAlign: "left" }}>
           {open ? "▾" : "▸"} Sessions This Week
         </h3>
         <span className="meta" style={{ fontSize: "0.76rem" }}>
@@ -2867,9 +2867,12 @@ function ExerciseCard({
               <span style={{ fontSize: "0.61rem", color: "var(--muted)", userSelect: "none" }}>All same</span>
             </label>
 
+            {/* Scroll wrapper so set grids never blow out the phone screen */}
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" as any }}>
+
             {it.same_format ? (
               /* ── Same-format grid: header row + single input row ── */
-              <div style={{ display: "grid", gridTemplateColumns: SF_COLS, gap: "0.35rem", alignItems: "center" }}>
+              <div style={{ display: "grid", gridTemplateColumns: SF_COLS, gap: "0.35rem", alignItems: "center", minWidth: "min-content" }}>
                 {/* Core headers */}
                 <span style={HDR}>Sets</span>
                 <span style={HDR}>Reps</span>
@@ -3009,6 +3012,8 @@ function ExerciseCard({
                 </div>
               </>
             )}
+
+            </div>{/* end scroll wrapper */}
           </div>
         );
       })()}

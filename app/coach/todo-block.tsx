@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { loadTodosFromDb, saveTodosToDb } from "./todo-actions";
 
 type Section = "today" | "soon" | "longer_term";
 const SECTIONS: Section[] = ["today", "soon", "longer_term"];
@@ -52,16 +53,46 @@ export default function TodoBlock() {
   const [overSection, setOverSection] = useState<Section | null>(null);
 
   useEffect(() => {
-    const { todos: t, backlog: b } = load();
-    setTodos(t);
-    setBacklog(b);
-    setReady(true);
+    async function init() {
+      try {
+        // Try Supabase first — syncs across devices
+        const { todos: dbTodos, backlog: dbBacklog } = await loadTodosFromDb();
+        if (dbTodos.length > 0 || dbBacklog.length > 0) {
+          const mapped: Todo[] = dbTodos.map((t) => ({
+            id: t.id, text: t.text,
+            section: t.section as Section,
+            done: t.done, doneAt: t.done_at,
+          }));
+          const mappedBacklog: BacklogEntry[] = dbBacklog.map((b) => ({
+            id: b.id, text: b.text, lastDoneAt: b.last_done_at,
+          }));
+          setTodos(mapped);
+          setBacklog(mappedBacklog);
+          persist({ todos: mapped, backlog: mappedBacklog });
+          setReady(true);
+          return;
+        }
+      } catch {
+        // Supabase unavailable — fall through to localStorage
+      }
+      // Fall back to localStorage (offline / no DB)
+      const { todos: t, backlog: b } = load();
+      setTodos(t);
+      setBacklog(b);
+      setReady(true);
+    }
+    init();
   }, []);
 
   function commit(nextTodos: Todo[], nextBacklog: BacklogEntry[]) {
     setTodos(nextTodos);
     setBacklog(nextBacklog);
     persist({ todos: nextTodos, backlog: nextBacklog });
+    // Background sync to Supabase so todos appear on all devices
+    saveTodosToDb(
+      nextTodos.map((t) => ({ id: t.id, text: t.text, section: t.section, done: t.done, done_at: t.doneAt })),
+      nextBacklog.map((b) => ({ id: b.id, text: b.text, last_done_at: b.lastDoneAt })),
+    ).catch(() => { /* silent — localStorage already updated */ });
   }
 
   function addItem(section: Section) {

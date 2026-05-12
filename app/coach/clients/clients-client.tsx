@@ -37,15 +37,16 @@ const BLANK_PROSPECT: ProspectInput = {
 type SortKey = "name" | "tier" | "rate" | "monthly" | "completed" | "scheduled" | "last" | "next" | "owed";
 
 function SortTh({
-  label, col, current, dir, onClick, style,
+  label, col, current, dir, onClick, style, className,
 }: {
   label: React.ReactNode; col: SortKey; current: SortKey; dir: "asc" | "desc";
-  onClick: (c: SortKey) => void; style?: React.CSSProperties;
+  onClick: (c: SortKey) => void; style?: React.CSSProperties; className?: string;
 }) {
   const active = current === col;
   return (
     <th
       onClick={() => onClick(col)}
+      className={className}
       style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", ...style }}
     >
       <span style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
@@ -200,8 +201,8 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
 
   return (
     <tr>
-      {/* Client */}
-      <td>
+      {/* Client — sticky left */}
+      <td className="tbl-sticky-first">
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <button
             className="btn btn-ghost"
@@ -302,8 +303,8 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
       </td>
       {/* Owed */}
       <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
-      {/* Actions */}
-      <td>
+      {/* Actions — sticky right */}
+      <td className="tbl-sticky-last">
         <Link href={`/coach/clients/${c.id}`} style={{ fontSize: "0.78rem", whiteSpace: "nowrap" }}>→</Link>
       </td>
     </tr>
@@ -332,7 +333,17 @@ function InactiveClientRow({ c }: { c: ClientRow }) {
 
   return (
     <tr style={{ opacity: saving ? 0.6 : 1 }}>
-      <td><strong>{c.full_name}</strong></td>
+      <td className="tbl-sticky-first">
+        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <Link
+            href={`/coach/clients/${c.id}`}
+            className="btn btn-ghost"
+            title="Open profile"
+            style={{ fontSize: "1rem", padding: "0.1rem 0.4rem", lineHeight: 1, flexShrink: 0 }}
+          >✎</Link>
+          <strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong>
+        </div>
+      </td>
       <td>
         <select
           className="select"
@@ -353,7 +364,9 @@ function InactiveClientRow({ c }: { c: ClientRow }) {
         {c.injuries ? <span style={{ color: "var(--red)", fontSize: "0.78rem" }}>{c.injuries}</span> : "—"}
       </td>
       <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
-      <td><Link href={`/coach/clients/${c.id}`}>open →</Link></td>
+      <td className="tbl-sticky-last">
+        <Link href={`/coach/clients/${c.id}`} style={{ fontSize: "0.78rem", whiteSpace: "nowrap" }}>→</Link>
+      </td>
     </tr>
   );
 }
@@ -441,7 +454,7 @@ function ProspectRow({ p, onDelete, onSave }: {
 
   return (
     <tr>
-      <td><strong>{p.full_name}</strong></td>
+      <td className="tbl-sticky-first"><strong>{p.full_name}</strong></td>
       <td>
         <div className="meta" style={{ fontSize: "0.82rem" }}>{p.phone ?? "—"}</div>
         <div className="meta" style={{ fontSize: "0.82rem" }}>{p.email ?? "—"}</div>
@@ -462,7 +475,7 @@ function ProspectRow({ p, onDelete, onSave }: {
         ) : <span className="meta" style={{ color: "var(--red)", fontSize: "0.82rem" }}>never</span>}
       </td>
       <td className="meta" style={{ maxWidth: 240, fontSize: "0.8rem" }}>{p.notes ?? "—"}</td>
-      <td>
+      <td className="tbl-sticky-last">
         <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
           <button
             className="btn btn-ghost"
@@ -705,7 +718,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           <table className="table">
             <thead>
               <tr>
-                <SortTh label="Client"         col="name"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTh label="Client"         col="name"      current={sortKey} dir={sortDir} onClick={toggleSort} className="tbl-sticky-first" />
                 <th>Goal</th>
                 <SortTh label="Tier"           col="tier"      current={sortKey} dir={sortDir} onClick={toggleSort} />
                 <SortTh label="Session Rate"   col="rate"      current={sortKey} dir={sortDir} onClick={toggleSort} />
@@ -716,7 +729,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
                 <SortTh label="Next Session"   col="next"      current={sortKey} dir={sortDir} onClick={toggleSort} />
                 <th>Program</th>
                 <SortTh label="Owed"           col="owed"      current={sortKey} dir={sortDir} onClick={toggleSort} />
-                <th></th>
+                <th className="tbl-sticky-last"></th>
               </tr>
             </thead>
             <tbody>
@@ -744,13 +757,13 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
             <table className="table">
               <thead>
                 <tr>
-                  <th>Client</th>
+                  <th className="tbl-sticky-first">Client</th>
                   <th>Status</th>
                   <th>Goal</th>
                   <th>Last session</th>
                   <th>Injuries / notes</th>
                   <th>Owed</th>
-                  <th></th>
+                  <th className="tbl-sticky-last"></th>
                 </tr>
               </thead>
               <tbody>
@@ -785,12 +798,12 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
             <table className="table">
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th className="tbl-sticky-first">Name</th>
                   <th>Contact</th>
                   <th>Where met / Connection</th>
                   <th>Last follow-up</th>
                   <th>Notes</th>
-                  <th></th>
+                  <th className="tbl-sticky-last"></th>
                 </tr>
               </thead>
               <tbody>

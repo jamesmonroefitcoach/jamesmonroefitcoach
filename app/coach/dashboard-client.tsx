@@ -434,7 +434,8 @@ export default function DashboardClient({
             {displayAppts.length === 0 ? (
               <p className="meta" style={{ marginTop: "0.5rem" }}>No sessions booked for this week.</p>
             ) : (
-              <table className="table" style={{ marginTop: "0.5rem" }}>
+              <div className="table-scroll-wrap" style={{ marginTop: "0.5rem" }}>
+              <table className="table" style={{ minWidth: 540 }}>
                 <thead>
                   <tr><th>When</th><th>Client</th><th>Rate</th><th>Status</th><th>Program</th></tr>
                 </thead>
@@ -493,6 +494,7 @@ export default function DashboardClient({
                   })}
                 </tbody>
               </table>
+              </div>
             )}
             </details>
           </GroupShell>
