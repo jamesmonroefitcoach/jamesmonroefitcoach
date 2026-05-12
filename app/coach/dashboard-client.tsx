@@ -411,9 +411,9 @@ export default function DashboardClient({
             {/* Stat tiles */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
               <div className="stat">
-                <div className="stat-label">Hours</div>
+                <div className="stat-label">Paid Hours</div>
                 <div className="stat-value">{Math.round(hours)}</div>
-                <div className="stat-sub">{displayAppts.length} sessions</div>
+                <div className="stat-sub">{displayAppts.filter((a) => a.session_type === "session" && a.status !== "cancelled" && a.status !== "no_show").length} sessions</div>
               </div>
               <div className="stat">
                 <div className="stat-label">Revenue</div>
