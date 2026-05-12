@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listClients, listAppointmentsForClient, listAppointmentsForWeek, startOfWeek } from "@/lib/data";
+import { listClients, listAppointmentsForClient, listAppointmentsForWeek, listMovements, startOfWeek } from "@/lib/data";
 import BuildProgramClient from "./build-program-client";
 import { pastProgramsForClient, type ProgramKind } from "@/lib/programs";
 
@@ -23,7 +23,10 @@ export default async function BuildProgramPage({
   if (user.role !== "coach") redirect("/");
 
   const sp = await searchParams;
-  const clients = await listClients(user.id);
+  const [clients, dbMovements] = await Promise.all([
+    listClients(user.id),
+    listMovements(),
+  ]);
 
   const initialClientId = sp.client ?? clients[0]?.id ?? "";
   const initialApptId = sp.appt ?? "";
@@ -110,6 +113,7 @@ export default async function BuildProgramPage({
         initialType={initialType}
         weekSessions={weekSessions}
         clientProgramSummary={clientProgramSummary}
+        dbMovements={dbMovements}
       />
     </main>
   );

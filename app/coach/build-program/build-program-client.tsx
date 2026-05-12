@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { ClientRow } from "@/lib/data";
+import type { ClientRow, MovementRow } from "@/lib/data";
 import {
   CATEGORY_LABELS,
   MOVEMENT_LIBRARY,
@@ -176,7 +176,8 @@ export default function BuildProgramClient({
   initialStartsAt = "",
   initialType = "in_gym",
   weekSessions = [],
-  clientProgramSummary = []
+  clientProgramSummary = [],
+  dbMovements = [],
 }: {
   clients: ClientRow[];
   initialClientId?: string;
@@ -187,6 +188,7 @@ export default function BuildProgramClient({
   initialType?: ProgramKind;
   weekSessions?: WeekSession[];
   clientProgramSummary?: ClientProgramItem[];
+  dbMovements?: MovementRow[];
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(initialClientId ?? clients[0]?.id ?? "");
@@ -346,28 +348,53 @@ export default function BuildProgramClient({
   // drag state
   const [drag, setDrag] = useState<DragPayload | null>(null);
 
+  /** Convert a MovementRow (from Supabase) into the Movement shape used by ProgramItems */
+  function dbMovToMovement(m: MovementRow): Movement {
+    return {
+      id: m.id,
+      name: m.name,
+      category: m.category as Category,
+      subcategory: m.subcategory ?? undefined,
+      muscles: m.muscles,
+      equipment_list: m.equipment_list as Equipment[],
+      equipment_specifics: m.equipment_specifics ?? undefined,
+      cues: m.cues ?? undefined,
+      demo_url: m.demo_url ?? undefined,
+      is_core: m.is_core,
+    };
+  }
+
+  /** Exercises from Supabase that belong to a given hierarchy node (matched by subcategory) */
+  function nodeDbExercises(nodeLabel: string): MovementRow[] {
+    const key = nodeLabel.toLowerCase();
+    return dbMovements.filter((m) => (m.subcategory ?? "").toLowerCase() === key);
+  }
+
   const filteredHierarchy = useMemo(() => {
     const t = searchTerm.trim().toLowerCase();
     if (!t) return LIBRARY_HIERARCHY;
+    // Also keep nodes that have matching DB exercises
+    const dbMatchesNode = (label: string) =>
+      dbMovements.some((m) => (m.subcategory ?? "").toLowerCase() === label.toLowerCase() && m.name.toLowerCase().includes(t));
     return LIBRARY_HIERARCHY.map((g) => ({
       ...g,
       nodes: g.nodes.reduce<LibraryNode[]>((acc, node) => {
         if (node.children?.length) {
           const matchedChildren = node.children.filter(
-            (c) => c.label.toLowerCase().includes(t) || c.description?.toLowerCase().includes(t)
+            (c) => c.label.toLowerCase().includes(t) || c.description?.toLowerCase().includes(t) || dbMatchesNode(c.label)
           );
           if (matchedChildren.length) {
             acc.push({ ...node, children: matchedChildren });
           } else if (node.label.toLowerCase().includes(t) || node.description?.toLowerCase().includes(t)) {
             acc.push(node);
           }
-        } else if (node.label.toLowerCase().includes(t) || node.description?.toLowerCase().includes(t)) {
+        } else if (node.label.toLowerCase().includes(t) || node.description?.toLowerCase().includes(t) || dbMatchesNode(node.label)) {
           acc.push(node);
         }
         return acc;
       }, []),
     })).filter((g) => g.nodes.length > 0);
-  }, [searchTerm]);
+  }, [searchTerm, dbMovements]);
 
   // Maps each leaf id → the effective movement id (accounts for leafToMovement MOVEMENT_LIBRARY lookup)
   const leafMoveIdMap = useMemo(() => {
@@ -393,15 +420,17 @@ export default function BuildProgramClient({
     ALL_CATEGORIES.forEach((c) => (usedByCat[c] = new Set()));
     days.forEach((d) => d.items.forEach((it) => usedByCat[it.movement.category].add(it.movement.id)));
     const totals: Record<Category, number> = {} as any;
-    ALL_CATEGORIES.forEach((c) => (totals[c] = MOVEMENT_LIBRARY.filter((m) => m.category === c).length));
+    // Use DB movements when available, fall back to hardcoded library
+    const libForCoverage = dbMovements.length > 0 ? dbMovements : MOVEMENT_LIBRARY;
+    ALL_CATEGORIES.forEach((c) => (totals[c] = libForCoverage.filter((m) => m.category === c).length));
     return ALL_CATEGORIES.map((c) => ({
       category: c,
       used: usedByCat[c].size,
       total: totals[c],
-      core_used: MOVEMENT_LIBRARY.filter((m) => m.category === c && m.is_core && usedByCat[c].has(m.id)).length,
-      core_total: MOVEMENT_LIBRARY.filter((m) => m.category === c && m.is_core).length
+      core_used: libForCoverage.filter((m) => m.category === c && m.is_core && usedByCat[c].has(m.id)).length,
+      core_total: libForCoverage.filter((m) => m.category === c && m.is_core).length
     }));
-  }, [days]);
+  }, [days, dbMovements]);
 
   const uncoveredMovements = useMemo(() =>
     hierarchyLeaves().filter((l) => !inProgramIds.has(leafMoveIdMap.get(l.id) ?? l.id)),
@@ -1311,10 +1340,12 @@ export default function BuildProgramClient({
             <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
               {filteredHierarchy.map((group) => {
             const groupOpen = openGroups.has(group.id) || !!searchTerm;
+            const nodeHasDbInProgram = (label: string) =>
+              nodeDbExercises(label).some((m) => inProgramIds.has(m.id));
             const groupHasCovered = group.nodes.some((node) =>
               node.children?.length
-                ? node.children.some((c) => inProgramIds.has(leafMoveIdMap.get(c.id) ?? c.id))
-                : inProgramIds.has(leafMoveIdMap.get(node.id) ?? node.id)
+                ? node.children.some((c) => nodeHasDbInProgram(c.label) || inProgramIds.has(leafMoveIdMap.get(c.id) ?? c.id))
+                : nodeHasDbInProgram(node.label) || inProgramIds.has(leafMoveIdMap.get(node.id) ?? node.id)
             );
             return (
               <div key={group.id} style={{ borderBottom: "1px solid var(--line)", paddingBottom: "0.25rem", marginBottom: "0.1rem" }}>
@@ -1341,21 +1372,52 @@ export default function BuildProgramClient({
                       const nodeOpen = openNodes.has(node.id) || !!searchTerm;
                       const nodeMoveId = leafMoveIdMap.get(node.id) ?? node.id;
                       const nodeInProgram = hasChildren
-                        ? node.children!.some((c) => inProgramIds.has(leafMoveIdMap.get(c.id) ?? c.id))
-                        : inProgramIds.has(nodeMoveId);
+                        ? node.children!.some((c) => nodeHasDbInProgram(c.label) || inProgramIds.has(leafMoveIdMap.get(c.id) ?? c.id))
+                        : nodeHasDbInProgram(node.label) || inProgramIds.has(nodeMoveId);
 
                       if (!hasChildren) {
-                        // Leaf node — checkbox + day selector
+                        // Leaf node — show DB exercises if any, else template leaf
                         const leaf: LibraryLeaf = { id: node.id, label: node.label, description: node.description, category: node.category, is_core: node.is_core };
+                        const exercises = nodeDbExercises(node.label).filter((m) =>
+                          !searchTerm.trim() || m.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
+                        );
                         return (
-                          <LibraryLeafRow
-                            key={node.id}
-                            leaf={leaf}
-                            inProgram={nodeInProgram}
-                            onAdd={() => addLeafToProgram(leaf, activeDayUid)}
-                            onDragStart={(e) => onDragStartLib(leafToMovement(leaf), e)}
-                            onDragEnd={() => setDrag(null)}
-                          />
+                          <div key={node.id} style={{ marginBottom: "0.12rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.28rem 0" }}>
+                              <span style={{ fontSize: "0.62rem", color: "var(--muted)", width: 10, flexShrink: 0 }}>
+                                {exercises.length > 0 ? "▾" : "—"}
+                              </span>
+                              <span style={{ fontWeight: 600, fontSize: "0.83rem", flex: 1 }}>{node.label}</span>
+                              {exercises.length > 0 && (
+                                <span style={{ fontSize: "0.63rem", color: "var(--muted)", fontWeight: 400 }}>{exercises.length}</span>
+                              )}
+                              {nodeInProgram && <span style={{ color: "var(--sage)", fontSize: "0.75rem" }}>✓</span>}
+                            </div>
+                            {exercises.length > 0 ? (
+                              <div style={{ paddingLeft: "0.85rem" }}>
+                                {exercises.map((m) => (
+                                  <DbExerciseRow
+                                    key={m.id}
+                                    m={m}
+                                    inProgram={inProgramIds.has(m.id)}
+                                    onAdd={() => addMovementToDay(activeDayUid, dbMovToMovement(m), false)}
+                                    onDragStart={(e) => onDragStartLib(dbMovToMovement(m), e)}
+                                    onDragEnd={() => setDrag(null)}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ paddingLeft: "0.5rem" }}>
+                                <LibraryLeafRow
+                                  leaf={leaf}
+                                  inProgram={nodeInProgram}
+                                  onAdd={() => addLeafToProgram(leaf, activeDayUid)}
+                                  onDragStart={(e) => onDragStartLib(leafToMovement(leaf), e)}
+                                  onDragEnd={() => setDrag(null)}
+                                />
+                              </div>
+                            )}
+                          </div>
                         );
                       }
 
@@ -1380,16 +1442,49 @@ export default function BuildProgramClient({
                           {nodeOpen ? (
                             <div style={{ paddingLeft: "0.6rem" }}>
                               {node.children!.map((child) => {
-                                const childInProgram = inProgramIds.has(leafMoveIdMap.get(child.id) ?? child.id);
+                                const childLeaf = child;
+                                const childExercises = nodeDbExercises(child.label).filter((m) =>
+                                  !searchTerm.trim() || m.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
+                                );
+                                const childInProgram = childExercises.some((m) => inProgramIds.has(m.id))
+                                  || inProgramIds.has(leafMoveIdMap.get(child.id) ?? child.id);
                                 return (
-                                  <LibraryLeafRow
-                                    key={child.id}
-                                    leaf={child}
-                                    inProgram={childInProgram}
-                                    onAdd={() => addLeafToProgram(child, activeDayUid)}
-                                    onDragStart={(e) => onDragStartLib(leafToMovement(child), e)}
-                                    onDragEnd={() => setDrag(null)}
-                                  />
+                                  <div key={child.id} style={{ marginBottom: "0.1rem" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.24rem 0" }}>
+                                      <span style={{ fontSize: "0.6rem", color: "var(--muted)", width: 10, flexShrink: 0 }}>
+                                        {childExercises.length > 0 ? "▾" : "—"}
+                                      </span>
+                                      <span style={{ fontWeight: 600, fontSize: "0.80rem", flex: 1 }}>{child.label}</span>
+                                      {childExercises.length > 0 && (
+                                        <span style={{ fontSize: "0.61rem", color: "var(--muted)" }}>{childExercises.length}</span>
+                                      )}
+                                      {childInProgram && <span style={{ color: "var(--sage)", fontSize: "0.72rem" }}>✓</span>}
+                                    </div>
+                                    {childExercises.length > 0 ? (
+                                      <div style={{ paddingLeft: "0.85rem" }}>
+                                        {childExercises.map((m) => (
+                                          <DbExerciseRow
+                                            key={m.id}
+                                            m={m}
+                                            inProgram={inProgramIds.has(m.id)}
+                                            onAdd={() => addMovementToDay(activeDayUid, dbMovToMovement(m), false)}
+                                            onDragStart={(e) => onDragStartLib(dbMovToMovement(m), e)}
+                                            onDragEnd={() => setDrag(null)}
+                                          />
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div style={{ paddingLeft: "0.5rem" }}>
+                                        <LibraryLeafRow
+                                          leaf={childLeaf}
+                                          inProgram={childInProgram}
+                                          onAdd={() => addLeafToProgram(childLeaf, activeDayUid)}
+                                          onDragStart={(e) => onDragStartLib(leafToMovement(childLeaf), e)}
+                                          onDragEnd={() => setDrag(null)}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
                                 );
                               })}
                             </div>
@@ -3074,6 +3169,59 @@ function CoverageHierarchy({
 }
 
 // ─── Library leaf row: add btn + label + in-program indicator ─────────────
+/** A draggable row for a real named exercise from the Supabase movements table. */
+function DbExerciseRow({
+  m,
+  inProgram,
+  onAdd,
+  onDragStart,
+  onDragEnd,
+}: {
+  m: MovementRow;
+  inProgram: boolean;
+  onAdd: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}) {
+  const equipLabel = (m.equipment_list ?? [])
+    .map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e)
+    .join(", ");
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      style={{
+        padding: "0.22rem 0.4rem",
+        borderRadius: 3,
+        background: inProgram ? "rgba(168,61,43,0.05)" : undefined,
+        marginBottom: "0.1rem",
+        cursor: "grab",
+      }}
+      title={equipLabel || undefined}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.4rem" }}>
+        <button
+          type="button"
+          className="btn btn-ghost no-print"
+          style={{ padding: "0.04rem 0.32rem", fontSize: "0.72rem", flexShrink: 0, color: "var(--muted)" }}
+          onClick={(e) => { e.stopPropagation(); onAdd(); }}
+          title="Add to active day"
+        >+</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 500, fontSize: "0.80rem" }}>{m.name}</div>
+          {equipLabel && (
+            <div className="meta" style={{ fontSize: "0.66rem" }}>{equipLabel}{m.equipment_specifics ? ` · ${m.equipment_specifics}` : ""}</div>
+          )}
+        </div>
+        {inProgram && (
+          <span style={{ flexShrink: 0, marginTop: "0.15rem", color: "var(--rust)", fontSize: "0.8rem", lineHeight: 1 }}>✓</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LibraryLeafRow({
   leaf,
   inProgram,
