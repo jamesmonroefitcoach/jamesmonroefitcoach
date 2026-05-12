@@ -258,7 +258,13 @@ export default function DashboardClient({
 
   const noSessionClients: NoSessionClient[] = activeClients
     .filter((c) => !sessionClientIds.has(c.id))
-    .map((c) => ({ id: c.id, name: c.full_name }));
+    .map((c) => {
+      const monthly = c.regular_frequency ? parseFloat(c.regular_frequency) : null;
+      const perWeek = (monthly != null && !isNaN(monthly))
+        ? `~${Math.max(1, Math.round(monthly / 4.33))}×/wk`
+        : null;
+      return { id: c.id, name: c.full_name, perWeek };
+    });
 
   // ── Derived month data ───────────────────────────────────────────────────
   const monthStats = useMemo(() => {
@@ -336,9 +342,23 @@ export default function DashboardClient({
               noSessions={noSessionClients}
             />
 
-            {/* Sessions table */}
+            {/* Sessions table — collapsible */}
+            <details style={{ marginTop: "0.75rem" }}>
+              <summary style={{
+                cursor: "pointer", userSelect: "none",
+                fontSize: "0.78rem", fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: "0.06em",
+                color: "var(--muted)", padding: "0.3rem 0",
+                listStyle: "none", display: "flex", alignItems: "center", gap: "0.4rem",
+              }}>
+                <span style={{ fontSize: "0.7rem" }}>▸</span>
+                All Sessions Summary
+                <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "0.74rem" }}>
+                  ({displayAppts.filter(a => a.session_type === "session" && a.status !== "cancelled").length} sessions)
+                </span>
+              </summary>
             {displayAppts.length === 0 ? (
-              <p className="meta">No sessions booked for this week.</p>
+              <p className="meta" style={{ marginTop: "0.5rem" }}>No sessions booked for this week.</p>
             ) : (
               <table className="table" style={{ marginTop: "0.5rem" }}>
                 <thead>
@@ -400,6 +420,7 @@ export default function DashboardClient({
                 </tbody>
               </table>
             )}
+            </details>
           </GroupShell>
 
           {/* Month group */}

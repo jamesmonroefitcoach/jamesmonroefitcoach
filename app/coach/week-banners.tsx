@@ -22,6 +22,7 @@ export type WeekProgramItem = {
 export type NoSessionClient = {
   id: string;
   name: string;
+  perWeek?: string | null;
 };
 
 function fmtSessionTime(iso: string) {
@@ -259,9 +260,15 @@ function NoSessionsBanner({ clients }: { clients: NoSessionClient[] }) {
                 fontSize: "0.78rem", fontWeight: 500,
                 textDecoration: "none", color: "var(--fg)",
                 whiteSpace: "nowrap",
+                display: "inline-flex", alignItems: "center", gap: "0.3rem",
               }}
             >
               {c.name}
+              {c.perWeek && (
+                <span style={{ fontSize: "0.66rem", color: "var(--muted)", fontWeight: 400 }}>
+                  {c.perWeek}
+                </span>
+              )}
             </Link>
           ))}
         </div>
