@@ -307,6 +307,23 @@ export async function denyChangeRequest(apptId: string): Promise<Result> {
   return { ok: true };
 }
 
+export async function markApptPaid(apptId: string, paid: boolean): Promise<Result> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase
+    .from("appointments")
+    .update({ paid, updated_at: new Date().toISOString() })
+    .eq("id", apptId)
+    .eq("coach_id", me.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/coach/schedule");
+  revalidatePath("/coach");
+  revalidatePath("/coach/clients", "layout");
+  return { ok: true };
+}
+
 export async function deleteAppointment(apptId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };

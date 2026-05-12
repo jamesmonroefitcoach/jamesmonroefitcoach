@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
 import { pastProgramsForClient } from "@/lib/programs";
-import { fetchWeekAppts } from "@/app/coach/schedule/actions";
+import { fetchWeekAppts, markApptPaid } from "@/app/coach/schedule/actions";
 import WeekBanners from "./week-banners";
 import TodoBlock from "./todo-block";
 import type { WeekSessionItem, WeekProgramItem, NoSessionClient } from "./week-banners";
@@ -70,7 +70,6 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
         const t = new Date(a.starts_at).getTime();
         return t >= b.start.getTime() && t < b.end.getTime()
           && a.session_type === "session"
-          && a.status !== "cancelled"
           && a.status !== "no_show";
       });
       const bookings = appts.reduce((s, a) => s + (a.rate ?? 0), 0);
@@ -298,6 +297,16 @@ export default function DashboardClient({
     });
   }
 
+  function handleMarkPaid(apptId: string, paid: boolean) {
+    // Optimistic update so the checkbox feels instant
+    setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? { ...a, paid } : a));
+    // Fire and forget — Supabase + schedule revalidated in background
+    markApptPaid(apptId, paid).catch(() => {
+      // Revert on failure
+      setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? { ...a, paid: !paid } : a));
+    });
+  }
+
   // ── Derived week data ────────────────────────────────────────────────────
   const hours = displayAppts.reduce((acc, a) => {
     return acc + (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 3_600_000;
@@ -343,7 +352,7 @@ export default function DashboardClient({
   // ── Derived month data ───────────────────────────────────────────────────
   const monthStats = useMemo(() => {
     const sessions = monthAppts.filter(
-      (a) => a.session_type === "session" && a.status !== "cancelled" && a.status !== "no_show"
+      (a) => a.session_type === "session" && a.status !== "no_show"
     );
     return {
       bookings: sessions.reduce((s, a) => s + (a.rate ?? 0), 0),
@@ -428,16 +437,16 @@ export default function DashboardClient({
                 <span style={{ fontSize: "0.7rem" }}>▸</span>
                 All Sessions Summary
                 <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "0.74rem" }}>
-                  ({displayAppts.filter(a => a.session_type === "session" && a.status !== "cancelled").length} sessions)
+                  ({displayAppts.filter(a => a.session_type === "session").length} sessions)
                 </span>
               </summary>
             {displayAppts.length === 0 ? (
               <p className="meta" style={{ marginTop: "0.5rem" }}>No sessions booked for this week.</p>
             ) : (
               <div className="table-scroll-wrap" style={{ marginTop: "0.5rem" }}>
-              <table className="table" style={{ minWidth: 540 }}>
+              <table className="table" style={{ minWidth: 600 }}>
                 <thead>
-                  <tr><th>When</th><th>Client</th><th>Rate</th><th>Status</th><th>Program</th></tr>
+                  <tr><th>When</th><th>Client</th><th>Rate</th><th>Paid</th><th>Status</th><th>Program</th></tr>
                 </thead>
                 <tbody>
                   {displayAppts.map((a) => {
@@ -453,6 +462,15 @@ export default function DashboardClient({
                         </td>
                         <td>{a.client_name ?? <span className="meta">{a.personal_label ?? "—"}</span>}</td>
                         <td>{fmtMoney(a.rate)}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={a.paid}
+                            onChange={(e) => handleMarkPaid(a.id, e.target.checked)}
+                            style={{ cursor: "pointer", width: 15, height: 15, accentColor: "var(--sage)" }}
+                            title={a.paid ? "Marked paid — click to unmark" : "Mark as paid"}
+                          />
+                        </td>
                         <td>
                           <div className="meta" style={{ fontSize: "0.7rem", marginBottom: "0.25rem" }}>
                             {sessionDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {fmtDaysAway(sessionDate)}

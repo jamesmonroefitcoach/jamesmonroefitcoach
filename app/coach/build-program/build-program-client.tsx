@@ -236,9 +236,7 @@ export default function BuildProgramClient({
 
   // library controls
   const [searchTerm, setSearchTerm] = useState("");
-  const [openGroups, setOpenGroups] = useState<Set<string>>(
-    new Set(LIBRARY_HIERARCHY.map((g) => g.id))  // all groups open by default
-  );
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set()); // all groups collapsed by default
   const [openNodes, setOpenNodes] = useState<Set<string>>(new Set()); // child-nodes collapsed
   const [showCoverage, setShowCoverage] = useState(true);
   const [libOpen, setLibOpen] = useState(true);
