@@ -132,8 +132,22 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
   if (editing) {
     return (
       <tr style={{ background: "rgba(168,61,43,0.03)" }}>
-        {/* Client — read-only */}
-        <td><strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong></td>
+        {/* Client — save/cancel on left, name beside them */}
+        <td>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", flexShrink: 0 }}>
+              <button className="btn btn-primary" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                onClick={saveEdit} disabled={saving}>
+                {saving ? "…" : "✓"}
+              </button>
+              <button className="btn btn-ghost" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                onClick={() => setEditing(false)} disabled={saving}>
+                ✕
+              </button>
+            </div>
+            <strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong>
+          </div>
+        </td>
         {/* Goal — read-only */}
         <td className="meta" style={{ fontSize: "0.82rem", maxWidth: 160 }}>{c.goals ?? "—"}</td>
         {/* Tier */}
@@ -170,19 +184,8 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
           {atHomeProg ? atHomeProg.name : <span style={{ color: "var(--muted)" }}>No program</span>}
         </td>
         <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
-        {/* Actions */}
-        <td>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-            <button className="btn btn-primary" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
-              onClick={saveEdit} disabled={saving}>
-              {saving ? "…" : "✓ Save"}
-            </button>
-            <button className="btn btn-ghost" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
-              onClick={() => setEditing(false)} disabled={saving}>
-              ✕
-            </button>
-          </div>
-        </td>
+        {/* Actions — empty while editing */}
+        <td></td>
       </tr>
     );
   }
