@@ -2349,25 +2349,37 @@ function VariationDropdown({ value, onChange }: {
   onChange: (v: Variation[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const selected = value[0] ?? null;
   const label = selected ? VARIATION_LABELS[selected] : "Spec";
 
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", close, { capture: true });
+  }, [open]);
+
+  function openDropdown() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 2, left: rect.left });
+    }
+    setOpen((o) => !o);
+  }
+
   function selectV(v: Variation) {
-    // Toggle: clicking the active option clears it; clicking a new one replaces
     onChange(selected === v ? [] : [v]);
     setOpen(false);
   }
 
   return (
-    <div
-      style={{ position: "relative", display: "inline-flex" }}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
-      }}
-    >
+    <div style={{ position: "relative", display: "inline-flex" }}>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={openDropdown}
         style={{
           fontSize: "0.67rem",
           padding: "0.16rem 0.28rem",
@@ -2390,16 +2402,16 @@ function VariationDropdown({ value, onChange }: {
       </button>
       {open && (
         <div style={{
-          position: "absolute",
-          top: "100%",
-          left: 0,
-          zIndex: 100,
+          position: "fixed",
+          top: dropPos?.top ?? 0,
+          left: dropPos?.left ?? 0,
+          zIndex: 1000,
           background: "var(--paper)",
           border: "1px solid var(--line)",
           borderRadius: 4,
           padding: "0.25rem 0.35rem",
-          minWidth: 108,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+          minWidth: 120,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.14)",
         }}>
           {VARIATIONS.map((v) => (
             <button
@@ -2410,7 +2422,7 @@ function VariationDropdown({ value, onChange }: {
               style={{
                 display: "flex", alignItems: "center", gap: "0.35rem", width: "100%",
                 border: "none", cursor: "pointer",
-                fontSize: "0.72rem", padding: "0.15rem 0.2rem", borderRadius: 3,
+                fontSize: "0.72rem", padding: "0.22rem 0.3rem", borderRadius: 3,
                 fontFamily: "inherit", textAlign: "left",
                 color: selected === v ? VARIATION_TEXT[v] : undefined,
                 fontWeight: selected === v ? 700 : undefined,
@@ -2495,14 +2507,35 @@ function AddOptionalFieldButton({
   onAdd: (f: OptionalField) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState<{ top: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const available = ALL_OPTIONAL_FIELDS.filter((f) => !activeFields.includes(f));
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", close, { capture: true });
+  }, [open]);
+
   if (available.length === 0) return null;
+
+  function openDropdown() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      // anchor right edge of dropdown to right edge of button
+      setDropPos({ top: rect.bottom + 2, right: window.innerWidth - rect.right });
+    }
+    setOpen((o) => !o);
+  }
+
   return (
     <div style={{ position: "relative", display: "inline-flex" }}>
       <button
+        ref={btnRef}
         type="button"
         title="Add optional field"
-        onClick={() => setOpen((o) => !o)}
+        onClick={openDropdown}
         style={{
           background: "transparent",
           border: "1px solid var(--line)",
@@ -2518,12 +2551,14 @@ function AddOptionalFieldButton({
       {open && (
         <div
           style={{
-            position: "absolute", top: "100%", right: 0, zIndex: 30,
+            position: "fixed",
+            top: dropPos?.top ?? 0,
+            right: dropPos?.right ?? 0,
+            zIndex: 1000,
             background: "var(--paper)", border: "1px solid var(--line)",
             borderRadius: 3, padding: "0.2rem", minWidth: 110,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.10)", marginTop: 2,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
           }}
-          onMouseLeave={() => setOpen(false)}
         >
           {available.map((f) => (
             <button
@@ -2813,10 +2848,8 @@ function ExerciseCard({
                     {OPTIONAL_FIELD_CONFIG[f].shortLabel}
                   </span>
                 ))}
-                {/* Add-field button lives in header row */}
-                <span style={{ alignSelf: "center", textAlign: "center" }}>
-                  <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
-                </span>
+                {/* placeholder to keep column count consistent with data row */}
+                <span />
                 {/* Core inputs */}
                 <input className="input" style={INP} type="number" min={1} max={20}
                   value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 0 })} />
@@ -2884,10 +2917,8 @@ function ExerciseCard({
                       {OPTIONAL_FIELD_CONFIG[f].shortLabel}
                     </span>
                   ))}
-                  {/* Add-field button */}
-                  <span style={{ alignSelf: "center", textAlign: "center" }}>
-                    <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
-                  </span>
+                  {/* placeholder to keep column count consistent with set rows */}
+                  <span />
                   {/* Set rows */}
                   {it.set_rows.map((row, si) => (
                     <>
