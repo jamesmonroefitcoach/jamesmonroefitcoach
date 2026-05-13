@@ -2806,7 +2806,7 @@ function PlanExerciseBlock({
         const restLabel = (s: number | undefined) => fmtRest(s) ?? "—";
 
         return (
-          <div style={{ marginBottom: "0.6rem", overflowX: "auto" }}>
+          <div className="plan-set-grid" style={{ marginBottom: "0.6rem", overflowX: "auto" }}>
             <div style={{ minWidth: "min-content" }}>
               {/* Header row */}
               <div style={{ display: "grid", gridTemplateColumns: cols, gap: "0.4rem 0.6rem", alignItems: "end" }}>

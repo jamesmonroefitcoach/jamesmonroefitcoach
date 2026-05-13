@@ -291,6 +291,12 @@ th.tbl-sticky-last {
 
 /* Print — used for floor printouts of programs */
 @media print {
+  /* Force landscape so the wide per-set grid has room to breathe. */
+  @page {
+    size: letter landscape;
+    margin: 0.4in;
+  }
+
   .sidebar, .no-print { display: none !important; }
   body { background: #fff; }
   .app-main { padding: 0; }
@@ -299,10 +305,21 @@ th.tbl-sticky-last {
 
   /* ── Plan view print sheet ────────────────────────────────────────────
      Mirrors the on-screen published plan so the coach can carry it to the
-     floor. Inputs become underlined blanks for handwritten weights/reps.   */
+     floor. Inputs become underlined blanks for handwritten weights/reps.
+     The whole plan-print container is shrunk via zoom so the wide per-set
+     grid fits the page without horizontal overflow. zoom is honoured by
+     print engines (Chromium/WebKit/Firefox) and unlike transform it also
+     affects layout, so pagination remains correct.                       */
   .plan-print {
     padding-top: 0 !important;
     gap: 0.4rem !important;
+    zoom: 0.78;
+  }
+  /* Set-grid wrapper: drop the on-screen horizontal scroll for print so
+     the table renders inline without a scrollbar marker, and any overflow
+     past the page edge wraps naturally.                                  */
+  .plan-set-grid {
+    overflow: visible !important;
   }
   .plan-print .card,
   .plan-print .day-card {
