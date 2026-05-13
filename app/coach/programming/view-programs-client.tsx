@@ -148,69 +148,117 @@ function ClientHistoricals({ block }: { block: ClientProgramBlock }) {
   );
 }
 
+function fmtShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function statusColor(status: "Programmed" | "Drafted" | "Not Programmed" | "published" | "draft" | "none"): string {
+  if (status === "Programmed" || status === "published") return "var(--sage)";
+  if (status === "Drafted" || status === "draft") return "var(--amber)";
+  return "var(--muted)";
+}
+
 function ClientRow({ block }: { block: ClientProgramBlock }) {
   const [open, setOpen] = useState(false);
-  const { active, upcomingSessions, historicalSessions, historicalPrograms } = block;
+  const { active, historicalSessions, historicalPrograms, nextSession, scheduledThisMonth } = block;
 
-  function StatusInline({
-    status, name, kind,
-  }: { status: "draft" | "published" | "none"; name: string | undefined | null; kind: "Sessions" | "Program" }) {
-    if (status === "none" || !name) {
-      return (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "var(--muted)", fontSize: "0.78rem" }}>
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{kind}:</span>
-          <span>—</span>
-        </span>
-      );
-    }
-    const badgeClass = status === "published" ? "badge-sage" : "badge-amber";
-    const tab = kind === "Sessions" ? "session" : "program";
-    const viewParam = status === "published" ? "&view=plan" : "";
-    return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.78rem" }}>
-        <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{kind}:</span>
-        <span className={`badge ${badgeClass}`} style={{ fontSize: "0.58rem" }}>
-          {status === "published" ? "✓" : "●"}
-        </span>
-        <Link
-          href={`/coach/programming/build?tab=${tab}&client=${block.clientId}${viewParam}`}
-          style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 600 }}
-          title={`Open ${kind.toLowerCase()}`}
-        >{name}</Link>
-      </span>
-    );
-  }
+  // Subtext bits — Next Session, Program, this-month count, past sessions, past programs
+  const programStatusLabel: "Programmed" | "Drafted" | "Not Programmed" =
+    active.programStatus === "published" ? "Programmed"
+    : active.programStatus === "draft" ? "Drafted"
+    : "Not Programmed";
+
+  const programDateText = active.program
+    ? (active.program.ends_on
+        ? `ends ${fmtShortDate(active.program.ends_on)}`
+        : active.program.starts_on
+          ? `from ${fmtShortDate(active.program.starts_on)}`
+          : "")
+    : "";
 
   return (
     <div style={{
       borderBottom: "1px solid var(--line)",
-      padding: "0.55rem 0.65rem",
+      padding: "0.6rem 0.75rem",
     }}>
-      {/* Single-line condensed row */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap" }}>
-        <Link
-          href={`/coach/clients/${block.clientId}`}
-          style={{
-            fontWeight: 700, fontSize: "0.88rem", color: "var(--ink)",
-            textDecoration: "none", whiteSpace: "nowrap",
-            minWidth: 130, flexShrink: 0,
-          }}
-        >{block.clientName}</Link>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <Link
+            href={`/coach/clients/${block.clientId}`}
+            style={{
+              fontWeight: 700, fontSize: "0.92rem", color: "var(--ink)",
+              textDecoration: "none",
+            }}
+          >{block.clientName}</Link>
+          <div className="meta" style={{ fontSize: "0.72rem", marginTop: "0.25rem", display: "flex", flexWrap: "wrap", gap: "0.15rem 0.85rem" }}>
+            {/* Next Session — status word is a link that jumps to view/edit/build */}
+            <span>
+              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Next Session:</span>{" "}
+              {nextSession ? (() => {
+                const startsParam = encodeURIComponent(nextSession.starts_at);
+                const viewParam = nextSession.status === "Programmed" ? "&view=plan" : "";
+                const href = `/coach/programming/build?tab=session&appt=${nextSession.id}&client=${block.clientId}&starts=${startsParam}${viewParam}`;
+                const verb = nextSession.status === "Programmed" ? "View"
+                  : nextSession.status === "Drafted" ? "Edit"
+                  : "Build";
+                return (
+                  <>
+                    <Link
+                      href={href}
+                      title={`${verb} session program`}
+                      style={{ color: statusColor(nextSession.status), fontWeight: 600, textDecoration: "underline" }}
+                    >{nextSession.status}</Link>
+                    <span style={{ color: "var(--ink)" }}> · {fmtShortDate(nextSession.starts_at)}</span>
+                  </>
+                );
+              })() : (
+                <span style={{ color: "var(--muted)" }}>None scheduled</span>
+              )}
+            </span>
+            {/* Program — status word links to view/edit/build for the at-home program */}
+            {(() => {
+              const viewParam = programStatusLabel === "Programmed" ? "&view=plan" : "";
+              const href = `/coach/programming/build?tab=program&client=${block.clientId}${viewParam}`;
+              const verb = programStatusLabel === "Programmed" ? "View"
+                : programStatusLabel === "Drafted" ? "Edit"
+                : "Build";
+              return (
+                <span>
+                  <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Program:</span>{" "}
+                  <Link
+                    href={href}
+                    title={`${verb} program`}
+                    style={{ color: statusColor(programStatusLabel), fontWeight: 600, textDecoration: "underline" }}
+                  >{programStatusLabel}</Link>
+                  {programDateText && <span style={{ color: "var(--ink)" }}> · {programDateText}</span>}
+                </span>
+              );
+            })()}
+            {/* This-month count */}
+            <span>
+              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>This month:</span>{" "}
+              <span style={{ color: "var(--ink)" }}>{scheduledThisMonth} session{scheduledThisMonth !== 1 ? "s" : ""}</span>
+            </span>
+            {/* Past sessions */}
+            <span>
+              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past sessions:</span>{" "}
+              <span style={{ color: "var(--ink)" }}>{historicalSessions.length}</span>
+            </span>
+            {/* Past programs */}
+            <span>
+              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past programs:</span>{" "}
+              <span style={{ color: "var(--ink)" }}>{historicalPrograms.length}</span>
+            </span>
+          </div>
+        </div>
 
-        <StatusInline status={active.sessionsStatus} name={active.sessions?.name} kind="Sessions" />
-        <StatusInline status={active.programStatus} name={active.program?.name} kind="Program" />
-
-        <span className="meta" style={{ fontSize: "0.7rem", whiteSpace: "nowrap", color: "var(--muted)" }}>
-          {upcomingSessions.length} upcoming · {historicalSessions.length} past · {historicalPrograms.length} program{historicalPrograms.length !== 1 ? "s" : ""}
-        </span>
-
-        <div style={{ marginLeft: "auto", display: "flex", gap: "0.4rem", flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: "0.4rem", flexShrink: 0, alignItems: "flex-start", paddingTop: "0.1rem" }}>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             className="btn btn-ghost"
             style={{ fontSize: "0.7rem", padding: "0.18rem 0.55rem", whiteSpace: "nowrap" }}
-          >{open ? "▾" : "▸"} Past programs</button>
+          >{open ? "▾" : "▸"} History</button>
           <Link
             href={`/coach/clients/${block.clientId}`}
             className="btn btn-ghost"

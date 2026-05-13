@@ -214,6 +214,46 @@ a:hover { text-decoration: underline; }
   overflow: visible;
 }
 
+/* Horizontal scroll wrapper around the roster table. We explicitly set
+   overflow-y: visible so modern browsers let vertical sticky bubble to the
+   viewport while horizontal scrolling stays inside this wrapper. The sticky
+   first/last columns attach to this wrapper for horizontal scrolling. */
+.roster-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/* Frozen first / last columns — apply on desktop too (mobile rules below
+   override with background colour overrides for the dark mobile theme). */
+.tbl-sticky-first {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--paper);
+}
+.tbl-sticky-last {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--paper);
+}
+th.tbl-sticky-first,
+th.tbl-sticky-last {
+  z-index: 3;
+  background: #f0ebe0;
+}
+/* Hovered row still shows tint behind sticky columns */
+.table tr:hover td.tbl-sticky-first,
+.table tr:hover td.tbl-sticky-last {
+  background: #f5ede2;
+}
+/* Sticky thead corner cells — must be above both axes */
+.table-sticky-head thead th.tbl-sticky-first,
+.table-sticky-head thead th.tbl-sticky-last {
+  z-index: 4;
+  background: #f0ebe0;
+}
+
 /* Badges */
 .badge {
   display: inline-block;
@@ -270,8 +310,9 @@ a:hover { text-decoration: underline; }
   .plan-print h3 { font-size: 0.85rem !important; }
   .plan-print .stat-label { font-size: 0.62rem !important; }
 
-  /* Inputs & textareas → underlined blanks. Empty fields print as a blank
-     line; values you typed in show as plain text. */
+  /* Inputs & textareas → underlined blanks. ALWAYS blank (even when the
+     coach has typed values on screen) so the print sheet is a clean template
+     to write on at the floor. */
   .plan-print .input,
   .plan-print .textarea,
   .plan-print .select {
@@ -282,7 +323,9 @@ a:hover { text-decoration: underline; }
     padding: 0 0.15rem !important;
     box-shadow: none !important;
     font-size: 0.82rem !important;
-    color: #000 !important;
+    color: transparent !important;       /* hide typed values */
+    caret-color: transparent !important;
+    -webkit-text-fill-color: transparent !important;  /* Safari */
   }
   .plan-print .textarea {
     min-height: 1.6rem;

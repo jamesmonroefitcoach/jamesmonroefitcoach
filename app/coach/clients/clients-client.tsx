@@ -729,30 +729,32 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
         }
       >
         <div className="card roster-card">
-          <table className="table table-sticky-head">
-            <thead>
-              <tr>
-                <SortTh label="Client"         col="name"      current={sortKey} dir={sortDir} onClick={toggleSort} className="tbl-sticky-first" />
-                <th>Goal</th>
-                <SortTh label="Tier"           col="tier"      current={sortKey} dir={sortDir} onClick={toggleSort} />
-                <SortTh label="Session Rate"   col="rate"      current={sortKey} dir={sortDir} onClick={toggleSort} />
-                <SortTh label="Monthly Sess."  col="monthly"   current={sortKey} dir={sortDir} onClick={toggleSort} />
-                <SortTh label="Completed"      col="completed" current={sortKey} dir={sortDir} onClick={toggleSort} style={{ textAlign: "center" }} />
-                <SortTh label="Scheduled"      col="scheduled" current={sortKey} dir={sortDir} onClick={toggleSort} style={{ textAlign: "center" }} />
-                <SortTh label="Last Session"   col="last"      current={sortKey} dir={sortDir} onClick={toggleSort} />
-                <SortTh label="Next Session"   col="next"      current={sortKey} dir={sortDir} onClick={toggleSort} />
-                <th>Program</th>
-                <SortTh label="Owed"           col="owed"      current={sortKey} dir={sortDir} onClick={toggleSort} />
-                <th className="tbl-sticky-last"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortClients(active).map((c) => <ActiveClientRow key={c.id} c={c} nextSessionStatus={nextSessionStatus} />)}
-              {active.length === 0 && (
-                <tr><td colSpan={12} className="meta" style={{ textAlign: "center", padding: "1.5rem" }}>No active clients.</td></tr>
-              )}
-            </tbody>
-          </table>
+          <div className="roster-scroll">
+            <table className="table table-sticky-head">
+              <thead>
+                <tr>
+                  <SortTh label="Client"         col="name"      current={sortKey} dir={sortDir} onClick={toggleSort} className="tbl-sticky-first" />
+                  <th>Goal</th>
+                  <SortTh label="Tier"           col="tier"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <SortTh label="Session Rate"   col="rate"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <SortTh label="Monthly Sess."  col="monthly"   current={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <SortTh label="Completed"      col="completed" current={sortKey} dir={sortDir} onClick={toggleSort} style={{ textAlign: "center" }} />
+                  <SortTh label="Scheduled"      col="scheduled" current={sortKey} dir={sortDir} onClick={toggleSort} style={{ textAlign: "center" }} />
+                  <SortTh label="Last Session"   col="last"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <SortTh label="Next Session"   col="next"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <th>Program</th>
+                  <SortTh label="Owed"           col="owed"      current={sortKey} dir={sortDir} onClick={toggleSort} />
+                  <th className="tbl-sticky-last"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortClients(active).map((c) => <ActiveClientRow key={c.id} c={c} nextSessionStatus={nextSessionStatus} />)}
+                {active.length === 0 && (
+                  <tr><td colSpan={12} className="meta" style={{ textAlign: "center", padding: "1.5rem" }}>No active clients.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </RosterSection>
 
@@ -768,22 +770,24 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           </div>
         ) : (
           <div className="card roster-card">
-            <table className="table table-sticky-head">
-              <thead>
-                <tr>
-                  <th className="tbl-sticky-first">Client</th>
-                  <th>Status</th>
-                  <th>Goal</th>
-                  <th>Last session</th>
-                  <th>Injuries / notes</th>
-                  <th>Owed</th>
-                  <th className="tbl-sticky-last"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {inactive.map((c) => <InactiveClientRow key={c.id} c={c} />)}
-              </tbody>
-            </table>
+            <div className="roster-scroll">
+              <table className="table table-sticky-head">
+                <thead>
+                  <tr>
+                    <th className="tbl-sticky-first">Client</th>
+                    <th>Status</th>
+                    <th>Goal</th>
+                    <th>Last session</th>
+                    <th>Injuries / notes</th>
+                    <th>Owed</th>
+                    <th className="tbl-sticky-last"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inactive.map((c) => <InactiveClientRow key={c.id} c={c} />)}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </RosterSection>
@@ -809,23 +813,25 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           </div>
         ) : (
           <div className="card roster-card">
-            <table className="table table-sticky-head">
-              <thead>
-                <tr>
-                  <th className="tbl-sticky-first">Name</th>
-                  <th>Contact</th>
-                  <th>Where met / Connection</th>
-                  <th>Last follow-up</th>
-                  <th>Notes</th>
-                  <th className="tbl-sticky-last"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {prospects.map((p) => (
-                  <ProspectRow key={p.id} p={p} onDelete={handleDelete} onSave={handleSave} />
-                ))}
-              </tbody>
-            </table>
+            <div className="roster-scroll">
+              <table className="table table-sticky-head">
+                <thead>
+                  <tr>
+                    <th className="tbl-sticky-first">Name</th>
+                    <th>Contact</th>
+                    <th>Where met / Connection</th>
+                    <th>Last follow-up</th>
+                    <th>Notes</th>
+                    <th className="tbl-sticky-last"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prospects.map((p) => (
+                    <ProspectRow key={p.id} p={p} onDelete={handleDelete} onSave={handleSave} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </RosterSection>

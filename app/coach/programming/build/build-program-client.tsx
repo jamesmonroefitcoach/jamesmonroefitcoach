@@ -155,7 +155,8 @@ type ProgramDay = {
 type PlanLogEntry = {
   weights: string[];
   actual_reps?: string[];   // per-set actual reps performed
-  notes: string;
+  set_notes?: string[];     // per-set notes (one slot per set, like the builder)
+  notes: string;            // optional overall-exercise notes (kept for back-compat)
   completed?: boolean;      // per-exercise complete flag (collapses block)
 };
 type PlanLog = Record<string, PlanLogEntry>; // itemUid → entry
@@ -265,30 +266,45 @@ export default function BuildProgramClient({
     for (const day of src) {
       for (const it of day.items) {
         const count = it.same_format ? it.sets : Math.max(it.sets, it.set_rows.length);
-        log[it.uid] = { weights: Array<string>(count).fill(""), notes: "" };
+        log[it.uid] = {
+          weights: Array<string>(count).fill(""),
+          actual_reps: Array<string>(count).fill(""),
+          set_notes: Array<string>(count).fill(""),
+          notes: "",
+        };
       }
     }
     return log;
   }
+  function blankEntry(): PlanLogEntry {
+    return { weights: [], actual_reps: [], set_notes: [], notes: "" };
+  }
   function setPlanWeight(itemUid: string, idx: number, val: string) {
     setPlanLog((p) => {
-      const e = p[itemUid] ?? { weights: [], actual_reps: [], notes: "" };
+      const e = p[itemUid] ?? blankEntry();
       const w = [...e.weights]; w[idx] = val;
       return { ...p, [itemUid]: { ...e, weights: w } };
     });
   }
   function setPlanActualReps(itemUid: string, idx: number, val: string) {
     setPlanLog((p) => {
-      const e = p[itemUid] ?? { weights: [], actual_reps: [], notes: "" };
+      const e = p[itemUid] ?? blankEntry();
       const ar = [...(e.actual_reps ?? [])]; ar[idx] = val;
       return { ...p, [itemUid]: { ...e, actual_reps: ar } };
     });
   }
+  function setPlanSetNotes(itemUid: string, idx: number, val: string) {
+    setPlanLog((p) => {
+      const e = p[itemUid] ?? blankEntry();
+      const sn = [...(e.set_notes ?? [])]; sn[idx] = val;
+      return { ...p, [itemUid]: { ...e, set_notes: sn } };
+    });
+  }
   function setPlanNotes(itemUid: string, val: string) {
-    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? { weights: [], actual_reps: [], notes: "" }), notes: val } }));
+    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? blankEntry()), notes: val } }));
   }
   function setPlanExerciseCompleted(itemUid: string, val: boolean) {
-    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? { weights: [], actual_reps: [], notes: "" }), completed: val } }));
+    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? blankEntry()), completed: val } }));
   }
   // Per-day completion is tracked separately so it survives independent of items.
   const [completedDays, setCompletedDays] = useState<Set<string>>(new Set());
@@ -395,13 +411,19 @@ export default function BuildProgramClient({
           const count = it.same_format ? it.sets : Math.max(it.sets, it.set_rows.length);
           const cur = next[it.uid];
           if (!cur) {
-            next[it.uid] = { weights: Array<string>(count).fill(""), actual_reps: Array<string>(count).fill(""), notes: "" };
+            next[it.uid] = {
+              weights: Array<string>(count).fill(""),
+              actual_reps: Array<string>(count).fill(""),
+              set_notes: Array<string>(count).fill(""),
+              notes: "",
+            };
             changed = true;
           } else if (cur.weights.length < count) {
             next[it.uid] = {
               ...cur,
               weights: [...cur.weights, ...Array<string>(count - cur.weights.length).fill("")],
               actual_reps: [...(cur.actual_reps ?? []), ...Array<string>(count - (cur.actual_reps ?? []).length).fill("")],
+              set_notes: [...(cur.set_notes ?? []), ...Array<string>(count - (cur.set_notes ?? []).length).fill("")],
             };
             changed = true;
           }
@@ -1198,6 +1220,7 @@ export default function BuildProgramClient({
           onSummaryToggle={() => setSummaryOpen((o) => !o)}
           onSetWeight={setPlanWeight}
           onSetActualReps={setPlanActualReps}
+          onSetSetNotes={setPlanSetNotes}
           onSetNotes={setPlanNotes}
           onSetExerciseCompleted={setPlanExerciseCompleted}
           onEdit={() => setViewMode("builder")}
@@ -2458,7 +2481,7 @@ function SetRowMeta({ row, fallbackEffort }: { row: SetRow | undefined; fallback
 
 function PlanExerciseBlock({
   clientId, it, entry, completed, isCompletedView,
-  onSetWeight, onSetActualReps, onSetNotes, onSetExerciseCompleted,
+  onSetWeight, onSetActualReps, onSetSetNotes, onSetNotes, onSetExerciseCompleted,
 }: {
   clientId: string;
   it: ProgramItem;
@@ -2467,6 +2490,7 @@ function PlanExerciseBlock({
   isCompletedView: boolean;      // entire program is completed
   onSetWeight: (itemUid: string, idx: number, val: string) => void;
   onSetActualReps: (itemUid: string, idx: number, val: string) => void;
+  onSetSetNotes: (itemUid: string, idx: number, val: string) => void;
   onSetNotes: (itemUid: string, val: string) => void;
   onSetExerciseCompleted: (itemUid: string, val: boolean) => void;
 }) {
@@ -2624,67 +2648,111 @@ function PlanExerciseBlock({
       {/* Item-level metadata strip (equipment, tempo, position, RIR, etc.) */}
       <ExerciseMetaStrip it={it} />
 
-      {/* Sets */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.5rem" }}>
-        {Array.from({ length: setCount }).map((_, si) => {
-          const prescribedReps = it.same_format ? it.reps : (it.set_rows[si]?.reps ?? it.reps);
-          const setRow = it.same_format ? undefined : it.set_rows[si];
-          const w = entry.weights[si] ?? "";
-          const ar = (entry.actual_reps ?? [])[si] ?? "";
-          // Previous set reference — same set index from the most recent prior log
-          const prevSet = priorSnapshot.lastEntry?.sets[si] ?? null;
-          return (
-            <div key={si} style={{ display: "flex", flexDirection: "column", gap: "0.18rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "0.78rem", color: "var(--muted)", minWidth: 40 }}>Set {si + 1}</span>
-                <span style={{ fontSize: "0.82rem", minWidth: 64 }}>{prescribedReps} reps</span>
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  placeholder="actual"
-                  value={ar}
-                  onChange={(e) => onSetActualReps(it.uid, si, e.target.value)}
-                  style={{ width: 56, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
-                  title="Actual reps performed"
-                />
-                <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>reps</span>
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  placeholder="lbs"
-                  value={w}
-                  onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
-                  style={{ width: 64, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
-                />
-                <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>lbs</span>
-                {prevSet && prevSet.weight_lb > 0 && (
-                  <span style={{ fontSize: "0.7rem", color: "#a89e90", fontStyle: "italic" }} title="Last time this set">
-                    prev: {prevSet.weight_lb} lbs{prevSet.reps ? ` × ${prevSet.reps}` : ""}
-                  </span>
-                )}
-              </div>
-              {/* Per-set extras when the prescription varies between sets */}
-              {!it.same_format && (
-                <div style={{ paddingLeft: "calc(40px + 0.5rem)", display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-                  <SetRowMeta row={setRow} fallbackEffort={it.exertion_score} />
-                  {setRow?.notes && (
-                    <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>
-                      <span style={{ fontStyle: "italic" }}>note:</span> {setRow.notes}
+      {/* Sets — labeled-column table layout matching the builder */}
+      {(() => {
+        // Grid columns: Set | Reps | Actual | Weight | Prev | Notes
+        // Prev column is suppressed when there's no prior history for any set.
+        const showPrev = !!priorSnapshot.lastEntry;
+        const cols = showPrev
+          ? "44px 84px 70px 70px 110px 1fr"
+          : "44px 84px 70px 70px 1fr";
+        const cellHeaderStyle: React.CSSProperties = {
+          fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.05em", color: "var(--muted)",
+          paddingBottom: "0.18rem", borderBottom: "1px solid var(--line)",
+        };
+        return (
+          <div style={{ marginBottom: "0.55rem" }}>
+            {/* Header row */}
+            <div style={{ display: "grid", gridTemplateColumns: cols, gap: "0.4rem 0.55rem", alignItems: "end" }}>
+              <span style={cellHeaderStyle}>Set</span>
+              <span style={cellHeaderStyle}>Reps</span>
+              <span style={cellHeaderStyle}>Actual</span>
+              <span style={cellHeaderStyle}>Weight</span>
+              {showPrev && <span style={cellHeaderStyle}>Previous</span>}
+              <span style={cellHeaderStyle}>Notes</span>
+            </div>
+
+            {/* Set rows */}
+            {Array.from({ length: setCount }).map((_, si) => {
+              const prescribedReps = it.same_format ? it.reps : (it.set_rows[si]?.reps ?? it.reps);
+              const setRow = it.same_format ? undefined : it.set_rows[si];
+              const w = entry.weights[si] ?? "";
+              const ar = (entry.actual_reps ?? [])[si] ?? "";
+              const sn = (entry.set_notes ?? [])[si] ?? "";
+              const prevSet = priorSnapshot.lastEntry?.sets[si] ?? null;
+              return (
+                <div key={si} style={{ display: "grid", gridTemplateColumns: cols, gap: "0.4rem 0.55rem", alignItems: "center", padding: "0.25rem 0", borderBottom: "1px dashed var(--line)" }}>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>{si + 1}</span>
+                  <span style={{ fontSize: "0.8rem" }}>{prescribedReps}</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    placeholder="—"
+                    value={ar}
+                    onChange={(e) => onSetActualReps(it.uid, si, e.target.value)}
+                    style={{ fontSize: "0.78rem", padding: "0.16rem 0.35rem", width: "100%" }}
+                    title="Actual reps performed"
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    placeholder="—"
+                    value={w}
+                    onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
+                    style={{ fontSize: "0.78rem", padding: "0.16rem 0.35rem", width: "100%" }}
+                    title="Weight (lbs)"
+                  />
+                  {showPrev && (
+                    <span style={{ fontSize: "0.7rem", color: "#a89e90", fontStyle: "italic" }}>
+                      {prevSet && prevSet.weight_lb > 0
+                        ? `${prevSet.weight_lb} × ${prevSet.reps || "—"}`
+                        : "—"}
                     </span>
                   )}
+                  <input
+                    className="input"
+                    type="text"
+                    placeholder=""
+                    value={sn}
+                    onChange={(e) => onSetSetNotes(it.uid, si, e.target.value)}
+                    style={{ fontSize: "0.78rem", padding: "0.16rem 0.35rem", width: "100%" }}
+                    title="Per-set notes"
+                  />
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
 
+            {/* Per-set extras for variable prescriptions (when same_format=false) */}
+            {!it.same_format && (
+              <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.18rem" }}>
+                {Array.from({ length: setCount }).map((_, si) => {
+                  const setRow = it.set_rows[si];
+                  const meta = setRow ? <SetRowMeta row={setRow} fallbackEffort={it.exertion_score} /> : null;
+                  if (!meta && !setRow?.notes) return null;
+                  return (
+                    <div key={si} style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap", fontSize: "0.7rem", color: "var(--muted)" }}>
+                      <span style={{ minWidth: 44 }}>Set {si + 1}:</span>
+                      {meta}
+                      {setRow?.notes && (
+                        <span><span style={{ fontStyle: "italic" }}>note:</span> {setRow.notes}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Overall exercise notes (separate from per-set notes above) */}
       <textarea
         className="textarea"
         rows={2}
-        placeholder="Notes…"
+        placeholder="Overall notes…"
         value={entry.notes}
         onChange={(e) => onSetNotes(it.uid, e.target.value)}
         style={{ fontSize: "0.8rem", padding: "0.25rem 0.4rem", resize: "vertical", width: "100%" }}
@@ -2706,7 +2774,7 @@ function PlanExerciseBlock({
 
 function PlanDayBlock({
   clientId, day, planLog, completed, isCompletedView, dayCompleted, onToggleDayCompleted,
-  onSetWeight, onSetActualReps, onSetNotes, onSetExerciseCompleted,
+  onSetWeight, onSetActualReps, onSetSetNotes, onSetNotes, onSetExerciseCompleted,
   showCompleteDayButton,
 }: {
   clientId: string;
@@ -2718,6 +2786,7 @@ function PlanDayBlock({
   onToggleDayCompleted: (uid: string) => void;
   onSetWeight: (itemUid: string, idx: number, val: string) => void;
   onSetActualReps: (itemUid: string, idx: number, val: string) => void;
+  onSetSetNotes: (itemUid: string, idx: number, val: string) => void;
   onSetNotes: (itemUid: string, val: string) => void;
   onSetExerciseCompleted: (itemUid: string, val: boolean) => void;
   showCompleteDayButton: boolean;
@@ -2762,11 +2831,12 @@ function PlanDayBlock({
                 key={it.uid}
                 clientId={clientId}
                 it={it}
-                entry={planLog[it.uid] ?? { weights: [], actual_reps: [], notes: "" }}
+                entry={planLog[it.uid] ?? { weights: [], actual_reps: [], set_notes: [], notes: "" }}
                 completed={!!planLog[it.uid]?.completed}
                 isCompletedView={isCompletedView}
                 onSetWeight={onSetWeight}
                 onSetActualReps={onSetActualReps}
+                onSetSetNotes={onSetSetNotes}
                 onSetNotes={onSetNotes}
                 onSetExerciseCompleted={onSetExerciseCompleted}
               />
@@ -2802,6 +2872,7 @@ function SessionPlanView({
   onSummaryToggle,
   onSetWeight,
   onSetActualReps,
+  onSetSetNotes,
   onSetNotes,
   onSetExerciseCompleted,
   onEdit,
@@ -2825,6 +2896,7 @@ function SessionPlanView({
   onSummaryToggle: () => void;
   onSetWeight: (itemUid: string, idx: number, val: string) => void;
   onSetActualReps: (itemUid: string, idx: number, val: string) => void;
+  onSetSetNotes: (itemUid: string, idx: number, val: string) => void;
   onSetNotes: (itemUid: string, val: string) => void;
   onSetExerciseCompleted: (itemUid: string, val: boolean) => void;
   onEdit: () => void;
@@ -2920,6 +2992,7 @@ function SessionPlanView({
             }}
             onSetWeight={onSetWeight}
             onSetActualReps={onSetActualReps}
+            onSetSetNotes={onSetSetNotes}
             onSetNotes={onSetNotes}
             onSetExerciseCompleted={onSetExerciseCompleted}
             showCompleteDayButton={showCompleteDayButton}

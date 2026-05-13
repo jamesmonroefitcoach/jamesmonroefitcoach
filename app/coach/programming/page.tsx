@@ -15,6 +15,13 @@ export type ClientProgramBlock = {
     program: PastProgramFull | null;        // current at_home
     programStatus: "draft" | "published" | "none";
   };
+  // Next upcoming session — surfaced on the subtext line
+  nextSession: {
+    id: string;
+    starts_at: string;
+    status: "Programmed" | "Drafted" | "Not Programmed";
+  } | null;
+  scheduledThisMonth: number;
   upcomingSessions: {
     id: string;
     starts_at: string;
@@ -68,6 +75,21 @@ export default async function ProgrammingLandingPage() {
         session_program_id: a.session_program_id ?? null,
       }));
 
+    // Next-session metadata for the subtext line: the earliest upcoming
+    // appointment + its program_status mapped to the display label.
+    const next = upcomingSessions[0] ?? null;
+    const statusLabel = (s: "programmed" | "draft" | "needs_programming" | "n/a"): "Programmed" | "Drafted" | "Not Programmed" =>
+      s === "programmed" ? "Programmed" : s === "draft" ? "Drafted" : "Not Programmed";
+    const nextSession = next ? { id: next.id, starts_at: next.starts_at, status: statusLabel(next.program_status) } : null;
+    // Sessions scheduled this calendar month (any status except cancelled / no_show)
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const monthEnd = new Date(monthStart); monthEnd.setMonth(monthEnd.getMonth() + 1);
+    const scheduledThisMonth = sessionAppts.filter((a) => {
+      const t = new Date(a.starts_at).getTime();
+      return t >= monthStart.getTime() && t < monthEnd.getTime()
+        && a.status !== "cancelled" && a.status !== "no_show";
+    }).length;
+
     return {
       clientId: c.id,
       clientName: c.full_name,
@@ -77,6 +99,8 @@ export default async function ProgrammingLandingPage() {
         program,
         programStatus: program ? "published" as const : "none" as const,
       },
+      nextSession,
+      scheduledThisMonth,
       upcomingSessions,
       historicalPrograms,
       historicalSessions,
