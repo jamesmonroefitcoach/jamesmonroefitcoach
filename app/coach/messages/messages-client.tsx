@@ -120,9 +120,9 @@ export default function MessagesClient({
         <button className="btn btn-primary" onClick={() => setShowAnnounce(true)}>+ Announce</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1.25rem" }}>
-        <div className="card" style={{ padding: 0, alignSelf: "start" }}>
-          {threads.length === 0 ? <p className="meta" style={{ padding: "1rem" }}>No threads yet.</p> : (
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(200px, 1fr) 2fr", gap: "0.85rem" }}>
+        <div className="card" style={{ padding: 0, alignSelf: "start", maxHeight: 360, overflowY: "auto" }}>
+          {threads.length === 0 ? <p className="meta" style={{ padding: "0.6rem 0.7rem", fontSize: "0.78rem" }}>No threads yet.</p> : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
               {threads.map((t) => (
                 <li
@@ -130,35 +130,35 @@ export default function MessagesClient({
                   onClick={() => pickThread(t.id)}
                   style={{
                     cursor: "pointer",
-                    padding: "0.7rem 0.9rem",
+                    padding: "0.4rem 0.55rem",
                     borderBottom: "1px solid var(--line)",
                     borderLeft: t.unread ? "3px solid var(--rust)" : "3px solid transparent",
                     background: active === t.id ? "rgba(168,61,43,0.06)" : undefined
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <strong>{t.client_name}</strong>
-                    <span className="meta" style={{ fontSize: "0.74rem" }}>{t.last_at ? new Date(t.last_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
+                    <strong style={{ fontSize: "0.82rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.client_name}</strong>
+                    <span className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", flexShrink: 0 }}>{t.last_at ? new Date(t.last_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span>
                   </div>
-                  <p className="meta" style={{ margin: "0.2rem 0 0", fontSize: "0.8rem" }}>{t.last_message}</p>
+                  <p className="meta" style={{ margin: "0.1rem 0 0", fontSize: "0.72rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.last_message}</p>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <div className="card" style={{ display: "flex", flexDirection: "column", minHeight: 480 }}>
+        <div className="card" style={{ display: "flex", flexDirection: "column", maxHeight: 360, padding: "0.65rem 0.85rem" }}>
           {!active ? (
-            <p className="meta">Pick a thread to read & reply.</p>
+            <p className="meta" style={{ fontSize: "0.82rem" }}>Pick a thread to read &amp; reply.</p>
           ) : (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h2>{threads.find((t) => t.id === active)?.client_name ?? ""}</h2>
-                <Link className="meta" href={`/coach/clients/${threads.find((t) => t.id === active)?.client_id ?? ""}`}>open profile →</Link>
+                <h2 style={{ fontSize: "1rem", margin: 0 }}>{threads.find((t) => t.id === active)?.client_name ?? ""}</h2>
+                <Link className="meta" style={{ fontSize: "0.72rem" }} href={`/coach/clients/${threads.find((t) => t.id === active)?.client_id ?? ""}`}>open profile →</Link>
               </div>
-              <hr className="divider" />
-              <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", paddingRight: 4 }}>
-                {messages.length === 0 ? <p className="meta">No messages yet.</p> : messages.map((m) => {
+              <hr className="divider" style={{ margin: "0.4rem 0" }} />
+              <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: "0.35rem", paddingRight: 4 }}>
+                {messages.length === 0 ? <p className="meta" style={{ fontSize: "0.78rem" }}>No messages yet.</p> : messages.map((m) => {
                   const mine = m.sender_id === myId;
                   return (
                     <div key={m.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "70%" }}>
@@ -166,25 +166,26 @@ export default function MessagesClient({
                         background: mine ? "var(--rust)" : "var(--paper)",
                         color: mine ? "#fff" : undefined,
                         border: mine ? "none" : "1px solid var(--line)",
-                        borderRadius: 6,
-                        padding: "0.45rem 0.65rem",
-                        fontSize: "0.88rem"
+                        borderRadius: 5,
+                        padding: "0.32rem 0.5rem",
+                        fontSize: "0.8rem",
+                        lineHeight: 1.35,
                       }}>
                         {m.body}
                       </div>
-                      <div className="meta" style={{ fontSize: "0.7rem", marginTop: 2, textAlign: mine ? "right" : "left" }}>
+                      <div className="meta" style={{ fontSize: "0.66rem", marginTop: 1, textAlign: mine ? "right" : "left" }}>
                         {mine ? "" : `${m.sender_name} · `}{new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                       </div>
                     </div>
                   );
                 })}
               </div>
-              <hr className="divider" />
-              <form onSubmit={(e) => { e.preventDefault(); send(); }} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
-                <textarea className="textarea" rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write a reply…" />
-                <button className="btn btn-primary" type="submit" disabled={pending || !body.trim()}>{pending ? "…" : "Send"}</button>
+              <hr className="divider" style={{ margin: "0.4rem 0" }} />
+              <form onSubmit={(e) => { e.preventDefault(); send(); }} style={{ display: "flex", gap: "0.4rem", alignItems: "flex-end" }}>
+                <textarea className="textarea" rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write a reply…" style={{ fontSize: "0.82rem", padding: "0.3rem 0.45rem" }} />
+                <button className="btn btn-primary" type="submit" disabled={pending || !body.trim()} style={{ fontSize: "0.78rem", padding: "0.3rem 0.7rem" }}>{pending ? "…" : "Send"}</button>
               </form>
-              {info ? <p style={{ color: "var(--amber)", fontSize: "0.8rem", margin: "0.4rem 0 0" }}>{info}</p> : null}
+              {info ? <p style={{ color: "var(--amber)", fontSize: "0.74rem", margin: "0.3rem 0 0" }}>{info}</p> : null}
             </>
           )}
         </div>
