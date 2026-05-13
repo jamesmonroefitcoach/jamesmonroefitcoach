@@ -438,8 +438,8 @@ export default function BuildProgramClient({
           set_rows: [],
           variations: [],
           rest_seconds: 60,
-          equipment_list: (m.equipment_list ?? []) as Equipment[],
-          equipment_specifics: m.equipment_specifics
+          equipment_list: [],
+          equipment_specifics: undefined,
         };
         return { ...day, items: [...day.items, item], collapsed: false };
       })
@@ -615,8 +615,8 @@ export default function BuildProgramClient({
             variations: [],
             rest_seconds: 60,
             notes: it.notes,
-            equipment_list: ((m as Movement).equipment_list ?? []) as Equipment[],
-            equipment_specifics: (m as Movement).equipment_specifics
+            equipment_list: [],
+            equipment_specifics: undefined,
           } satisfies ProgramItem;
         })
       }))
@@ -648,7 +648,8 @@ export default function BuildProgramClient({
             set_rows: [],
             variations: [],
             rest_seconds: 60,
-            equipment_list: ((m as Movement).equipment_list ?? []) as Equipment[]
+            equipment_list: [],
+            equipment_specifics: undefined,
           } satisfies ProgramItem;
         })
       }
@@ -768,8 +769,8 @@ export default function BuildProgramClient({
           sets: 3, reps: "8-10", exertion_score: 5,
           same_format: true, set_rows: [], variations: [],
           rest_seconds: 60,
-          equipment_list: (m.equipment_list ?? []) as Equipment[],
-          equipment_specifics: m.equipment_specifics,
+          equipment_list: [],
+          equipment_specifics: undefined,
           superset_id: supersetId,
         };
         return { ...day, items: [...day.items, newItem] };
@@ -1525,7 +1526,7 @@ export default function BuildProgramClient({
           return (
             <div
               className="card"
-              style={{ padding: 0, display: "flex", flexDirection: "column", marginTop: "1rem" }}
+              style={{ padding: 0, display: "flex", flexDirection: "column", marginTop: "1rem", minWidth: 0 }}
               onDragOver={(e) => { if (drag) e.preventDefault(); }}
               onDrop={(e) => onDayDrop(day.uid, e)}
             >
@@ -1555,7 +1556,7 @@ export default function BuildProgramClient({
               </div>
 
               {/* Exercises */}
-              <div style={{ padding: "0.4rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1 }}>
+              <div style={{ padding: "0.4rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1, minWidth: 0 }}>
               {day.items.length === 0 ? (
                 <p className="meta" style={{ fontSize: "0.74rem", textAlign: "center", padding: "0.75rem 0", color: "var(--muted)" }}>
                   Drop movements here or click + in the library
@@ -1620,44 +1621,35 @@ export default function BuildProgramClient({
                         onRowDrop(day.uid, lastEntry.itemIdx + 1, e);
                       }
                     }}
-                    style={{ borderRadius: 5, border: "2px solid var(--amber)", overflow: "hidden", position: "relative" }}
+                    style={{ borderRadius: 5, border: "2px solid var(--amber)" }}
                   >
-                    {/* Remove entire superset — sits outside the amber border */}
-                    <button
-                      type="button"
-                      className="no-print"
-                      title="Remove superset"
-                      onClick={() => removeSuperset(day.uid, supersetId)}
-                      style={{
-                        position: "absolute",
-                        top: -9,
-                        right: -9,
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
-                        border: "1.5px solid var(--amber)",
-                        background: "var(--paper)",
-                        color: "var(--amber)",
-                        fontSize: "0.6rem",
-                        fontWeight: 700,
-                        lineHeight: 1,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: 0,
-                        zIndex: 5,
-                      }}
-                    >✕</button>
                     <div
                       draggable
                       onDragStart={(e) => onDragStartSuperset(day.uid, supersetId, e)}
                       onDragEnd={() => setDrag(null)}
-                      style={{ background: "rgba(217,119,6,0.09)", padding: "0.28rem 0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "grab", borderBottom: "1px solid rgba(217,119,6,0.25)" }}
+                      style={{ background: "rgba(217,119,6,0.09)", padding: "0.28rem 0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "grab", borderBottom: "1px solid rgba(217,119,6,0.25)", borderTopLeftRadius: 3, borderTopRightRadius: 3 }}
                     >
                       <span className="no-print" style={{ color: "var(--amber)", userSelect: "none", fontSize: "0.7rem" }}>⋮⋮</span>
                       <span style={{ fontWeight: 700, fontSize: "0.7rem", color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Super Set</span>
                       <span className="meta" style={{ fontSize: "0.64rem" }}>{entries.length} exercises</span>
+                      <button
+                        type="button"
+                        className="no-print"
+                        title="Remove entire superset"
+                        onClick={() => removeSuperset(day.uid, supersetId)}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid var(--amber)",
+                          borderRadius: 3,
+                          color: "var(--amber)",
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          lineHeight: 1,
+                          cursor: "pointer",
+                          padding: "0.1rem 0.35rem",
+                          flexShrink: 0,
+                        }}
+                      >✕ Remove</button>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", padding: "0.3rem 0.35rem" }}>
                       {entries.map(({ item: it, itemIdx }) => (
@@ -1712,15 +1704,14 @@ export default function BuildProgramClient({
           );
         })()}
 
-        {/* ── at_home: multi-day card grid ── */}
+        {/* ── at_home: multi-day card stack ── */}
         {programKind === "at_home" && (
           <>
-          <div className="day-grid-2col" style={{
+          <div style={{
             marginTop: "1rem",
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
+            display: "flex",
+            flexDirection: "column",
             gap: "0.75rem",
-            alignItems: "start",
             paddingBottom: "0.75rem",
           }}>
             {days.map((day) => {
@@ -1789,7 +1780,7 @@ export default function BuildProgramClient({
                   </div>
 
                   {/* Render groups */}
-                  <div style={{ padding: "0.4rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1 }}>
+                  <div style={{ padding: "0.4rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1, minWidth: 0 }}>
                     {day.items.length === 0 ? (
                       <p className="meta" style={{ fontSize: "0.74rem", textAlign: "center", padding: "0.75rem 0", color: "var(--muted)" }}>Drop movements here</p>
                     ) : renderGroups.map((group) => {
@@ -1853,17 +1844,35 @@ export default function BuildProgramClient({
                               onRowDrop(day.uid, lastEntry.itemIdx + 1, e);
                             }
                           }}
-                          style={{ borderRadius: 5, border: "2px solid var(--amber)", overflow: "hidden" }}
+                          style={{ borderRadius: 5, border: "2px solid var(--amber)" }}
                         >
                           <div
                             draggable
                             onDragStart={(e) => onDragStartSuperset(day.uid, supersetId, e)}
                             onDragEnd={() => setDrag(null)}
-                            style={{ background: "rgba(217,119,6,0.09)", padding: "0.28rem 0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "grab", borderBottom: "1px solid rgba(217,119,6,0.25)" }}
+                            style={{ background: "rgba(217,119,6,0.09)", padding: "0.28rem 0.5rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "grab", borderBottom: "1px solid rgba(217,119,6,0.25)", borderTopLeftRadius: 3, borderTopRightRadius: 3 }}
                           >
                             <span className="no-print" style={{ color: "var(--amber)", userSelect: "none", fontSize: "0.7rem" }}>⋮⋮</span>
                             <span style={{ fontWeight: 700, fontSize: "0.7rem", color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Super Set</span>
                             <span className="meta" style={{ fontSize: "0.64rem" }}>{entries.length} exercises</span>
+                            <button
+                              type="button"
+                              className="no-print"
+                              title="Remove entire superset"
+                              onClick={() => removeSuperset(day.uid, supersetId)}
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--amber)",
+                                borderRadius: 3,
+                                color: "var(--amber)",
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                lineHeight: 1,
+                                cursor: "pointer",
+                                padding: "0.1rem 0.35rem",
+                                flexShrink: 0,
+                              }}
+                            >✕ Remove</button>
                           </div>
                           <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", padding: "0.3rem 0.35rem" }}>
                             {entries.map(({ item: it, itemIdx }) => (
@@ -2701,6 +2710,7 @@ function ExerciseCard({
         border: inSuperset ? "1px solid rgba(217,119,6,0.18)" : "1px solid var(--line)",
         background: it.is_warmup ? "rgba(168,61,43,0.04)" : inSuperset ? "rgba(217,119,6,0.03)" : "var(--paper)",
         cursor: "grab",
+        minWidth: 0,
       }}
     >
       {/* Name row */}
@@ -2773,7 +2783,7 @@ function ExerciseCard({
             </label>
 
             {/* Scroll wrapper so set grids never blow out the phone screen */}
-            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" as any }}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" as any, width: "100%", minWidth: 0 }}>
 
             {it.same_format ? (
               /* ── Same-format grid: header row + single input row ── */
@@ -2836,7 +2846,9 @@ function ExerciseCard({
                     style={{ ...INP, width: "100%", boxSizing: "border-box" as const }}
                   />
                 ))}
-                <span /> {/* spacer under the + column */}
+                <span style={{ alignSelf: "center", textAlign: "center" }}>
+                  <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
+                </span>
               </div>
             ) : (
               /* ── Per-set: sets count + grid with header row + one row per set ── */
@@ -2911,7 +2923,9 @@ function ExerciseCard({
                           style={{ ...INP, width: "100%", boxSizing: "border-box" as const }}
                         />
                       ))}
-                      <span key={`plus-sp-${si}`} /> {/* spacer under the + column for each row */}
+                      <span key={`plus-sp-${si}`} style={{ alignSelf: "center", textAlign: "center" }}>
+                        <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
+                      </span>
                     </>
                   ))}
                 </div>
@@ -3142,10 +3156,28 @@ function EquipmentMultiSelect({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const showSpecifics = value.includes("machine") || value.includes("other");
   const fullLabel = value.length === 0 ? "Equipment" : value.length <= 2 ? value.map(v => EQUIPMENT_OPTIONS.find(o => o.value === v)?.label ?? v).join(", ") : `${value.length} equip.`;
   const compactLabel = value.length === 0 ? "Equip." : value.length <= 1 ? (EQUIPMENT_OPTIONS.find(o => o.value === value[0])?.label ?? value[0]).slice(0, 7) : `${value.length} eq.`;
   const label = compact ? compactLabel : fullLabel;
+
+  // Close on scroll so the fixed dropdown doesn't drift
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", close, { capture: true });
+  }, [open]);
+
+  function openDropdown() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 2, left: rect.left });
+    }
+    setOpen((o) => !o);
+  }
 
   function toggle(eq: Equipment) {
     const has = value.includes(eq);
@@ -3156,6 +3188,7 @@ function EquipmentMultiSelect({
   return (
     <div style={{ position: "relative", minWidth: 0 }}>
       <button
+        ref={btnRef}
         type="button"
         className="btn btn-ghost"
         style={{
@@ -3170,7 +3203,7 @@ function EquipmentMultiSelect({
           whiteSpace: "nowrap",
           boxSizing: "border-box",
         }}
-        onClick={() => setOpen((o) => !o)}
+        onClick={openDropdown}
       >
         <span style={{ fontWeight: value.length ? 600 : 400, color: value.length ? undefined : "var(--muted)" }}>{label}</span>
         <span style={{ fontSize: "0.58rem" }}>▾</span>
@@ -3178,19 +3211,17 @@ function EquipmentMultiSelect({
       {open ? (
         <div
           style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            zIndex: 10,
+            position: "fixed",
+            top: dropPos?.top ?? 0,
+            left: dropPos?.left ?? 0,
+            zIndex: 1000,
             background: "var(--paper)",
             border: "1px solid var(--line)",
             borderRadius: 3,
             padding: "0.4rem",
             minWidth: 200,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-            marginTop: 2
+            boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
           }}
-          onMouseLeave={() => setOpen(false)}
         >
           {EQUIPMENT_OPTIONS.map((opt) => (
             <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.18rem 0.2rem", fontSize: "0.78rem", cursor: "pointer" }}>
@@ -3207,7 +3238,6 @@ function EquipmentMultiSelect({
               style={{ marginTop: "0.4rem", fontSize: "0.78rem" }}
             />
           ) : null}
-          <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: "0.4rem", padding: "0.25rem", fontSize: "0.7rem" }} onClick={() => setOpen(false)}>Done</button>
         </div>
       ) : null}
     </div>
