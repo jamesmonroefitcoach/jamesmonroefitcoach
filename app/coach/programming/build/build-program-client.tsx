@@ -401,9 +401,10 @@ export default function BuildProgramClient({
       if (res.data.name) setProgramName(res.data.name);
       if (res.data.starts_on) setStartsOn(res.data.starts_on);
       if (res.data.duration_weeks) setDurationWeeks(res.data.duration_weeks);
-      // If the linked program is published, default to plan view (read-only with
-      // weight/notes inputs). Coach can still click "Edit" to drop into builder.
-      if (res.data.is_published) setViewMode((v) => (v === "builder" ? "plan" : v));
+      // NOTE: don't auto-flip viewMode here. The plan view should only be
+      // entered when the coach explicitly clicks View → on the picker (or
+      // when the URL says ?view=plan). Auto-flipping on dropdown selection
+      // hijacks the picker and hides the Session/Program tabs.
     })();
     return () => { cancelled = true; };
   }, [clientId, selectedApptId, appts]);
@@ -1286,6 +1287,18 @@ export default function BuildProgramClient({
           onSetNotes={setPlanNotes}
           onSetExerciseCompleted={setPlanExerciseCompleted}
           onEdit={() => setViewMode("builder")}
+          onBack={() => {
+            // Prefer browser history when we have one (so coaches who landed
+            // here from View Programs etc. go back to where they came from).
+            // Otherwise fall back to the picker step within Build Program.
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              setViewMode("builder");
+              if (programKind === "in_gym") setInGymStep("picker");
+              else setAtHomeProgramStep("picker");
+            }
+          }}
           onComplete={() => setViewMode("completed")}
           feedbackId={programKind === "in_gym" ? selectedApptId : (savedProgramId ? `program-${savedProgramId}` : "")}
           feedbackTick={feedbackTick}
@@ -1316,15 +1329,19 @@ export default function BuildProgramClient({
           }}
         />
       )}
-      {viewMode === "builder" && <>
-      {/* ─── Page-level tab bar ─── */}
-      <div style={{ borderBottom: "2px solid var(--line)", marginBottom: "1.5rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+      {/* ─── Page-level Session / Program tab bar — always visible, even in plan view ─── */}
+      <div className="no-print" style={{ borderBottom: "2px solid var(--line)", marginBottom: "1.5rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
         <div style={{ display: "flex" }}>
           {(["in_gym", "at_home"] as const).map((k) => (
             <button
               key={k}
               type="button"
-              onClick={() => handleTabChange(k)}
+              onClick={() => {
+                // Clicking a top-level tab always returns to the picker for
+                // that kind. Drop out of plan view so the picker is visible.
+                setViewMode("builder");
+                handleTabChange(k);
+              }}
               style={{
                 padding: "0.55rem 1.4rem",
                 background: "transparent",
@@ -1350,6 +1367,7 @@ export default function BuildProgramClient({
         </span>
       </div>
 
+      {viewMode === "builder" && <>
       {/* ─── in_gym PICKER FLOW ─── */}
       {programKind === "in_gym" && inGymStep === "picker" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -1433,7 +1451,16 @@ export default function BuildProgramClient({
                 <button
                   className="btn btn-primary"
                   disabled={!selectedApptId}
-                  onClick={() => setInGymStep("builder")}
+                  onClick={() => {
+                    // Enter the builder step. If the selected session is a
+                    // published program, flip into plan view so the coach
+                    // lands on the read-only sheet. Otherwise stay in builder
+                    // mode so draft / new sessions edit normally.
+                    const a = appts.find((x) => x.id === selectedApptId);
+                    if (a?.program_status === "programmed") setViewMode("plan");
+                    else setViewMode("builder");
+                    setInGymStep("builder");
+                  }}
                 >{(() => {
                   const a = appts.find((x) => x.id === selectedApptId);
                   return a?.program_status === "programmed" ? "View →"
@@ -3041,6 +3068,7 @@ function SessionPlanView({
   onSetNotes,
   onSetExerciseCompleted,
   onEdit,
+  onBack,
   onComplete,
   feedbackId,
   feedbackTick,
@@ -3065,6 +3093,7 @@ function SessionPlanView({
   onSetNotes: (itemUid: string, val: string) => void;
   onSetExerciseCompleted: (itemUid: string, val: boolean) => void;
   onEdit: () => void;
+  onBack: () => void;
   onComplete: () => void;
   feedbackId: string;
   feedbackTick: number;
@@ -3095,7 +3124,14 @@ function SessionPlanView({
             <h2 style={{ margin: "0.35rem 0 0.15rem" }}>{sessionTitle}</h2>
             <div className="meta" style={{ fontSize: "0.82rem" }}>{clientName}</div>
           </div>
-          <div style={{ display: "flex", gap: "0.4rem" }} className="no-print">
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }} className="no-print">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.78rem" }}
+              onClick={onBack}
+              title="Back to previous page"
+            >← Back</button>
             <button
               type="button"
               className="btn btn-ghost"
