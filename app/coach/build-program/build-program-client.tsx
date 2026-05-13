@@ -2356,7 +2356,7 @@ function VariationDropdown({ value, onChange, style }: {
       className="select"
       value={selected}
       onChange={(e) => onChange(e.target.value ? [e.target.value as Variation] : [])}
-      style={{ fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%", ...style }}
+      style={{ fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%", minWidth: 0, ...style }}
     >
       <option value="">—</option>
       {VARIATIONS.map((v) => (
@@ -2755,7 +2755,7 @@ function ExerciseCard({
                   <input className="input" style={{ ...INP, width: 36 }} type="number" min={1} max={10}
                     value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: PS_COLS, gap: "0.3rem", alignItems: "center" }}>
+                <div style={{ display: "grid", gridTemplateColumns: PS_COLS, gap: "0.3rem", alignItems: "center", minWidth: "min-content" }}>
                   {/* Headers — single row above all set rows */}
                   <span style={HDR}></span>{/* blank over S1/S2 labels */}
                   <span style={HDR}>Reps</span>
@@ -3057,7 +3057,7 @@ function EquipmentMultiSelect({
         const eq = e.target.value as Equipment | "";
         onChange(eq ? [eq] : [], undefined);
       }}
-      style={{ fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%" }}
+      style={{ fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%", minWidth: 0 }}
     >
       <option value="">—</option>
       {EQUIPMENT_OPTIONS.map((opt) => (
