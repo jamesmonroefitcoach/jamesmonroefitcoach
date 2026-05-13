@@ -213,11 +213,12 @@ export function hierarchyLeaves(): LibraryLeaf[] {
 /** Convert a LibraryLeaf into a Movement-compatible object for the program builder. */
 export function leafToMovement(leaf: LibraryLeaf): Movement {
   const existing = MOVEMENT_LIBRARY.find((m) => m.id === leaf.id || m.name.toLowerCase() === leaf.label.toLowerCase());
-  if (existing) return existing;
+  if (existing) return { ...existing, subcategory: existing.subcategory ?? leaf.label };
   return {
     id: leaf.id,
     name: leaf.label,
     category: leaf.category,
+    subcategory: leaf.label,
     is_core: leaf.is_core ?? false,
     equipment_list: [],
     cues: leaf.description,

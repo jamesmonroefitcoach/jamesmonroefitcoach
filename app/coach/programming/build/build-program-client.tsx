@@ -24,6 +24,7 @@ import {
   pastProgramsForClient
 } from "@/lib/programs";
 import { saveProgram, getClientAppointments, loadProgramForAppointment, type ApptOption } from "./actions";
+import { addMovement } from "../exercise-library/actions";
 import { fmtDate } from "@/lib/format";
 import type { ProgramKind } from "@/lib/programs";
 import type { ClientProgramItem } from "./page";
@@ -3956,6 +3957,17 @@ function ExerciseCard({
   function saveCurrentAsPreset() {
     const name = presetDraft.trim();
     if (!name) return;
+
+    // Validate: Machine/Other equipment requires equipment_specifics
+    const requiresSpecifics = (it.equipment_list ?? []).some(
+      (e) => e === "machine" || e === "other"
+    );
+    if (requiresSpecifics && !(it.equipment_specifics ?? "").trim()) {
+      alert("Machine or Other equipment requires you to specify which machine or item. Please fill in the equipment specifics before saving.");
+      return;
+    }
+
+    // Save preset to localStorage (existing behavior — keeps dropdown selection)
     const preset: ExercisePreset = {
       id: `p-${Date.now()}`,
       name,
@@ -3973,6 +3985,21 @@ function ExerciseCard({
     persistPresets(it.movement.id, next);
     setPresetDraft("");
     setShowNameInput(false);
+
+    // Also persist to the Exercise Library under the parent movement's category.
+    // Subcategory falls back to the parent movement's name when not set.
+    const subcategory = it.movement.subcategory || it.movement.name;
+    void addMovement({
+      name,
+      category: it.movement.category,
+      subcategory,
+      muscles: [],
+      equipment_list: it.equipment_list ?? [],
+      equipment_specifics: it.equipment_specifics,
+      position: it.position,
+      cues: "",
+      demo_url: "",
+    }).catch(() => { /* silent — preset still saved locally */ });
   }
 
   function applyPreset(p: ExercisePreset) {
