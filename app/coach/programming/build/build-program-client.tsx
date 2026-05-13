@@ -460,14 +460,74 @@ export default function BuildProgramClient({
   const pastPrograms = useMemo(() => (clientId ? pastProgramsForClient(clientId) : []), [clientId]);
   const pastSelected = useMemo(() => pastPrograms.find((p) => p.id === pastSelId) ?? null, [pastPrograms, pastSelId]);
 
+  // ── Per-tab state snapshots ─────────────────────────────────────────────
+  // The builder state (days, viewMode, selected appt/program, etc.) is shared
+  // across both Session and Program tabs. To make the tabs feel persistent —
+  // "whatever you were doing on Session stays there when you come back" — we
+  // snapshot the whole working state into a ref when switching out and restore
+  // it when switching back. First visit to a tab has no snapshot, so the
+  // existing initial state is used as-is.
+  type TabSnapshot = {
+    days: ProgramDay[];
+    programName: string;
+    durationWeeks: number;
+    daysPerWeek: number;
+    startsOn: string;
+    viewMode: "builder" | "plan" | "completed";
+    selectedApptId: string;
+    inGymStep: "picker" | "builder";
+    atHomeProgramStep: "picker" | "form" | "builder";
+    savedProgramId: string | null;
+    isDraftSaved: boolean;
+    completedDays: Set<string>;
+    planLog: PlanLog;
+  };
+  const inGymSnapshotRef = useRef<TabSnapshot | null>(null);
+  const atHomeSnapshotRef = useRef<TabSnapshot | null>(null);
+
+  function captureSnapshot(): TabSnapshot {
+    return {
+      days, programName, durationWeeks, daysPerWeek, startsOn,
+      viewMode, selectedApptId, inGymStep, atHomeProgramStep,
+      savedProgramId, isDraftSaved, completedDays, planLog,
+    };
+  }
+  function applySnapshot(s: TabSnapshot) {
+    setDays(s.days);
+    setProgramName(s.programName);
+    setDurationWeeks(s.durationWeeks);
+    setDaysPerWeek(s.daysPerWeek);
+    setStartsOn(s.startsOn);
+    setViewMode(s.viewMode);
+    setSelectedApptId(s.selectedApptId);
+    setInGymStep(s.inGymStep);
+    setAtHomeProgramStep(s.atHomeProgramStep);
+    setSavedProgramId(s.savedProgramId);
+    setIsDraftSaved(s.isDraftSaved);
+    setCompletedDays(s.completedDays);
+    setPlanLog(s.planLog);
+  }
+
   function handleTabChange(k: ProgramKind) {
+    if (k === programKind) return;
+    // Save the current tab's working state, then try to restore the other
+    // tab's saved snapshot so the user picks up exactly where they left off.
+    const outgoing = captureSnapshot();
+    if (programKind === "in_gym") inGymSnapshotRef.current = outgoing;
+    else atHomeSnapshotRef.current = outgoing;
     setProgramKind(k);
-    if (k === "at_home") {
-      setAtHomeProgramStep("picker");
-      setAtHomeEditingHeader(false);
-    }
-    if (k === "in_gym") {
-      setInGymStep("picker");
+    const incoming = k === "in_gym" ? inGymSnapshotRef.current : atHomeSnapshotRef.current;
+    if (incoming) {
+      applySnapshot(incoming);
+    } else {
+      // First time on this tab — go to the picker.
+      if (k === "at_home") {
+        setAtHomeProgramStep("picker");
+        setAtHomeEditingHeader(false);
+      } else {
+        setInGymStep("picker");
+      }
+      setViewMode("builder");
     }
     const url = new URL(window.location.href);
     url.searchParams.set("tab", k === "in_gym" ? "session" : "program");
@@ -1264,6 +1324,40 @@ export default function BuildProgramClient({
 
   return (
     <div>
+      {/* ─── Page-level Session / Program tab bar — always visible, lives at the
+            very top regardless of viewMode (plan view, builder, etc.) ─── */}
+      <div className="no-print" style={{ borderBottom: "2px solid var(--line)", marginBottom: "1.5rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <div style={{ display: "flex" }}>
+          {(["in_gym", "at_home"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => handleTabChange(k)}
+              style={{
+                padding: "0.55rem 1.4rem",
+                background: "transparent",
+                border: "none",
+                borderBottom: programKind === k ? "2px solid var(--rust)" : "2px solid transparent",
+                marginBottom: "-2px",
+                fontFamily: "inherit",
+                fontSize: "0.95rem",
+                fontWeight: programKind === k ? 700 : 400,
+                color: programKind === k ? "var(--rust)" : "var(--muted)",
+                cursor: "pointer",
+                letterSpacing: programKind === k ? "0.01em" : undefined,
+              }}
+            >
+              {k === "in_gym" ? "Session" : "Program"}
+            </button>
+          ))}
+        </div>
+        <span className="meta" style={{ paddingBottom: "0.55rem", fontSize: "0.78rem" }}>
+          {programKind === "in_gym"
+            ? "Training days James leads on the schedule."
+            : "Self-guided plan the client follows on their own time."}
+        </span>
+      </div>
+
       {viewMode !== "builder" && (
         <SessionPlanView
           clientId={clientId}
@@ -1325,44 +1419,6 @@ export default function BuildProgramClient({
           }}
         />
       )}
-      {/* ─── Page-level Session / Program tab bar — always visible, even in plan view ─── */}
-      <div className="no-print" style={{ borderBottom: "2px solid var(--line)", marginBottom: "1.5rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-        <div style={{ display: "flex" }}>
-          {(["in_gym", "at_home"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => {
-                // Clicking a top-level tab always returns to the picker for
-                // that kind. Drop out of plan view so the picker is visible.
-                setViewMode("builder");
-                handleTabChange(k);
-              }}
-              style={{
-                padding: "0.55rem 1.4rem",
-                background: "transparent",
-                border: "none",
-                borderBottom: programKind === k ? "2px solid var(--rust)" : "2px solid transparent",
-                marginBottom: "-2px",
-                fontFamily: "inherit",
-                fontSize: "0.95rem",
-                fontWeight: programKind === k ? 700 : 400,
-                color: programKind === k ? "var(--rust)" : "var(--muted)",
-                cursor: "pointer",
-                letterSpacing: programKind === k ? "0.01em" : undefined
-              }}
-            >
-              {k === "in_gym" ? "Session" : "Program"}
-            </button>
-          ))}
-        </div>
-        <span className="meta" style={{ paddingBottom: "0.55rem", fontSize: "0.78rem" }}>
-          {programKind === "in_gym"
-            ? "Training days James leads on the schedule."
-            : "Self-guided plan the client follows on their own time."}
-        </span>
-      </div>
-
       {viewMode === "builder" && <>
       {/* ─── in_gym PICKER FLOW ─── */}
       {programKind === "in_gym" && inGymStep === "picker" && (
