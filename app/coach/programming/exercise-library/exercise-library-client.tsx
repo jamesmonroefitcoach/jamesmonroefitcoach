@@ -33,21 +33,11 @@ function allNodeOptions(): NodeOption[] {
   return out;
 }
 const NODE_OPTIONS = allNodeOptions();
-const ALL_NODE_LABELS_LC = new Set(NODE_OPTIONS.map((o) => o.value.toLowerCase()));
 
 /** Return all exercises whose subcategory matches a node or child label. */
 function matchExercises(movements: MovementRow[], nodeLabel: string): MovementRow[] {
   const key = nodeLabel.toLowerCase();
   return movements.filter((m) => (m.subcategory ?? "").toLowerCase() === key);
-}
-
-/** Exercises whose subcategory doesn't map to any known node — surfaced
- *  in a small "Needs subcategory" banner so they don't get lost. */
-function orphanExercises(movements: MovementRow[]): MovementRow[] {
-  return movements.filter((m) => {
-    const sub = (m.subcategory ?? "").trim().toLowerCase();
-    return sub === "" || !ALL_NODE_LABELS_LC.has(sub);
-  });
 }
 
 // ── blank form ────────────────────────────────────────────────────────────────
@@ -549,75 +539,6 @@ function GroupSection({
   );
 }
 
-// ── Orphan banner — exercises that don't map to any library node ─────────────
-
-function OrphanBanner({ movements }: { movements: MovementRow[] }) {
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const orphans = useMemo(() => orphanExercises(movements), [movements]);
-  if (orphans.length === 0) return null;
-
-  async function handleUpdate(id: string, input: MovementInput) {
-    await updateMovement(id, input);
-    setEditingId(null);
-  }
-  async function handleArchive(id: string) {
-    if (!confirm("Archive this exercise?")) return;
-    await archiveMovement(id);
-  }
-
-  return (
-    <section
-      style={{
-        marginBottom: "1.25rem",
-        padding: "0.6rem 0.85rem",
-        border: "1px dashed var(--amber)",
-        borderRadius: 4,
-        background: "rgba(217,119,6,0.06)",
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          width: "100%", background: "none", border: "none", padding: 0,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          cursor: "pointer", fontFamily: "inherit",
-        }}
-      >
-        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {open ? "▾" : "▸"} Needs subcategory ({orphans.length})
-        </span>
-        <span className="meta" style={{ fontSize: "0.7rem" }}>
-          These exercises aren&apos;t assigned to a library node — pick one via Edit so they show up under the right group.
-        </span>
-      </button>
-      {open && (
-        <div style={{ marginTop: "0.65rem", paddingTop: "0.5rem", borderTop: "1px solid rgba(217,119,6,0.3)" }}>
-          {orphans.map((m) => (
-            editingId === m.id ? (
-              <ExerciseForm
-                key={m.id}
-                initial={movementToInput(m)}
-                mode="full"
-                onSave={(input) => handleUpdate(m.id, input)}
-                onCancel={() => setEditingId(null)}
-              />
-            ) : (
-              <ExerciseRow
-                key={m.id}
-                m={m}
-                onEdit={() => setEditingId(m.id)}
-                onArchive={handleArchive}
-              />
-            )
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ExerciseLibraryClient({ movements }: { movements: MovementRow[] }) {
@@ -678,11 +599,6 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
           style={{ maxWidth: 380 }}
         />
       </div>
-
-      {/* Needs-subcategory banner — only renders when an orphan exists.
-          Lets the coach find and re-classify exercises that slipped through
-          (e.g. saved with no subcategory) instead of being invisible. */}
-      <OrphanBanner movements={filtered} />
 
       {/* Hierarchy groups */}
       {LIBRARY_HIERARCHY.map((group) => (

@@ -3953,10 +3953,13 @@ function ExerciseCard({
   const [presets, setPresets] = useState<ExercisePreset[]>(() => loadPresets(it.movement.id));
   const [showNameInput, setShowNameInput] = useState(false);
   const [presetDraft, setPresetDraft] = useState("");
+  const [savingPreset, setSavingPreset] = useState(false);
+  const cardRouter = useRouter();
 
-  function saveCurrentAsPreset() {
+  async function saveCurrentAsPreset() {
     const name = presetDraft.trim();
     if (!name) return;
+    if (savingPreset) return;
 
     // Validate: Machine/Other equipment requires equipment_specifics
     const requiresSpecifics = (it.equipment_list ?? []).some(
@@ -3967,7 +3970,9 @@ function ExerciseCard({
       return;
     }
 
-    // Save preset to localStorage (existing behavior — keeps dropdown selection)
+    setSavingPreset(true);
+
+    // 1) Save preset to localStorage (drives the dropdown for this exercise)
     const preset: ExercisePreset = {
       id: `p-${Date.now()}`,
       name,
@@ -3983,23 +3988,34 @@ function ExerciseCard({
     const next = [...presets, preset];
     setPresets(next);
     persistPresets(it.movement.id, next);
-    setPresetDraft("");
-    setShowNameInput(false);
 
-    // Also persist to the Exercise Library under the parent movement's category.
-    // Subcategory falls back to the parent movement's name when not set.
+    // 2) Persist to the Exercise Library under the parent movement's category.
+    //    Subcategory falls back to the parent movement's name when not set.
     const subcategory = it.movement.subcategory || it.movement.name;
-    void addMovement({
-      name,
-      category: it.movement.category,
-      subcategory,
-      muscles: [],
-      equipment_list: it.equipment_list ?? [],
-      equipment_specifics: it.equipment_specifics,
-      position: it.position,
-      cues: "",
-      demo_url: "",
-    }).catch(() => { /* silent — preset still saved locally */ });
+    try {
+      const res = await addMovement({
+        name,
+        category: it.movement.category,
+        subcategory,
+        muscles: [],
+        equipment_list: it.equipment_list ?? [],
+        equipment_specifics: it.equipment_specifics,
+        position: it.position,
+        cues: "",
+        demo_url: "",
+      });
+      if (!res.ok) {
+        alert(`Saved to dropdown but Exercise Library write failed: ${res.error ?? "unknown error"}`);
+      } else {
+        cardRouter.refresh();
+      }
+    } catch (e) {
+      alert(`Saved to dropdown but Exercise Library write threw: ${(e as Error).message}`);
+    } finally {
+      setPresetDraft("");
+      setShowNameInput(false);
+      setSavingPreset(false);
+    }
   }
 
   function applyPreset(p: ExercisePreset) {
@@ -4325,8 +4341,8 @@ function ExerciseCard({
                 if (e.key === "Escape") { setShowNameInput(false); setPresetDraft(""); }
               }}
             />
-            <button className="btn btn-primary" style={{ fontSize: "0.64rem", padding: "0.1rem 0.38rem" }} onClick={saveCurrentAsPreset}>Save</button>
-            <button className="btn btn-ghost" style={{ fontSize: "0.64rem", padding: "0.1rem 0.26rem" }} onClick={() => { setShowNameInput(false); setPresetDraft(""); }}>✕</button>
+            <button className="btn btn-primary" style={{ fontSize: "0.64rem", padding: "0.1rem 0.38rem" }} onClick={saveCurrentAsPreset} disabled={savingPreset}>{savingPreset ? "…" : "Save"}</button>
+            <button className="btn btn-ghost" style={{ fontSize: "0.64rem", padding: "0.1rem 0.26rem" }} onClick={() => { setShowNameInput(false); setPresetDraft(""); }} disabled={savingPreset}>✕</button>
           </>
         ) : (
           <button
