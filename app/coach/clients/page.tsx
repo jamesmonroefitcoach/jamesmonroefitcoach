@@ -3,7 +3,11 @@ import { getSessionUser } from "@/lib/session";
 import { listClients, listProspects, listAppointmentsForWeek, startOfWeek } from "@/lib/data";
 import ClientsClient from "./clients-client";
 
-export type NextSessionStatus = Record<string, { apptId: string; programmed: boolean }>;
+export type NextSessionStatus = Record<string, {
+  apptId: string;
+  programmed: boolean;
+  status: "programmed" | "draft" | "needs_programming";
+}>;
 
 export default async function ClientsPage() {
   const user = await getSessionUser();
@@ -37,9 +41,15 @@ export default async function ClientsPage() {
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     .forEach((a) => {
       if (a.client_id && !nextSessionStatus[a.client_id]) {
+        const status: "programmed" | "draft" | "needs_programming" =
+          a.program_status === "programmed" ? "programmed"
+          : a.program_status === "draft" ? "draft"
+          : a.session_program_id ? "draft"
+          : "needs_programming";
         nextSessionStatus[a.client_id] = {
           apptId: a.id,
-          programmed: a.program_status === "programmed" || !!a.session_program_id,
+          programmed: status === "programmed",  // strict
+          status,
         };
       }
     });

@@ -52,7 +52,7 @@ type Draft = {
   status: AppointmentRow["status"];
   notes: string;
   session_program_id: string;
-  program_status: "programmed" | "needs_programming" | "n/a";
+  program_status: "programmed" | "draft" | "needs_programming" | "n/a";
   cancel_reason: string;
   cancel_reason_other: string;
   change_count: number;
@@ -1027,8 +1027,12 @@ export default function ScheduleView({
                             {e.change_count > 0 ? <span style={{ marginLeft: 6 }}>Moved {e.change_count}×</span> : null}
                           </span>
                           {e.session_type === "session" ? (
-                            <span style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                              {e.program_status === "programmed" ? "✓ prog" : "● need"}
+                            <span style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.04em",
+                              color: e.program_status === "draft" ? "var(--amber)" : undefined,
+                            }}>
+                              {e.program_status === "programmed" ? "✓ prog"
+                                : e.program_status === "draft" ? "● draft"
+                                : "● need"}
                             </span>
                           ) : null}
                         </div>
@@ -1292,13 +1296,18 @@ export default function ScheduleView({
                         className="btn btn-primary"
                         style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem", display: "inline-block" }}
                       >
-                        {draft.program_status === "programmed" ? "Edit session program →" : "Add session program →"}
+                        {draft.program_status === "programmed" ? "View session program →"
+                          : draft.program_status === "draft" ? "Edit draft program →"
+                          : "Add session program →"}
                       </Link>
                     ) : (
                       <span className="meta" style={{ fontSize: "0.78rem" }}>Pick a client to program this session.</span>
                     )}
                     {draft.program_status === "programmed" && (
-                      <span className="badge badge-sage" style={{ marginLeft: "0.5rem", fontSize: "0.7rem" }}>programmed</span>
+                      <span className="badge badge-sage" style={{ marginLeft: "0.5rem", fontSize: "0.7rem" }}>published</span>
+                    )}
+                    {draft.program_status === "draft" && (
+                      <span className="badge badge-amber" style={{ marginLeft: "0.5rem", fontSize: "0.7rem" }}>draft</span>
                     )}
                   </div>
                 </div>
