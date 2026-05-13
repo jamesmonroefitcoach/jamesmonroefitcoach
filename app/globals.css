@@ -214,13 +214,18 @@ a:hover { text-decoration: underline; }
   overflow: visible;
 }
 
-/* Horizontal scroll wrapper around the roster table. We explicitly set
-   overflow-y: visible so modern browsers let vertical sticky bubble to the
-   viewport while horizontal scrolling stays inside this wrapper. The sticky
-   first/last columns attach to this wrapper for horizontal scrolling. */
+/* Scroll wrapper around the roster table. Both axes scroll INSIDE this
+   wrapper (fixed max-height) so sticky thead AND sticky first/last columns
+   all pin reliably — they all attach to the same scrollport (the wrapper).
+   Vertical page scroll past the wrapper is unaffected. */
 .roster-scroll {
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: auto;
+  max-height: calc(100vh - 180px);
+}
+@media (max-width: 640px) {
+  .roster-scroll {
+    max-height: calc(100vh - 160px);
+  }
 }
 
 /* Frozen first / last columns — apply on desktop too (mobile rules below
@@ -482,8 +487,4 @@ th.tbl-sticky-last {
   /* Corner cells: sticky header + sticky column — must be above both */
   .table-sticky-head thead th.tbl-sticky-first,
   .table-sticky-head thead th.tbl-sticky-last { z-index: 4 !important; background: #f0ebe0 !important; }
-
-  /* On mobile the fixed top nav (48px) covers top:0, so sit the sticky
-     header just below it instead of disappearing behind it. */
-  .table-sticky-head thead th { top: 48px; }
 }
