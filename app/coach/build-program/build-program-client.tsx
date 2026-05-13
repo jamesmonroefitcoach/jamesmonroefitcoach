@@ -3166,10 +3166,10 @@ function EquipmentMultiSelect({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const PANEL_W = 148;
+  const PANEL_W = 160;
 
   useClickOutsideTwo(btnRef, panelRef, open, () => setOpen(false));
 
@@ -3177,10 +3177,13 @@ function EquipmentMultiSelect({
     if (open) { setOpen(false); return; }
     const rect = btnRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setPos({
-      top: rect.bottom + 2,
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_W - 8)),
-    });
+    // Anchor right edge of panel to right edge of button when near right side of screen
+    const spaceRight = window.innerWidth - rect.left;
+    if (spaceRight >= PANEL_W + 8) {
+      setPos({ top: rect.bottom + 2, left: rect.left });
+    } else {
+      setPos({ top: rect.bottom + 2, right: window.innerWidth - rect.right });
+    }
     setOpen(true);
   }
 
@@ -3199,16 +3202,18 @@ function EquipmentMultiSelect({
         ref={btnRef} type="button" onClick={toggleOpen}
         className="select"
         style={{
-          fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center",
-          width: "100%", minWidth: 0, display: "block", boxSizing: "border-box",
+          fontSize: "0.72rem", padding: "0.14rem 0.14rem",
+          width: "100%", minWidth: 0, display: "flex", boxSizing: "border-box",
+          alignItems: "center", justifyContent: "space-between", gap: 2,
           cursor: "pointer", color: value.length ? "var(--ink)" : "var(--muted)",
         }}
       >
-        {label}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, textAlign: "center" }}>{label}</span>
+        <span style={{ fontSize: "0.55rem", color: "var(--muted)", flexShrink: 0, lineHeight: 1 }}>▾</span>
       </button>
       {open && (
         <div ref={panelRef} style={{
-          position: "fixed", top: pos.top, left: pos.left, zIndex: 1000,
+          position: "fixed", top: pos.top, left: pos.left, right: pos.right, zIndex: 1000,
           background: "var(--paper)", border: "1px solid var(--line)",
           borderRadius: 3, boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
           minWidth: PANEL_W, padding: "0.25rem 0",
