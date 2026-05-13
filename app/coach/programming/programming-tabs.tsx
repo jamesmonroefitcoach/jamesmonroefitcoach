@@ -6,7 +6,8 @@ export default function ProgrammingTabs() {
   const path = usePathname() ?? "";
   const isBuild = path.startsWith("/coach/programming/build");
   const isLibrary = path.startsWith("/coach/programming/exercise-library");
-  const isView = !isBuild && !isLibrary;
+  const isMaterials = path.startsWith("/coach/programming/materials");
+  const isView = !isBuild && !isLibrary && !isMaterials;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -42,6 +43,7 @@ export default function ProgrammingTabs() {
         <Link href="/coach/programming" style={tabStyle(isView)}>View Programs</Link>
         <Link href="/coach/programming/build" style={tabStyle(isBuild)}>Build Program</Link>
         <Link href="/coach/programming/exercise-library" style={tabStyle(isLibrary)}>Exercise Library</Link>
+        <Link href="/coach/programming/materials" style={tabStyle(isMaterials)}>Materials</Link>
       </nav>
     </div>
   );
