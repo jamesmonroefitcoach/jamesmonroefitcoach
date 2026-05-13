@@ -35,7 +35,7 @@ export type ApptInput = {
   status: AppointmentRow["status"];
   notes?: string | null;
   session_program_id?: string | null;
-  program_status?: "programmed" | "needs_programming" | "n/a";
+  program_status?: "programmed" | "draft" | "needs_programming" | "n/a";
   cancel_reason?: CancelReason | null;
   cancel_reason_other?: string | null;
   repeat?: RepeatInput;

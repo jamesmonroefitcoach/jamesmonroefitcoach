@@ -23,7 +23,7 @@ import {
   type LibraryLeaf,
   pastProgramsForClient
 } from "@/lib/programs";
-import { saveProgram, getClientAppointments, type ApptOption } from "./actions";
+import { saveProgram, getClientAppointments, loadProgramForAppointment, type ApptOption } from "./actions";
 import { fmtDate } from "@/lib/format";
 import type { ProgramKind } from "@/lib/programs";
 import type { ClientProgramItem } from "./page";
@@ -279,21 +279,75 @@ export default function BuildProgramClient({
     try { localStorage.setItem(draftKey(cid), JSON.stringify(map)); } catch {}
   }
 
-  // Restore drafted appt set when the client changes
+  // Restore drafted appt set when the client changes. Merge DB-derived drafts
+  // (appts with program_status === 'draft') with any localStorage-tracked drafts.
   useEffect(() => {
     if (!clientId) return;
+    const dbDrafts = appts.filter((a) => a.program_status === "draft").map((a) => a.id);
     const map = readDraftMap(clientId);
-    setDraftedApptIds(new Set(Object.keys(map)));
-  }, [clientId]);
+    setDraftedApptIds(new Set([...Object.keys(map), ...dbDrafts]));
+  }, [clientId, appts]);
 
-  // Restore savedProgramId when the selected appointment changes
+  // When the selected appointment changes, restore the linked program (draft OR
+  // published) so the builder shows exactly what was saved before.
   useEffect(() => {
     if (!clientId || !selectedApptId) { setSavedProgramId(null); setIsDraftSaved(false); return; }
-    const map = readDraftMap(clientId);
-    const pid = map[selectedApptId] ?? null;
+    const appt = appts.find((a) => a.id === selectedApptId);
+    // Try apptId-keyed snapshot first (stable, always available even offline).
+    let restored = false;
+    let pidFromSnapshot: string | null = null;
+    try {
+      const raw = localStorage.getItem(`builder_state_appt_${selectedApptId}`);
+      if (raw) {
+        const bs = JSON.parse(raw) as {
+          days?: ProgramDay[]; programName?: string; durationWeeks?: number;
+          daysPerWeek?: number; startsOn?: string; program_id?: string | null; publish?: boolean;
+        };
+        if (bs?.days?.length) {
+          setDays(bs.days);
+          if (bs.programName) setProgramName(bs.programName);
+          if (bs.durationWeeks) setDurationWeeks(bs.durationWeeks);
+          if (bs.daysPerWeek) setDaysPerWeek(bs.daysPerWeek);
+          if (bs.startsOn) setStartsOn(bs.startsOn);
+          restored = true;
+        }
+        if (bs?.program_id) pidFromSnapshot = bs.program_id;
+      }
+    } catch {}
+    // Resolve program_id from: DB link → snapshot → legacy map
+    const pidFromAppt = appt?.session_program_id ?? null;
+    const pidFromMap = readDraftMap(clientId)[selectedApptId] ?? null;
+    const pid = pidFromAppt ?? pidFromSnapshot ?? (pidFromMap && pidFromMap !== "local" && pidFromMap !== "saved" ? pidFromMap : null);
     setSavedProgramId(pid);
-    setIsDraftSaved(!!pid);
-  }, [clientId, selectedApptId]);
+    setIsDraftSaved(appt?.program_status === "draft" || (!pidFromAppt && !!pidFromMap));
+    // Fallback: if we didn't restore yet, try the pid-keyed snapshot for back-compat.
+    if (!restored && pid) {
+      try {
+        const raw = localStorage.getItem(`builder_state_${pid}`);
+        if (raw) {
+          const bs = JSON.parse(raw) as { days?: ProgramDay[]; programName?: string; durationWeeks?: number; daysPerWeek?: number; startsOn?: string };
+          if (bs?.days?.length) {
+            setDays(bs.days);
+            if (bs.programName) setProgramName(bs.programName);
+            if (bs.durationWeeks) setDurationWeeks(bs.durationWeeks);
+            if (bs.daysPerWeek) setDaysPerWeek(bs.daysPerWeek);
+            if (bs.startsOn) setStartsOn(bs.startsOn);
+          }
+        }
+      } catch {}
+    }
+    // Fetch program meta from DB (name, is_published) for header display in case it changed.
+    if (!pid) return;
+    let cancelled = false;
+    (async () => {
+      const res = await loadProgramForAppointment(selectedApptId);
+      if (cancelled || !res.ok || !res.data) return;
+      if (res.data.name) setProgramName(res.data.name);
+      if (res.data.starts_on) setStartsOn(res.data.starts_on);
+      if (res.data.duration_weeks) setDurationWeeks(res.data.duration_weeks);
+    })();
+    return () => { cancelled = true; };
+  }, [clientId, selectedApptId, appts]);
 
   // library controls
   const [searchTerm, setSearchTerm] = useState("");
@@ -728,6 +782,7 @@ export default function BuildProgramClient({
         : programName;
       const res = await saveProgram({
         program_id: savedProgramId ?? undefined,
+        appt_id: programKind === "in_gym" ? (selectedApptId || null) : null,
         client_id: clientId,
         name: autoName,
         starts_on: startsOn,
@@ -757,6 +812,18 @@ export default function BuildProgramClient({
           }))
         }))
       });
+      // Always snapshot the full builder UI state (set_rows, supersets, optional
+      // fields, etc.) to localStorage so reload restores exactly what the coach
+      // saw — even if Supabase is unconfigured or the DB write didn't return an id.
+      const pidFromSave = res.ok ? (res.data?.id ?? null) : null;
+      if (selectedApptId) {
+        try {
+          localStorage.setItem(
+            `builder_state_appt_${selectedApptId}`,
+            JSON.stringify({ days, programName, durationWeeks, daysPerWeek, startsOn, program_id: pidFromSave, publish })
+          );
+        } catch {}
+      }
       if (!res.ok) {
         if (res.error.startsWith("Supabase not configured")) {
           if (!publish && selectedApptId) {
@@ -771,6 +838,8 @@ export default function BuildProgramClient({
             writeDraftMap(clientId, map);
             setDraftedApptIds((prev) => { const n = new Set(prev); n.delete(selectedApptId); return n; });
             setIsDraftSaved(false);
+            setPlanLog(initPlanLog(days));
+            setViewMode("plan");
           }
           setSaveMessage(`${publish ? "Published" : "Drafted"} locally — Supabase not configured yet.`);
         } else {
@@ -778,8 +847,25 @@ export default function BuildProgramClient({
         }
         return;
       }
-      const pid = res.data?.id ?? null;
+      const pid = pidFromSave;
       if (pid) setSavedProgramId(pid);
+      // Also write a pid-keyed copy for back-compat with any earlier saves.
+      if (pid) {
+        try {
+          localStorage.setItem(
+            `builder_state_${pid}`,
+            JSON.stringify({ days, programName, durationWeeks, daysPerWeek, startsOn })
+          );
+        } catch {}
+      }
+      // Optimistically reflect the new status on the local appts list so the
+      // dropdown badge flips without a server round-trip.
+      if (selectedApptId) {
+        setAppts((prev) => prev.map((a) => a.id === selectedApptId
+          ? { ...a, program_status: publish ? "programmed" : "draft", session_program_id: pid ?? a.session_program_id ?? null }
+          : a
+        ));
+      }
       if (!publish) {
         if (selectedApptId) {
           const map = readDraftMap(clientId);
@@ -1134,16 +1220,24 @@ export default function BuildProgramClient({
                   onChange={(e) => {
                     const id = e.target.value;
                     setSelectedApptId(id);
-                    setSavedProgramId(null);
-                    setIsDraftSaved(false);
                     setSaveMessage(null);
                     const appt = appts.find((a) => a.id === id);
-                    setDays([{
-                      uid: `day-1-${Date.now()}`,
-                      title: appt ? fmtSessionTitle(appt.starts_at) : "Session",
-                      collapsed: false,
-                      items: [],
-                    }]);
+                    // Only reset days to a clean empty day when there is NO
+                    // saved state to restore (no DB link AND no localStorage
+                    // snapshot for this appt). Otherwise the useEffect below
+                    // restores the saved exercises.
+                    const hasLocalSnapshot = id ? (() => {
+                      try { return !!localStorage.getItem(`builder_state_appt_${id}`); }
+                      catch { return false; }
+                    })() : false;
+                    if (!appt?.session_program_id && !hasLocalSnapshot) {
+                      setDays([{
+                        uid: `day-1-${Date.now()}`,
+                        title: appt ? fmtSessionTitle(appt.starts_at) : "Session",
+                        collapsed: false,
+                        items: [],
+                      }]);
+                    }
                   }}
                   disabled={apptsPending}
                 >
@@ -1151,7 +1245,9 @@ export default function BuildProgramClient({
                   {appts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {new Date(a.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                      {draftedApptIds.has(a.id) ? "  · Drafted" : a.program_status === "programmed" ? "  ✓ programmed" : ""}
+                      {a.program_status === "draft" || draftedApptIds.has(a.id) ? "  · Drafted"
+                        : a.program_status === "programmed" ? "  ✓ Published"
+                        : ""}
                     </option>
                   ))}
                 </select>
@@ -1159,7 +1255,12 @@ export default function BuildProgramClient({
                   className="btn btn-primary"
                   disabled={!selectedApptId}
                   onClick={() => setInGymStep("builder")}
-                >Build →</button>
+                >{(() => {
+                  const a = appts.find((x) => x.id === selectedApptId);
+                  return a?.program_status === "programmed" ? "View →"
+                    : a?.program_status === "draft" || draftedApptIds.has(selectedApptId) ? "Edit →"
+                    : "Build →";
+                })()}</button>
               </div>
             </div>
           )}

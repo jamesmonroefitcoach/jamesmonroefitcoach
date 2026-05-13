@@ -319,13 +319,21 @@ export default function DashboardClient({
 
   const weekSessions: WeekSessionItem[] = displayAppts
     .filter((a) => a.session_type === "session" && a.status !== "cancelled" && a.status !== "no_show" && !!a.client_id)
-    .map((a) => ({
-      id: a.id,
-      client_id: a.client_id!,
-      client_name: a.client_name,
-      starts_at: a.starts_at,
-      is_programmed: a.program_status === "programmed" || !!a.session_program_id,
-    }))
+    .map((a) => {
+      const status: "programmed" | "draft" | "needs_programming" =
+        a.program_status === "programmed" ? "programmed"
+        : a.program_status === "draft" ? "draft"
+        : a.session_program_id ? "draft"
+        : "needs_programming";
+      return {
+        id: a.id,
+        client_id: a.client_id!,
+        client_name: a.client_name,
+        starts_at: a.starts_at,
+        program_status: status,
+        is_programmed: status === "programmed",
+      };
+    })
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
   const activeClients = clients.filter((c) => c.lifecycle === "active");
@@ -454,7 +462,13 @@ export default function DashboardClient({
                 </thead>
                 <tbody>
                   {displayAppts.map((a) => {
-                    const isProgrammed = a.program_status === "programmed" || !!a.session_program_id;
+                    const progStatus: "programmed" | "draft" | "needs_programming" =
+                      a.program_status === "programmed" ? "programmed"
+                      : a.program_status === "draft" ? "draft"
+                      : a.session_program_id ? "draft"
+                      : "needs_programming";
+                    const isProgrammed = progStatus === "programmed";
+                    const isDraft = progStatus === "draft";
                     const isSession = a.session_type === "session" && !!a.client_id;
                     const sessionDate = new Date(a.starts_at);
                     const prog = a.client_id ? clientProgramInfo.get(a.client_id) : null;
@@ -504,13 +518,13 @@ export default function DashboardClient({
                                 style={{
                                   fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
                                   borderRadius: 3,
-                                  border: `1px solid ${isProgrammed ? "var(--sage)" : "var(--amber)"}`,
+                                  border: `1px ${isDraft ? "dashed" : "solid"} ${isProgrammed ? "var(--sage)" : "var(--amber)"}`,
                                   color: isProgrammed ? "var(--sage)" : "var(--amber)",
                                   background: isProgrammed ? "rgba(90,107,74,0.07)" : "rgba(217,119,6,0.07)",
                                   textDecoration: "none", whiteSpace: "nowrap", display: "inline-block",
                                 }}
                               >
-                                {isProgrammed ? "Programmed →" : "Not Programmed →"}
+                                {isProgrammed ? "Published →" : isDraft ? "Draft →" : "Not Programmed →"}
                               </Link>
                             </>
                           ) : <span className="meta">—</span>}

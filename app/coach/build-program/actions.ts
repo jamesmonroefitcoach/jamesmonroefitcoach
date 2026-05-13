@@ -27,6 +27,7 @@ export type SaveProgramDay = {
 
 export type SaveProgramInput = {
   program_id?: string;
+  appt_id?: string | null;  // if set, link this program back to the appointment via session_program_id
   client_id: string;
   name: string;
   starts_on: string;        // YYYY-MM-DD
@@ -158,11 +159,61 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
     }
   }
 
+  // Link the new program to its appointment (uses existing session_program_id
+  // column — no schema change required). Re-saving the same draft reuses the
+  // same programs row, so publishing naturally overwrites the prior draft.
+  if (input.appt_id && programId) {
+    await supabase
+      .from("appointments")
+      .update({ session_program_id: programId, updated_at: new Date().toISOString() })
+      .eq("id", input.appt_id)
+      .eq("coach_id", me.id);
+  }
+
   revalidatePath(`/coach/clients/${input.client_id}`);
   revalidatePath("/coach/clients");
   revalidatePath("/coach/build-program");
+  revalidatePath("/coach/schedule");
+  revalidatePath("/coach");
   if (!programId) return { ok: false, error: "program id missing after save" };
   return { ok: true, data: { id: programId } };
+}
+
+// ─── Load program metadata for editing ──────────────────────────────────────
+// Builder-specific extras (set_rows, supersets, optional fields) live in
+// localStorage keyed by program_id on the client. This action returns just the
+// DB-backed metadata: id, name, dates, kind, published flag.
+export type LoadedProgram = {
+  id: string;
+  name: string;
+  starts_on: string;
+  ends_on: string | null;
+  duration_weeks: number;
+  is_published: boolean;
+  program_kind: ProgramKind;
+  at_home_cadence: string | null;
+};
+
+export async function loadProgramForAppointment(apptId: string): Promise<{ ok: true; data: LoadedProgram | null } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: true, data: null };
+  const supabase = createSupabaseAdmin();
+  const { data: appt } = await supabase
+    .from("appointments")
+    .select("session_program_id")
+    .eq("id", apptId)
+    .eq("coach_id", me.id)
+    .maybeSingle();
+  if (!appt?.session_program_id) return { ok: true, data: null };
+  const { data: prog, error } = await supabase
+    .from("programs")
+    .select("id, name, starts_on, ends_on, duration_weeks, is_published, program_kind, at_home_cadence")
+    .eq("id", appt.session_program_id)
+    .eq("coach_id", me.id)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: (prog as LoadedProgram | null) ?? null };
 }
 
 export type ApptOption = {
@@ -170,7 +221,8 @@ export type ApptOption = {
   starts_at: string;
   ends_at: string;
   status: string;
-  program_status: string;
+  program_status: "programmed" | "draft" | "needs_programming" | "n/a";
+  session_program_id?: string | null;
 };
 
 export async function getClientAppointments(clientId: string): Promise<ApptOption[]> {
@@ -185,7 +237,8 @@ export async function getClientAppointments(clientId: string): Promise<ApptOptio
       starts_at: a.starts_at,
       ends_at: a.ends_at,
       status: a.status,
-      program_status: a.program_status ?? "needs_programming"
+      program_status: a.program_status ?? "needs_programming",
+      session_program_id: a.session_program_id ?? null,
     }));
 }
 

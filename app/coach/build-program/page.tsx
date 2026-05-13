@@ -53,7 +53,9 @@ export default async function BuildProgramPage({
       starts_at: a.starts_at,
       ends_at: a.ends_at,
       status: a.status,
-      program_status: a.program_status ?? "needs_programming"
+      program_status: (a.program_status ?? (a.session_program_id ? "draft" : "needs_programming")) as
+        "programmed" | "draft" | "needs_programming" | "n/a",
+      session_program_id: a.session_program_id ?? null,
     }));
 
   // All sessions this week — for the Session tab banner
@@ -65,13 +67,21 @@ export default async function BuildProgramPage({
       a.status !== "no_show" &&
       a.client_id !== null
     )
-    .map((a) => ({
-      id: a.id,
-      client_id: a.client_id!,
-      client_name: a.client_name,
-      starts_at: a.starts_at,
-      is_programmed: a.program_status === "programmed" || !!a.session_program_id
-    }))
+    .map((a) => {
+      const status: "programmed" | "draft" | "needs_programming" =
+        a.program_status === "programmed" ? "programmed"
+        : a.program_status === "draft" ? "draft"
+        : a.session_program_id ? "draft"
+        : "needs_programming";
+      return {
+        id: a.id,
+        client_id: a.client_id!,
+        client_name: a.client_name,
+        starts_at: a.starts_at,
+        program_status: status,
+        is_programmed: status === "programmed",
+      };
+    })
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
   // Active client program summary — for the Program tab banner

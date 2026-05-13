@@ -317,7 +317,7 @@ export type AppointmentRow = {
   personal_label: string | null;
   is_blocking: boolean;
   session_program_id?: string | null;
-  program_status: "programmed" | "needs_programming" | "n/a";  // n/a for personal blocks
+  program_status: "programmed" | "draft" | "needs_programming" | "n/a";  // n/a for personal blocks
   call_type?: "voice" | "video" | null;  // for online client sessions
   series_id?: string | null;
   requested_starts_at?: string | null;
@@ -455,6 +455,35 @@ function demoAppointments(): AppointmentRow[] {
   return rows;
 }
 
+// Derive program_status without depending on a DB column. We use existing
+// columns only: appointments.session_program_id + programs.is_published.
+// This avoids needing a schema migration to ship draft/published surfacing.
+async function attachDerivedProgramStatus<T extends {
+  session_type: "session" | "personal";
+  session_program_id?: string | null;
+  program_status?: AppointmentRow["program_status"];
+}>(rows: T[]): Promise<T[]> {
+  if (rows.length === 0) return rows;
+  const programIds = Array.from(new Set(
+    rows.map((r) => r.session_program_id).filter((id): id is string => !!id)
+  ));
+  let publishedMap = new Map<string, boolean>();
+  if (programIds.length > 0 && hasSupabaseEnv()) {
+    const supabase = createSupabaseAdmin();
+    const { data } = await supabase
+      .from("programs")
+      .select("id, is_published")
+      .in("id", programIds);
+    publishedMap = new Map((data ?? []).map((p: { id: string; is_published: boolean }) => [p.id, !!p.is_published]));
+  }
+  return rows.map((r) => {
+    if (r.session_type === "personal") return { ...r, program_status: "n/a" as const };
+    if (!r.session_program_id) return { ...r, program_status: "needs_programming" as const };
+    const isPub = publishedMap.get(r.session_program_id);
+    return { ...r, program_status: (isPub ? "programmed" : "draft") as AppointmentRow["program_status"] };
+  });
+}
+
 export async function listAppointmentsForWeek(coachId: string, weekStart?: Date): Promise<AppointmentRow[]> {
   if (!hasSupabaseEnv()) {
     const start = weekStart ?? startOfWeek(new Date());
@@ -475,7 +504,7 @@ export async function listAppointmentsForWeek(coachId: string, weekStart?: Date)
     .lt("starts_at", end.toISOString())
     .order("starts_at", { ascending: true });
   if (error || !data) return [];
-  return data as AppointmentRow[];
+  return attachDerivedProgramStatus(data as AppointmentRow[]);
 }
 
 export async function listAppointmentsForMonth(coachId: string, monthStart: Date): Promise<AppointmentRow[]> {
@@ -497,7 +526,7 @@ export async function listAppointmentsForMonth(coachId: string, monthStart: Date
     .eq("coach_id", coachId)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString());
-  return (data ?? []) as AppointmentRow[];
+  return attachDerivedProgramStatus((data ?? []) as AppointmentRow[]);
 }
 
 export async function listAppointmentsForClient(clientId: string): Promise<AppointmentRow[]> {
@@ -535,7 +564,7 @@ export async function listAppointmentsForClient(clientId: string): Promise<Appoi
     .eq("client_id", clientId)
     .order("starts_at", { ascending: true });
   if (error || !data) return [];
-  return data as AppointmentRow[];
+  return attachDerivedProgramStatus(data as AppointmentRow[]);
 }
 
 export function startOfWeek(d: Date): Date {
