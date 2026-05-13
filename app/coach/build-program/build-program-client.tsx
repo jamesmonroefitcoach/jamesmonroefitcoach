@@ -236,6 +236,9 @@ export default function BuildProgramClient({
   const [savePending, startSave] = useTransition();
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedProgramId, setSavedProgramId] = useState<string | null>(null);
+  const [isDraftSaved, setIsDraftSaved] = useState(false);
+  const [draftedApptIds, setDraftedApptIds] = useState<Set<string>>(new Set());
 
   // library controls
   const [searchTerm, setSearchTerm] = useState("");
@@ -669,6 +672,7 @@ export default function BuildProgramClient({
         ? `Session ${new Date(sessionAppt.starts_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
         : programName;
       const res = await saveProgram({
+        program_id: savedProgramId ?? undefined,
         client_id: clientId,
         name: autoName,
         starts_on: startsOn,
@@ -700,13 +704,27 @@ export default function BuildProgramClient({
       });
       if (!res.ok) {
         if (res.error.startsWith("Supabase not configured")) {
-          setSaveMessage(`${publish ? "Published" : "Saved"} locally — Supabase not configured yet.`);
+          if (!publish && selectedApptId) {
+            setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
+            setIsDraftSaved(true);
+          } else if (publish) {
+            setIsDraftSaved(false);
+          }
+          setSaveMessage(`${publish ? "Published" : "Drafted"} locally — Supabase not configured yet.`);
         } else {
           setSaveError(res.error);
         }
         return;
       }
-      setSaveMessage(publish ? "Published. Visible on the client's portal." : "Saved as draft.");
+      if (res.data?.id) setSavedProgramId(res.data.id);
+      if (!publish) {
+        if (selectedApptId) setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
+        setIsDraftSaved(true);
+        setSaveMessage("Drafted.");
+      } else {
+        setIsDraftSaved(false);
+        setSaveMessage("Published. Visible on the client's portal.");
+      }
     });
   }
 
@@ -1023,6 +1041,9 @@ export default function BuildProgramClient({
                   onChange={(e) => {
                     const id = e.target.value;
                     setSelectedApptId(id);
+                    setSavedProgramId(null);
+                    setIsDraftSaved(false);
+                    setSaveMessage(null);
                     const appt = appts.find((a) => a.id === id);
                     setDays([{
                       uid: `day-1-${Date.now()}`,
@@ -1037,7 +1058,7 @@ export default function BuildProgramClient({
                   {appts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {new Date(a.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                      {a.program_status === "programmed" ? "  ✓ programmed" : ""}
+                      {draftedApptIds.has(a.id) ? "  · Drafted" : a.program_status === "programmed" ? "  ✓ programmed" : ""}
                     </option>
                   ))}
                 </select>
@@ -1599,7 +1620,7 @@ export default function BuildProgramClient({
                           style={{ fontSize: "0.62rem", padding: "0.1rem 0.32rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", marginTop: "0.18rem" }}
                           onClick={() => {
                             const ssId = initSuperset(day.uid, it.uid);
-                            setSupersetPickerState({ dayUid: day.uid, supersetId: ssId });
+                            addMovementToSuperset(day.uid, { id: `ph-${Date.now()}`, name: "Exercise", category: "push" }, ssId);
                           }}
                           title="Add another exercise to form a superset"
                         >⊞ + Superset</button>
@@ -1646,18 +1667,7 @@ export default function BuildProgramClient({
                         className="no-print"
                         title="Remove entire superset"
                         onClick={() => removeSuperset(day.uid, supersetId)}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid var(--amber)",
-                          borderRadius: 3,
-                          color: "var(--amber)",
-                          fontSize: "0.68rem",
-                          fontWeight: 700,
-                          lineHeight: 1,
-                          cursor: "pointer",
-                          padding: "0.1rem 0.35rem",
-                          flexShrink: 0,
-                        }}
+                        style={{ background: "transparent", border: "1px solid var(--amber)", borderRadius: 3, color: "var(--amber)", fontSize: "0.68rem", fontWeight: 700, lineHeight: 1, cursor: "pointer", padding: "0.1rem 0.35rem", flexShrink: 0 }}
                       >✕ Remove</button>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", padding: "0.3rem 0.35rem" }}>
@@ -1678,33 +1688,15 @@ export default function BuildProgramClient({
                           onPatch={(p) => patchItem(day.uid, it.uid, p)}
                           onToggleSameFormat={() => toggleSameFormat(day.uid, it.uid)}
                           onPatchSetRow={(si, p) => patchSetRow(day.uid, it.uid, si, p)}
-                          bottomSlot={
-                            <button
-                              type="button"
-                              className="btn btn-ghost no-print"
-                              style={{ fontSize: "0.6rem", padding: "0.1rem 0.3rem", color: "var(--muted)", width: "100%", marginTop: "0.2rem" }}
-                              onClick={() => removeFromSuperset(day.uid, it.uid)}
-                            >↗ Ungroup</button>
-                          }
                         />
                       ))}
                     </div>
-                    {supersetPickerState?.supersetId === supersetId ? (
-                      <SupersetExercisePicker
-                        onSelect={(leaf) => {
-                          addMovementToSuperset(supersetPickerState.dayUid, leafToMovement(leaf), supersetId);
-                          setSupersetPickerState(null);
-                        }}
-                        onClose={() => setSupersetPickerState(null)}
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-ghost no-print"
-                        style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
-                        onClick={() => setSupersetPickerState({ dayUid: day.uid, supersetId })}
-                      >⊞ + Add exercise to Super Set</button>
-                    )}
+                    <button
+                      type="button"
+                      className="btn btn-ghost no-print"
+                      style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
+                      onClick={() => addMovementToSuperset(day.uid, { id: `ph-${Date.now()}`, name: "Exercise", category: "push" }, supersetId)}
+                    >⊞ + Add exercise to Super Set</button>
                   </div>
                 );
               })}
@@ -1870,18 +1862,7 @@ export default function BuildProgramClient({
                               className="no-print"
                               title="Remove entire superset"
                               onClick={() => removeSuperset(day.uid, supersetId)}
-                              style={{
-                                background: "transparent",
-                                border: "1px solid var(--amber)",
-                                borderRadius: 3,
-                                color: "var(--amber)",
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                lineHeight: 1,
-                                cursor: "pointer",
-                                padding: "0.1rem 0.35rem",
-                                flexShrink: 0,
-                              }}
+                              style={{ background: "transparent", border: "1px solid var(--amber)", borderRadius: 3, color: "var(--amber)", fontSize: "0.68rem", fontWeight: 700, lineHeight: 1, cursor: "pointer", padding: "0.1rem 0.35rem", flexShrink: 0 }}
                             >✕ Remove</button>
                           </div>
                           <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", padding: "0.3rem 0.35rem" }}>
@@ -1902,33 +1883,15 @@ export default function BuildProgramClient({
                                 onPatch={(p) => patchItem(day.uid, it.uid, p)}
                                 onToggleSameFormat={() => toggleSameFormat(day.uid, it.uid)}
                                 onPatchSetRow={(si, p) => patchSetRow(day.uid, it.uid, si, p)}
-                                bottomSlot={
-                                  <button
-                                    type="button"
-                                    className="btn btn-ghost no-print"
-                                    style={{ fontSize: "0.6rem", padding: "0.1rem 0.3rem", color: "var(--muted)", width: "100%", marginTop: "0.2rem" }}
-                                    onClick={() => removeFromSuperset(day.uid, it.uid)}
-                                  >↗ Ungroup</button>
-                                }
                               />
                             ))}
                           </div>
-                          {supersetPickerState?.supersetId === supersetId ? (
-                            <SupersetExercisePicker
-                              onSelect={(leaf) => {
-                                addMovementToSuperset(supersetPickerState.dayUid, leafToMovement(leaf), supersetId);
-                                setSupersetPickerState(null);
-                              }}
-                              onClose={() => setSupersetPickerState(null)}
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn btn-ghost no-print"
-                              style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
-                              onClick={() => setSupersetPickerState({ dayUid: day.uid, supersetId })}
-                            >⊞ + Add exercise to Super Set</button>
-                          )}
+                          <button
+                            type="button"
+                            className="btn btn-ghost no-print"
+                            style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
+                            onClick={() => addMovementToSuperset(day.uid, { id: `ph-${Date.now()}`, name: "Exercise", category: "push" }, supersetId)}
+                          >⊞ + Add exercise to Super Set</button>
                         </div>
                       );
                     })}
@@ -1948,7 +1911,7 @@ export default function BuildProgramClient({
 
     {/* ─── Bottom actions ─── */}
     <div className="no-print" style={{ display: "flex", gap: "0.5rem", marginTop: "1.25rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
-      {saveMessage && <span style={{ color: "var(--sage)", fontSize: "0.82rem", alignSelf: "center", marginRight: "0.25rem" }}>{saveMessage}</span>}
+      {saveMessage && <span style={{ color: isDraftSaved ? "var(--amber)" : "var(--sage)", fontSize: "0.82rem", alignSelf: "center", marginRight: "0.25rem" }}>{saveMessage}</span>}
       {saveError && <span style={{ color: "var(--red)", fontSize: "0.82rem", alignSelf: "center", marginRight: "0.25rem" }}>{saveError}</span>}
       <button className="btn btn-ghost" onClick={() => window.print()}>Print</button>
       <button className="btn btn-ghost" onClick={() => persist(false)} disabled={savePending}>{savePending ? "…" : "Save draft"}</button>
@@ -3149,10 +3112,12 @@ function LibraryLeafRow({
   );
 }
 
-// ─── Equipment multi-select dropdown (fixed-position, viewport-clamped) ──────
+// ─── Equipment multi-select with Other-specify and Machine-specify ─────
 function EquipmentMultiSelect({
   value,
+  specifics,
   onChange,
+  compact = false,
 }: {
   value: Equipment[];
   specifics?: string;
@@ -3160,71 +3125,90 @@ function EquipmentMultiSelect({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0 });
+  const [dropPos, setDropPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const PANEL_W = 160;
+  const showSpecifics = value.includes("machine") || value.includes("other");
+  const fullLabel = value.length === 0 ? "Equipment" : value.length <= 2 ? value.map(v => EQUIPMENT_OPTIONS.find(o => o.value === v)?.label ?? v).join(", ") : `${value.length} equip.`;
+  const compactLabel = value.length === 0 ? "Equip." : value.length <= 1 ? (EQUIPMENT_OPTIONS.find(o => o.value === value[0])?.label ?? value[0]).slice(0, 7) : `${value.length} eq.`;
+  const label = compact ? compactLabel : fullLabel;
 
-  useClickOutsideTwo(btnRef, panelRef, open, () => setOpen(false));
+  // Close on scroll so the fixed dropdown doesn't drift
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", close, { capture: true });
+  }, [open]);
 
-  function toggleOpen() {
-    if (open) { setOpen(false); return; }
-    const rect = btnRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    // Anchor right edge of panel to right edge of button when near right side of screen
-    const spaceRight = window.innerWidth - rect.left;
-    if (spaceRight >= PANEL_W + 8) {
-      setPos({ top: rect.bottom + 2, left: rect.left });
-    } else {
-      setPos({ top: rect.bottom + 2, right: window.innerWidth - rect.right });
+  function openDropdown() {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 2, left: rect.left });
     }
-    setOpen(true);
+    setOpen((o) => !o);
   }
 
-  function toggleItem(eq: Equipment) {
-    const next = value.includes(eq) ? value.filter((x) => x !== eq) : [...value, eq];
-    onChange(next, undefined);
+  function toggle(eq: Equipment) {
+    const has = value.includes(eq);
+    const next = has ? value.filter(x => x !== eq) : [...value, eq];
+    onChange(next, next.includes("machine") || next.includes("other") ? specifics : undefined);
   }
-
-  const label = value.length === 0 ? "—"
-    : value.length === 1 ? (EQUIPMENT_OPTIONS.find((o) => o.value === value[0])?.label ?? value[0])
-    : `${value.length} equip.`;
 
   return (
     <div style={{ position: "relative", minWidth: 0 }}>
       <button
-        ref={btnRef} type="button" onClick={toggleOpen}
-        className="select"
+        ref={btnRef}
+        type="button"
+        className="btn btn-ghost"
         style={{
-          fontSize: "0.72rem", padding: "0.14rem 0.14rem",
-          width: "100%", minWidth: 0, display: "flex", boxSizing: "border-box",
-          alignItems: "center", justifyContent: "space-between", gap: 2,
-          cursor: "pointer", color: value.length ? "var(--ink)" : "var(--muted)",
+          padding: compact ? "0.16rem 0.28rem" : "0.35rem 0.5rem",
+          fontSize: compact ? "0.67rem" : "0.74rem",
+          textAlign: "left",
+          width: "100%",
+          justifyContent: "space-between",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.3rem",
+          whiteSpace: "nowrap",
+          boxSizing: "border-box",
         }}
+        onClick={openDropdown}
       >
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, textAlign: "center" }}>{label}</span>
-        <span style={{ fontSize: "0.55rem", color: "var(--muted)", flexShrink: 0, lineHeight: 1 }}>▾</span>
+        <span style={{ fontWeight: value.length ? 600 : 400, color: value.length ? undefined : "var(--muted)" }}>{label}</span>
+        <span style={{ fontSize: "0.58rem" }}>▾</span>
       </button>
-      {open && (
-        <div ref={panelRef} style={{
-          position: "fixed", top: pos.top, left: pos.left, right: pos.right, zIndex: 1000,
-          background: "var(--paper)", border: "1px solid var(--line)",
-          borderRadius: 3, boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
-          minWidth: PANEL_W, padding: "0.25rem 0",
-        }}>
+      {open ? (
+        <div
+          style={{
+            position: "fixed",
+            top: dropPos?.top ?? 0,
+            left: dropPos?.left ?? 0,
+            zIndex: 1000,
+            background: "var(--paper)",
+            border: "1px solid var(--line)",
+            borderRadius: 3,
+            padding: "0.4rem",
+            minWidth: 200,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+          }}
+        >
           {EQUIPMENT_OPTIONS.map((opt) => (
-            <label key={opt.value} onMouseDown={(e) => e.preventDefault()}
-              style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.28rem 0.65rem", fontSize: "0.8rem", cursor: "pointer", userSelect: "none", background: value.includes(opt.value) ? "rgba(0,0,0,0.05)" : "transparent" }}
-            >
-              <input type="checkbox" checked={value.includes(opt.value)}
-                onChange={() => toggleItem(opt.value)}
-                style={{ cursor: "pointer", accentColor: "var(--rust)", flexShrink: 0 }}
-              />
+            <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.18rem 0.2rem", fontSize: "0.78rem", cursor: "pointer" }}>
+              <input type="checkbox" checked={value.includes(opt.value)} onChange={() => toggle(opt.value)} />
               {opt.label}
             </label>
           ))}
+          {showSpecifics ? (
+            <input
+              className="input"
+              placeholder={value.includes("other") ? "Specify other…" : "Specify machine…"}
+              value={specifics ?? ""}
+              onChange={(e) => onChange(value, e.target.value)}
+              style={{ marginTop: "0.4rem", fontSize: "0.78rem" }}
+            />
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
