@@ -2497,7 +2497,7 @@ function RepsInput({
   );
 }
 
-// ─── Optional field add — native select, resets after pick ───────────────────
+// ─── Optional field add — button + fixed-position panel ─────────────────────
 function AddOptionalFieldButton({
   activeFields,
   onAdd,
@@ -2505,21 +2505,62 @@ function AddOptionalFieldButton({
   activeFields: OptionalField[];
   onAdd: (f: OptionalField) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const available = ALL_OPTIONAL_FIELDS.filter((f) => !activeFields.includes(f));
+  const PANEL_W = 140;
+
+  useClickOutsideTwo(btnRef, panelRef, open, () => setOpen(false));
+
   if (available.length === 0) return null;
+
+  function toggleOpen() {
+    if (open) { setOpen(false); return; }
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({
+      top: rect.bottom + 2,
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_W - 8)),
+    });
+    setOpen(true);
+  }
+
   return (
-    <select
-      className="select"
-      value=""
-      onChange={(e) => { if (e.target.value) onAdd(e.target.value as OptionalField); }}
-      title="Add optional column"
-      style={{ fontSize: "0.65rem", padding: "0.12rem 0.08rem", width: "100%" }}
-    >
-      <option value="">+</option>
-      {available.map((f) => (
-        <option key={f} value={f}>{OPTIONAL_FIELD_CONFIG[f].label}</option>
-      ))}
-    </select>
+    <div style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        ref={btnRef}
+        type="button"
+        title="Add optional field"
+        onClick={toggleOpen}
+        style={{
+          background: "transparent", border: "1px solid var(--line)", borderRadius: 3,
+          fontSize: "0.62rem", padding: "0.06rem 0.22rem", cursor: "pointer",
+          color: "var(--muted)", lineHeight: 1, fontFamily: "inherit",
+        }}
+      >+</button>
+      {open && (
+        <div ref={panelRef} style={{
+          position: "fixed", top: pos.top, left: pos.left, zIndex: 1000,
+          background: "var(--paper)", border: "1px solid var(--line)",
+          borderRadius: 3, boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
+          minWidth: PANEL_W, padding: "0.25rem 0",
+        }}>
+          {available.map((f) => (
+            <button key={f} type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onAdd(f); setOpen(false); }}
+              style={{
+                display: "block", width: "100%", textAlign: "left", border: "none",
+                padding: "0.28rem 0.65rem", fontSize: "0.8rem", cursor: "pointer",
+                fontFamily: "inherit", background: "transparent", color: "var(--ink)",
+              }}
+            >{OPTIONAL_FIELD_CONFIG[f].label}</button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
