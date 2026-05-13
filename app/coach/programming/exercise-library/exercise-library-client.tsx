@@ -1,12 +1,70 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import type { MovementRow } from "@/lib/data";
 import {
-  EQUIPMENT_OPTIONS, LIBRARY_HIERARCHY,
+  EQUIPMENT_OPTIONS, LIBRARY_HIERARCHY, MOVEMENT_LIBRARY,
   type Category, type LibraryNode, type LibraryGroup,
 } from "@/lib/programs";
 import { addMovement, updateMovement, archiveMovement, type MovementInput } from "./actions";
+
+// ── Local-preset backfill helpers ─────────────────────────────────────────────
+// Mirrors the ExercisePreset shape from build-program-client.tsx so we can
+// read presets the coach already saved to localStorage before the +Name flow
+// began writing to the Exercise Library.
+type LocalPreset = {
+  id: string;
+  name: string;
+  movementId: string;
+  sets?: number;
+  reps?: string;
+  exertion_score?: number;
+  variations?: string[];
+  equipment_list?: string[];
+  equipment_specifics?: string;
+  notes?: string;
+};
+const PRESET_KEY = "monroe-exercise-presets";
+
+/** Look up parent-movement metadata (category + subcategory) given a movementId
+ *  stored in a preset. We try, in order: the library hierarchy (where most
+ *  presets originate from), the static MOVEMENT_LIBRARY demo set, and finally
+ *  the Supabase movements rows passed in as props. */
+function lookupParent(
+  movementId: string,
+  movements: MovementRow[]
+): { category: Category; subcategory: string } | null {
+  // 1) Library hierarchy — both nodes and their children
+  for (const g of LIBRARY_HIERARCHY) {
+    for (const node of g.nodes) {
+      if (node.id === movementId) {
+        return { category: node.category, subcategory: node.label };
+      }
+      for (const child of node.children ?? []) {
+        if (child.id === movementId) {
+          return { category: child.category, subcategory: child.label };
+        }
+      }
+    }
+  }
+  // 2) Static MOVEMENT_LIBRARY (the m1..m20 demo seeds)
+  const stat = MOVEMENT_LIBRARY.find((m) => m.id === movementId);
+  if (stat) return { category: stat.category, subcategory: stat.subcategory || stat.name };
+  // 3) Supabase rows
+  const row = movements.find((m) => m.id === movementId);
+  if (row) return { category: row.category as Category, subcategory: row.subcategory || row.name };
+  return null;
+}
+
+function readLocalPresets(): Record<string, LocalPreset[]> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(PRESET_KEY) ?? "{}") as Record<string, LocalPreset[]>;
+  } catch {
+    return {};
+  }
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -544,7 +602,88 @@ function GroupSection({
 export default function ExerciseLibraryClient({ movements }: { movements: MovementRow[] }) {
   const [search, setSearch] = useState("");
   const [addingGlobal, setAddingGlobal] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [, startSave] = useTransition();
+  const router = useRouter();
+
+  // Count of presets sitting in localStorage but not yet in the database. Drives
+  // the "Import N saved presets" button so coaches know there's work to do.
+  const pendingImportCount = useMemo(() => {
+    if (typeof window === "undefined") return 0;
+    const all = readLocalPresets();
+    const existingKeys = new Set(
+      movements.map((m) => `${m.name.trim().toLowerCase()}::${(m.subcategory ?? "").trim().toLowerCase()}`)
+    );
+    let n = 0;
+    for (const [movementId, list] of Object.entries(all)) {
+      const parent = lookupParent(movementId, movements);
+      if (!parent) continue;
+      for (const p of list) {
+        const key = `${p.name.trim().toLowerCase()}::${parent.subcategory.trim().toLowerCase()}`;
+        if (!existingKeys.has(key)) n++;
+      }
+    }
+    return n;
+  }, [movements]);
+
+  async function importLocalPresets() {
+    if (importing) return;
+    const all = readLocalPresets();
+    const existingKeys = new Set(
+      movements.map((m) => `${m.name.trim().toLowerCase()}::${(m.subcategory ?? "").trim().toLowerCase()}`)
+    );
+    const queue: { name: string; parent: { category: Category; subcategory: string }; preset: LocalPreset }[] = [];
+    const unmatched: string[] = [];
+    for (const [movementId, list] of Object.entries(all)) {
+      const parent = lookupParent(movementId, movements);
+      if (!parent) {
+        for (const p of list) unmatched.push(p.name);
+        continue;
+      }
+      for (const p of list) {
+        const key = `${p.name.trim().toLowerCase()}::${parent.subcategory.trim().toLowerCase()}`;
+        if (existingKeys.has(key)) continue;
+        queue.push({ name: p.name, parent, preset: p });
+        existingKeys.add(key);
+      }
+    }
+    if (queue.length === 0) {
+      alert(unmatched.length
+        ? `Nothing new to import. ${unmatched.length} preset(s) couldn't be matched to a library node and were skipped: ${unmatched.join(", ")}`
+        : "All saved presets are already in the Exercise Library.");
+      return;
+    }
+    if (!confirm(`Import ${queue.length} preset${queue.length === 1 ? "" : "s"} into the Exercise Library?`)) return;
+
+    setImporting(true);
+    let ok = 0;
+    const errors: string[] = [];
+    for (const item of queue) {
+      try {
+        const res = await addMovement({
+          name: item.name,
+          category: item.parent.category,
+          subcategory: item.parent.subcategory,
+          muscles: [],
+          equipment_list: (item.preset.equipment_list ?? []) as string[],
+          equipment_specifics: item.preset.equipment_specifics,
+          position: undefined,
+          cues: "",
+          demo_url: "",
+        });
+        if (res.ok) ok++;
+        else errors.push(`${item.name}: ${res.error ?? "unknown error"}`);
+      } catch (e) {
+        errors.push(`${item.name}: ${(e as Error).message}`);
+      }
+    }
+    setImporting(false);
+    const lines = [`Imported ${ok} of ${queue.length} preset${queue.length === 1 ? "" : "s"}.`];
+    if (unmatched.length) lines.push(`Skipped (no library match): ${unmatched.join(", ")}`);
+    if (errors.length) lines.push(`Errors:\n${errors.join("\n")}`);
+    alert(lines.join("\n\n"));
+    if (ok > 0) router.refresh();
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return movements;
@@ -572,9 +711,21 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
           <h1 style={{ marginTop: "0.5rem" }}>Exercise Library</h1>
           <p className="meta">{movements.length} exercises</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setAddingGlobal((o) => !o)}>
-          {addingGlobal ? "Cancel" : "+ Add Exercise"}
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          {pendingImportCount > 0 && (
+            <button
+              className="btn btn-ghost"
+              onClick={importLocalPresets}
+              disabled={importing}
+              title="Import named presets saved on this browser into the Exercise Library"
+            >
+              {importing ? "Importing…" : `Import ${pendingImportCount} saved preset${pendingImportCount === 1 ? "" : "s"}`}
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={() => setAddingGlobal((o) => !o)}>
+            {addingGlobal ? "Cancel" : "+ Add Exercise"}
+          </button>
+        </div>
       </header>
 
       <hr className="divider" />
