@@ -2730,110 +2730,190 @@ function PlanExerciseBlock({
         )}
       </div>
 
-      {/* Item-level metadata strip (equipment, tempo, position, RIR, etc.) */}
-      <ExerciseMetaStrip it={it} />
-
-      {/* Sets — labeled-column table layout matching the builder */}
+      {/* Sets — full prescription grid with input columns for Actual / Weight / Notes */}
       {(() => {
-        // Grid columns: Set | Reps | Actual | Weight | Prev | Notes
-        // Prev column is suppressed when there's no prior history for any set.
+        // Detect which optional columns to render — only those actually in use.
+        const isFieldUsed = (
+          itemVal: unknown,
+          rowKey: keyof SetRow,
+        ): boolean => {
+          if (itemVal != null && itemVal !== "" && itemVal !== 0) return true;
+          for (const r of it.set_rows ?? []) {
+            const v = (r as Record<string, unknown>)[rowKey];
+            if (v != null && v !== "" && v !== 0) return true;
+          }
+          return false;
+        };
+        const showTempo = isFieldUsed(it.tempo, "tempo");
+        const showPos = isFieldUsed(it.position, "position");
+        const showHalf = isFieldUsed(it.half_reps, "half_reps");
+        const showRir = isFieldUsed(it.rir, "rir");
+        const showRest = isFieldUsed(it.rest_seconds, "rest_seconds");
+        // "Coach notes" column shows the programmed per-set notes from the builder.
+        // Show the column when any set has a programmed note OR (in same_format) when
+        // the item itself has notes the coach wrote in.
+        const showCoachNotes = !!it.notes
+          || (it.set_rows ?? []).some((r) => r.notes);
         const showPrev = !!priorSnapshot.lastEntry;
-        const cols = showPrev
-          ? "44px 84px 70px 70px 110px 1fr"
-          : "44px 84px 70px 70px 1fr";
+
+        // Build the grid template
+        const colWidths: string[] = [
+          "32px",   // SET
+          "60px",   // REPS
+          "70px",   // ACTUAL (input)
+          "70px",   // WEIGHT (input)
+          "80px",   // EXERTION
+          "90px",   // SPECIFICATION
+          "100px",  // EQUIPMENT
+        ];
+        const headers: string[] = ["Set", "Reps", "Actual", "Weight", "Exertion", "Specification", "Equipment"];
+        if (showTempo) { colWidths.push("70px"); headers.push("Tempo"); }
+        if (showPos)   { colWidths.push("100px"); headers.push("Pos"); }
+        if (showHalf)  { colWidths.push("50px"); headers.push("½"); }
+        if (showRir)   { colWidths.push("56px"); headers.push("RIR"); }
+        if (showRest)  { colWidths.push("70px"); headers.push("Rest"); }
+        if (showCoachNotes) { colWidths.push("1fr"); headers.push("Coach Notes"); }
+        colWidths.push("1fr"); headers.push("Notes");
+        if (showPrev)  { colWidths.push("90px"); headers.push(""); /* prev: subtext, no header */ }
+
+        const cols = colWidths.join(" ");
         const cellHeaderStyle: React.CSSProperties = {
           fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
           letterSpacing: "0.05em", color: "var(--muted)",
           paddingBottom: "0.18rem", borderBottom: "1px solid var(--line)",
         };
+        const cellStyle: React.CSSProperties = { fontSize: "0.78rem" };
+        const inputStyle: React.CSSProperties = { fontSize: "0.78rem", padding: "0.16rem 0.35rem", width: "100%" };
+
+        // Format helpers for prescription columns
+        const exertionLabel = (score: number | undefined) => {
+          if (!score) return "—";
+          return EXERTION_SHORT[score] ?? EXERTION_LABELS[score] ?? String(score);
+        };
+        const variationLabel = (vs: Variation[] | undefined) => {
+          if (!vs || vs.length === 0) return "—";
+          return vs.map((v) => VARIATION_LABELS[v]).join(", ");
+        };
+        const equipmentLabel = (list: Equipment[] | undefined, specs: string | undefined) => {
+          const parts: string[] = [];
+          if (list && list.length > 0) {
+            parts.push(list.map((eq) => EQUIPMENT_OPTIONS.find((o) => o.value === eq)?.label ?? eq).join(", "));
+          }
+          if (specs) parts.push(specs);
+          return parts.length ? parts.join(" · ") : "—";
+        };
+        const positionLabel = (p: string | undefined) => fmtPosition(p) ?? "—";
+        const restLabel = (s: number | undefined) => fmtRest(s) ?? "—";
+
         return (
-          <div style={{ marginBottom: "0.55rem" }}>
-            {/* Header row */}
-            <div style={{ display: "grid", gridTemplateColumns: cols, gap: "0.4rem 0.55rem", alignItems: "end" }}>
-              <span style={cellHeaderStyle}>Set</span>
-              <span style={cellHeaderStyle}>Reps</span>
-              <span style={cellHeaderStyle}>Actual</span>
-              <span style={cellHeaderStyle}>Weight</span>
-              {showPrev && <span style={cellHeaderStyle}>Previous</span>}
-              <span style={cellHeaderStyle}>Notes</span>
-            </div>
-
-            {/* Set rows */}
-            {Array.from({ length: setCount }).map((_, si) => {
-              const prescribedReps = it.same_format ? it.reps : (it.set_rows[si]?.reps ?? it.reps);
-              const setRow = it.same_format ? undefined : it.set_rows[si];
-              const w = entry.weights[si] ?? "";
-              const ar = (entry.actual_reps ?? [])[si] ?? "";
-              const sn = (entry.set_notes ?? [])[si] ?? "";
-              const prevSet = priorSnapshot.lastEntry?.sets[si] ?? null;
-              return (
-                <div key={si} style={{ display: "grid", gridTemplateColumns: cols, gap: "0.4rem 0.55rem", alignItems: "center", padding: "0.25rem 0", borderBottom: "1px dashed var(--line)" }}>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>{si + 1}</span>
-                  <span style={{ fontSize: "0.8rem" }}>{prescribedReps}</span>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    placeholder="—"
-                    value={ar}
-                    onChange={(e) => onSetActualReps(it.uid, si, e.target.value)}
-                    style={{ fontSize: "0.78rem", padding: "0.16rem 0.35rem", width: "100%" }}
-                    title="Actual reps performed"
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    placeholder="—"
-                    value={w}
-                    onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
-                    style={{ fontSize: "0.78rem", padding: "0.16rem 0.35rem", width: "100%" }}
-                    title="Weight (lbs)"
-                  />
-                  {showPrev && (
-                    <span style={{ fontSize: "0.7rem", color: "#a89e90", fontStyle: "italic" }}>
-                      {prevSet && prevSet.weight_lb > 0
-                        ? `${prevSet.weight_lb} × ${prevSet.reps || "—"}`
-                        : "—"}
-                    </span>
-                  )}
-                  <input
-                    className="input"
-                    type="text"
-                    placeholder=""
-                    value={sn}
-                    onChange={(e) => onSetSetNotes(it.uid, si, e.target.value)}
-                    style={{ fontSize: "0.78rem", padding: "0.16rem 0.35rem", width: "100%" }}
-                    title="Per-set notes"
-                  />
-                </div>
-              );
-            })}
-
-            {/* Per-set extras for variable prescriptions (when same_format=false) */}
-            {!it.same_format && (
-              <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.18rem" }}>
-                {Array.from({ length: setCount }).map((_, si) => {
-                  const setRow = it.set_rows[si];
-                  const meta = setRow ? <SetRowMeta row={setRow} fallbackEffort={it.exertion_score} /> : null;
-                  if (!meta && !setRow?.notes) return null;
-                  return (
-                    <div key={si} style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap", fontSize: "0.7rem", color: "var(--muted)" }}>
-                      <span style={{ minWidth: 44 }}>Set {si + 1}:</span>
-                      {meta}
-                      {setRow?.notes && (
-                        <span><span style={{ fontStyle: "italic" }}>note:</span> {setRow.notes}</span>
-                      )}
-                    </div>
-                  );
-                })}
+          <div style={{ marginBottom: "0.6rem", overflowX: "auto" }}>
+            <div style={{ minWidth: "min-content" }}>
+              {/* Header row */}
+              <div style={{ display: "grid", gridTemplateColumns: cols, gap: "0.4rem 0.6rem", alignItems: "end" }}>
+                {headers.map((h, i) => (
+                  <span key={i} style={cellHeaderStyle}>{h}</span>
+                ))}
               </div>
-            )}
+
+              {/* Set rows */}
+              {Array.from({ length: setCount }).map((_, si) => {
+                const row = it.same_format ? undefined : it.set_rows[si];
+                // Pull the value from the row when available; otherwise fall back to the item-level value.
+                const val = <T,>(rowVal: T | undefined, itemVal: T): T => (rowVal != null && rowVal !== ("" as unknown as T) ? rowVal : itemVal);
+                const prescribedReps = val(row?.reps, it.reps);
+                const exertion = val(row?.exertion_score, it.exertion_score);
+                const variations = (row?.variations && row.variations.length > 0) ? row.variations : it.variations;
+                const equipmentList = (row?.equipment_list && row.equipment_list.length > 0) ? row.equipment_list : it.equipment_list;
+                const equipmentSpecifics = val(row?.equipment_specifics, it.equipment_specifics);
+                const tempo = val(row?.tempo, it.tempo);
+                const position = val(row?.position, it.position);
+                const halfReps = val(row?.half_reps, it.half_reps);
+                const rir = val(row?.rir, it.rir);
+                const restSec = val(row?.rest_seconds, it.rest_seconds);
+                const coachNote = val(row?.notes, it.notes);
+
+                const w = entry.weights[si] ?? "";
+                const ar = (entry.actual_reps ?? [])[si] ?? "";
+                const sn = (entry.set_notes ?? [])[si] ?? "";
+                const prevSet = priorSnapshot.lastEntry?.sets[si] ?? null;
+
+                return (
+                  <div
+                    key={si}
+                    style={{
+                      display: "grid", gridTemplateColumns: cols, gap: "0.4rem 0.6rem",
+                      alignItems: "center", padding: "0.28rem 0",
+                      borderBottom: "1px dashed var(--line)",
+                    }}
+                  >
+                    <span style={{ ...cellStyle, fontWeight: 600 }}>{si + 1}</span>
+                    <span style={cellStyle}>{prescribedReps || "—"}</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      placeholder="—"
+                      value={ar}
+                      onChange={(e) => onSetActualReps(it.uid, si, e.target.value)}
+                      style={inputStyle}
+                      title="Actual reps performed"
+                    />
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      placeholder="—"
+                      value={w}
+                      onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
+                      style={inputStyle}
+                      title="Weight (lbs)"
+                    />
+                    <span style={cellStyle}>{exertionLabel(exertion)}</span>
+                    <span style={cellStyle}>{variationLabel(variations)}</span>
+                    <span style={cellStyle}>{equipmentLabel(equipmentList, equipmentSpecifics ?? undefined)}</span>
+                    {showTempo && <span style={cellStyle}>{tempo || "—"}</span>}
+                    {showPos   && <span style={cellStyle}>{positionLabel(position)}</span>}
+                    {showHalf  && <span style={cellStyle}>{halfReps != null && halfReps > 0 ? halfReps : "—"}</span>}
+                    {showRir   && <span style={cellStyle}>{rir != null ? rir : "—"}</span>}
+                    {showRest  && <span style={cellStyle}>{restLabel(restSec)}</span>}
+                    {showCoachNotes && (
+                      <span style={{ ...cellStyle, color: "var(--muted)", fontStyle: "italic" }}>{coachNote || "—"}</span>
+                    )}
+                    <input
+                      className="input"
+                      type="text"
+                      placeholder=""
+                      value={sn}
+                      onChange={(e) => onSetSetNotes(it.uid, si, e.target.value)}
+                      style={inputStyle}
+                      title="Per-set notes"
+                    />
+                    {showPrev && (
+                      <span style={{ fontSize: "0.7rem", color: "#a89e90", fontStyle: "italic", textAlign: "right" }}>
+                        {prevSet && prevSet.weight_lb > 0
+                          ? `${prevSet.weight_lb} × ${prevSet.reps || "—"}`
+                          : ""}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
 
-      {/* Overall exercise notes (separate from per-set notes above) */}
+      {/* Coach Notes (read-only, from programming) — only render when set */}
+      {it.movement_notes && (
+        <div style={{ marginTop: "0.2rem", marginBottom: "0.45rem", padding: "0.35rem 0.5rem", borderLeft: "2px solid var(--line)", background: "rgba(0,0,0,0.02)" }}>
+          <div style={{ fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)", marginBottom: "0.15rem" }}>
+            Coach Notes
+          </div>
+          <div style={{ fontSize: "0.82rem", whiteSpace: "pre-wrap" }}>{it.movement_notes}</div>
+        </div>
+      )}
+
+      {/* Overall exercise notes — input field for the coach to fill during/after the session */}
       <textarea
         className="textarea"
         rows={2}
