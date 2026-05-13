@@ -754,6 +754,7 @@ export type MovementRow = {
   muscles: string[];
   equipment_list: string[];
   equipment_specifics: string | null;
+  position: string | null;
   cues: string | null;
   demo_url: string | null;
   is_core: boolean;
@@ -771,6 +772,7 @@ export async function listMovements(): Promise<MovementRow[]> {
       muscles: m.muscles ?? [],
       equipment_list: m.equipment_list ?? [],
       equipment_specifics: m.equipment_specifics ?? null,
+      position: null,
       cues: m.cues ?? null,
       demo_url: m.demo_url ?? null,
       is_core: m.is_core ?? false,
@@ -781,7 +783,7 @@ export async function listMovements(): Promise<MovementRow[]> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("movements")
-    .select("id, name, category, subcategory, muscles, equipment_list, equipment_specifics, cues, demo_url, is_core, archived, created_at")
+    .select("id, name, category, subcategory, muscles, equipment_list, equipment_specifics, position, cues, demo_url, is_core, archived, created_at")
     .eq("archived", false)
     .order("name");
   if (error || !data) return [];

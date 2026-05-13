@@ -9,10 +9,9 @@ type NavLink = { href: string; label: string };
 const COACH_NAV: NavLink[] = [
   { href: "/coach", label: "Dashboard" },
   { href: "/coach/schedule", label: "Schedule" },        // Appointments + Availability live as subtabs under Schedule
-  { href: "/coach/programming", label: "Programming" },
+  { href: "/coach/programming", label: "Programming" },  // Build Program + Exercise Library live as subtabs under Programming
   { href: "/coach/clients", label: "Clients" },
   { href: "/coach/messages", label: "Messages" },
-  { href: "/coach/exercise-library", label: "Exercise Library" },
 ];
 
 const CLIENT_NAV: NavLink[] = [

@@ -3936,9 +3936,9 @@ function ExerciseCard({
         const INP: React.CSSProperties = { fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center" };
         const activeFields: OptionalField[] = it.optional_fields ?? [];
         const optColStr = activeFields.map((f) => OPTIONAL_FIELD_CONFIG[f].width).join(" ");
-        // Column order: Sets | Reps | Spec | Equip | Exertion | [opt cols] | + | Notes(1fr)
-        const SF_COLS = `32px 76px 62px 60px 68px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
-        const PS_COLS = `24px 76px 62px 60px 68px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        // Column order: Sets | Reps | Exertion | Spec | Equip | [opt cols] | + | Notes(1fr)
+        const SF_COLS = `32px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        const PS_COLS = `24px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
 
         function removeOptField(f: OptionalField) {
           onPatch({ optional_fields: activeFields.filter((x) => x !== f) });
@@ -3962,9 +3962,10 @@ function ExerciseCard({
             {it.same_format ? (
               /* ── Same-format grid: header row + single input row ── */
               <div style={{ display: "grid", gridTemplateColumns: SF_COLS, gap: "0.35rem", alignItems: "center", minWidth: "min-content" }}>
-                {/* Headers: Sets | Reps | Spec | Equip | Exertion | [opt] | + | Notes */}
+                {/* Headers: Sets | Reps | Exertion | Spec | Equip | [opt] | + | Notes */}
                 <span style={HDR}>Sets</span>
                 <span style={HDR}>Reps</span>
+                <span style={HDR}>Exertion</span>
                 <span style={HDR}>
                   <span className="hdr-full">Specification</span>
                   <span className="hdr-short">Spec</span>
@@ -3973,7 +3974,6 @@ function ExerciseCard({
                   <span className="hdr-full">Equipment</span>
                   <span className="hdr-short">Equip</span>
                 </span>
-                <span style={HDR}>Exertion</span>
                 {activeFields.map((f) => (
                   <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                     <button
@@ -3994,16 +3994,16 @@ function ExerciseCard({
                   reps={it.reps} repsType={it.reps_type} repsUnit={it.reps_unit}
                   onChange={(p) => onPatch(p as Partial<ProgramItem>)}
                 />
+                <select className="select" style={INP}
+                  value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
+                  {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
                 <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
                 <EquipmentMultiSelect
                   value={it.equipment_list} specifics={it.equipment_specifics}
                   onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
                   compact
                 />
-                <select className="select" style={INP}
-                  value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
-                  {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
                 {activeFields.map((f) => (
                   <OptionalFieldInput
                     key={`inp-${f}`}
@@ -4028,9 +4028,10 @@ function ExerciseCard({
                     value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: PS_COLS, gap: "0.3rem", alignItems: "center", minWidth: "min-content" }}>
-                  {/* Headers: blank | Reps | Spec | Equip | Exertion | [opt] | + | Notes */}
+                  {/* Headers: blank | Reps | Exertion | Spec | Equip | [opt] | + | Notes */}
                   <span style={HDR}></span>
                   <span style={HDR}>Reps</span>
+                  <span style={HDR}>Exertion</span>
                   <span style={HDR}>
                     <span className="hdr-full">Specification</span>
                     <span className="hdr-short">Spec</span>
@@ -4039,7 +4040,6 @@ function ExerciseCard({
                     <span className="hdr-full">Equipment</span>
                     <span className="hdr-short">Equip</span>
                   </span>
-                  <span style={HDR}>Exertion</span>
                   {activeFields.map((f) => (
                     <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                       <button
@@ -4064,6 +4064,10 @@ function ExerciseCard({
                         repsUnit={row.reps_unit ?? it.reps_unit}
                         onChange={(p) => onPatchSetRow(si, p as Partial<SetRow>)}
                       />
+                      <select key={`exr-${si}`} className="select" style={INP}
+                        value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
+                        {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
                       <VariationDropdown key={`spec-${si}`} value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
                       <EquipmentMultiSelect
                         key={`eq-${si}`}
@@ -4072,10 +4076,6 @@ function ExerciseCard({
                         onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
                         compact
                       />
-                      <select key={`exr-${si}`} className="select" style={INP}
-                        value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
-                        {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
                       {activeFields.map((f) => (
                         <OptionalFieldInput
                           key={`opt-${f}-${si}`}

@@ -24,7 +24,7 @@ function matchExercises(movements: MovementRow[], nodeLabel: string): MovementRo
 
 const BLANK: MovementInput = {
   name: "", category: "push", subcategory: "",
-  muscles: [], equipment_list: [], equipment_specifics: "",
+  muscles: [], equipment_list: [], equipment_specifics: "", position: "",
   cues: "", demo_url: "",
 };
 
@@ -36,19 +36,34 @@ function movementToInput(m: MovementRow): MovementInput {
     muscles: m.muscles ?? [],
     equipment_list: m.equipment_list ?? [],
     equipment_specifics: m.equipment_specifics ?? "",
+    position: m.position ?? "",
     cues: m.cues ?? "",
     demo_url: m.demo_url ?? "",
   };
 }
 
+// Position options match the program builder's position field (standing,
+// seated, lying, incline — incline can have an angle suffix like "incline:45").
+const POSITION_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "—" },
+  { value: "standing", label: "Standing" },
+  { value: "seated", label: "Seated" },
+  { value: "incline", label: "Incline" },
+  { value: "lying", label: "Lying" },
+];
+
 // ── Exercise form ─────────────────────────────────────────────────────────────
 
 function ExerciseForm({
-  initial, defaultCategory, defaultSubcategory, onSave, onCancel,
+  initial, defaultCategory, defaultSubcategory, mode = "quick", onSave, onCancel,
 }: {
   initial?: MovementInput;
   defaultCategory?: Category;
   defaultSubcategory?: string;
+  /** quick = name + equipment + specification + position (for adding new
+   *  exercises). full = all fields including cues, muscles, demo URL (for
+   *  editing existing exercises). */
+  mode?: "quick" | "full";
   onSave: (input: MovementInput) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -79,6 +94,12 @@ function ExerciseForm({
     (e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.allowsSpecifics
   );
 
+  // Position parsing — "incline:45" → base "incline" with angle "45"
+  const positionRaw = draft.position ?? "";
+  const isIncline = positionRaw.startsWith("incline");
+  const positionBase = isIncline ? "incline" : positionRaw;
+  const inclineAngle = isIncline ? positionRaw.slice("incline:".length) : "";
+
   return (
     <div style={{
       background: "rgba(168,61,43,0.03)", border: "1px solid var(--line)",
@@ -93,24 +114,28 @@ function ExerciseForm({
             placeholder="e.g. Incline DB Press" autoFocus />
         </label>
 
-        {/* Category (hidden if locked) */}
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>Category</span>
-          <select className="select" value={draft.category}
-            onChange={(e) => set("category", e.target.value as Category)}>
-            {ALL_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c.replace("_", " ")}</option>
-            ))}
-          </select>
-        </label>
+        {/* Category — only shown in full mode (quick mode locks it to the node) */}
+        {mode === "full" && (
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="meta" style={{ fontSize: "0.74rem" }}>Category</span>
+            <select className="select" value={draft.category}
+              onChange={(e) => set("category", e.target.value as Category)}>
+              {ALL_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c.replace("_", " ")}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
-        {/* Subcategory locked to node */}
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>Node / subcategory</span>
-          <input className="input" value={draft.subcategory ?? ""}
-            onChange={(e) => set("subcategory", e.target.value)}
-            placeholder="e.g. Vertical Pull" />
-        </label>
+        {/* Subcategory — only shown in full mode */}
+        {mode === "full" && (
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="meta" style={{ fontSize: "0.74rem" }}>Node / subcategory</span>
+            <input className="input" value={draft.subcategory ?? ""}
+              onChange={(e) => set("subcategory", e.target.value)}
+              placeholder="e.g. Vertical Pull" />
+          </label>
+        )}
 
         {/* Equipment */}
         <div style={{ gridColumn: "1/-1" }}>
@@ -125,39 +150,81 @@ function ExerciseForm({
               </label>
             ))}
           </div>
-          {needsSpecifics && (
-            <input className="input" style={{ marginTop: "0.4rem" }}
-              value={draft.equipment_specifics ?? ""}
-              onChange={(e) => set("equipment_specifics", e.target.value)}
-              placeholder="e.g. Preacher curl machine" />
-          )}
         </div>
 
-        {/* Muscles */}
+        {/* Specification (equipment_specifics) — always visible in both modes. */}
         <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>Muscles (comma-separated)</span>
+          <span className="meta" style={{ fontSize: "0.74rem" }}>Specification</span>
           <input className="input"
-            value={(draft.muscles ?? []).join(", ")}
-            onChange={(e) => set("muscles", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
-            placeholder="e.g. pec_major, triceps" />
+            value={draft.equipment_specifics ?? ""}
+            onChange={(e) => set("equipment_specifics", e.target.value)}
+            placeholder={needsSpecifics ? "e.g. Preacher curl machine" : "e.g. Wide grip, paused, deficit"} />
         </label>
 
-        {/* Cues */}
-        <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>Coaching cues</span>
-          <textarea className="input" rows={2} style={{ resize: "vertical" }}
-            value={draft.cues ?? ""}
-            onChange={(e) => set("cues", e.target.value)}
-            placeholder="Key cues or notes…" />
-        </label>
+        {/* Position */}
+        <div style={{ gridColumn: "1/-1" }}>
+          <span className="meta" style={{ fontSize: "0.74rem" }}>Position</span>
+          <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem", flexWrap: "wrap", alignItems: "center" }}>
+            <select className="select" style={{ maxWidth: 200, fontSize: "0.85rem" }}
+              value={positionBase}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "incline") set("position", inclineAngle ? `incline:${inclineAngle}` : "incline:");
+                else set("position", v);
+              }}>
+              {POSITION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            {isIncline && (
+              <>
+                <input className="input" type="number" min={0} max={90} placeholder="°"
+                  value={inclineAngle}
+                  onChange={(e) => set("position", `incline:${e.target.value}`)}
+                  style={{ width: 72, fontSize: "0.85rem" }} />
+                <span className="meta" style={{ fontSize: "0.74rem" }}>degrees</span>
+              </>
+            )}
+          </div>
+        </div>
 
-        {/* Demo URL */}
-        <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>Demo URL</span>
-          <input className="input" type="url" value={draft.demo_url ?? ""}
-            onChange={(e) => set("demo_url", e.target.value)} placeholder="https://…" />
-        </label>
+        {/* Muscles — full mode only */}
+        {mode === "full" && (
+          <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="meta" style={{ fontSize: "0.74rem" }}>Muscles (comma-separated)</span>
+            <input className="input"
+              value={(draft.muscles ?? []).join(", ")}
+              onChange={(e) => set("muscles", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+              placeholder="e.g. pec_major, triceps" />
+          </label>
+        )}
+
+        {/* Cues — full mode only */}
+        {mode === "full" && (
+          <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="meta" style={{ fontSize: "0.74rem" }}>Coaching cues</span>
+            <textarea className="input" rows={2} style={{ resize: "vertical" }}
+              value={draft.cues ?? ""}
+              onChange={(e) => set("cues", e.target.value)}
+              placeholder="Key cues or notes…" />
+          </label>
+        )}
+
+        {/* Demo URL — full mode only */}
+        {mode === "full" && (
+          <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="meta" style={{ fontSize: "0.74rem" }}>Demo URL</span>
+            <input className="input" type="url" value={draft.demo_url ?? ""}
+              onChange={(e) => set("demo_url", e.target.value)} placeholder="https://…" />
+          </label>
+        )}
       </div>
+
+      {mode === "quick" && (
+        <p className="meta" style={{ fontSize: "0.72rem", marginTop: "0.6rem", fontStyle: "italic" }}>
+          Cues, muscles, and demo link can be added later by editing this exercise.
+        </p>
+      )}
 
       {error && <p style={{ color: "var(--red)", fontSize: "0.82rem", marginTop: "0.5rem" }}>{error}</p>}
       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginTop: "0.85rem", paddingTop: "0.65rem", borderTop: "1px solid var(--line)" }}>
@@ -191,9 +258,10 @@ function ExerciseRow({ m, onEdit, onArchive }: {
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
           <strong style={{ fontSize: "0.88rem" }}>{m.name}</strong>
         </div>
-        {(equipLabel || (m.muscles ?? []).length > 0 || m.cues) && (
+        {(equipLabel || m.position || (m.muscles ?? []).length > 0 || m.cues) && (
           <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.12rem", flexWrap: "wrap" }}>
             {equipLabel && <span className="meta" style={{ fontSize: "0.73rem" }}>{equipLabel}{m.equipment_specifics ? ` (${m.equipment_specifics})` : ""}</span>}
+            {m.position && <span className="meta" style={{ fontSize: "0.73rem" }}>{m.position}</span>}
             {(m.muscles ?? []).length > 0 && <span className="meta" style={{ fontSize: "0.73rem" }}>{m.muscles.join(", ")}</span>}
             {m.cues && <span className="meta" style={{ fontSize: "0.73rem", fontStyle: "italic" }}>{m.cues}</span>}
           </div>
@@ -330,6 +398,7 @@ function NodeSection({
           {exercises.map((m) => (
             editingId === m.id
               ? <ExerciseForm key={m.id} initial={movementToInput(m)}
+                  mode="full"
                   onSave={(input) => handleUpdate(m.id, input)}
                   onCancel={() => setEditingId(null)} />
               : <ExerciseRow key={m.id} m={m}
@@ -439,7 +508,7 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
   }
 
   return (
-    <main className="shell">
+    <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header className="page-hdr">
         <div>
           <span className="badge">Coach</span>
@@ -456,6 +525,7 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
       {addingGlobal && (
         <div style={{ marginBottom: "1.5rem" }}>
           <ExerciseForm
+            mode="full"
             onSave={handleGlobalAdd}
             onCancel={() => setAddingGlobal(false)}
           />
@@ -472,36 +542,6 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
           style={{ maxWidth: 380 }}
         />
       </div>
-
-      {/* Unmatched exercises (subcategory doesn't match any node) */}
-      {(() => {
-        const allNodeLabels = new Set(
-          LIBRARY_HIERARCHY.flatMap((g) =>
-            g.nodes.flatMap((n) => [n.label.toLowerCase(), ...(n.children?.map((c) => c.label.toLowerCase()) ?? [])])
-          )
-        );
-        const unmatched = filtered.filter(
-          (m) => m.subcategory && !allNodeLabels.has(m.subcategory.toLowerCase())
-        );
-        const noSubcat = filtered.filter((m) => !m.subcategory);
-        const orphans = [...unmatched, ...noSubcat];
-        if (orphans.length === 0) return null;
-        return (
-          <section style={{ marginBottom: "1rem" }}>
-            <div style={{ borderBottom: "2px solid var(--line)", paddingBottom: "0.45rem", marginBottom: "0.6rem" }}>
-              <span style={{ fontWeight: 700, fontSize: "1.05rem", color: "var(--muted)" }}>Uncategorized</span>
-              <span style={{ marginLeft: "0.5rem", fontSize: "0.65rem", color: "var(--muted)" }}>{orphans.length}</span>
-            </div>
-            <div style={{ paddingLeft: "0.5rem" }}>
-              {orphans.map((m) => (
-                <ExerciseRow key={m.id} m={m}
-                  onEdit={() => {}}
-                  onArchive={async (id) => { if (confirm("Archive?")) await archiveMovement(id); }} />
-              ))}
-            </div>
-          </section>
-        );
-      })()}
 
       {/* Hierarchy groups */}
       {LIBRARY_HIERARCHY.map((group) => (

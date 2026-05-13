@@ -12,6 +12,7 @@ export type MovementInput = {
   muscles?: string[];
   equipment_list?: string[];
   equipment_specifics?: string;
+  position?: string;
   cues?: string;
   demo_url?: string;
 };
@@ -23,7 +24,7 @@ export async function addMovement(
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
 
   if (!hasSupabaseEnv()) {
-    revalidatePath("/coach/exercise-library");
+    revalidatePath("/coach/programming/exercise-library");
     return { ok: true, id: `static-${Date.now()}` };
   }
 
@@ -37,6 +38,7 @@ export async function addMovement(
       muscles: input.muscles ?? [],
       equipment_list: input.equipment_list ?? [],
       equipment_specifics: input.equipment_specifics?.trim() || null,
+      position: input.position?.trim() || null,
       cues: input.cues?.trim() || null,
       demo_url: input.demo_url?.trim() || null,
       is_core: false,
@@ -46,7 +48,7 @@ export async function addMovement(
     .single();
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/coach/exercise-library");
+  revalidatePath("/coach/programming/exercise-library");
   revalidatePath("/coach/programming/build");
   return { ok: true, id: data.id };
 }
@@ -59,7 +61,7 @@ export async function updateMovement(
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
 
   if (!hasSupabaseEnv()) {
-    revalidatePath("/coach/exercise-library");
+    revalidatePath("/coach/programming/exercise-library");
     return { ok: true };
   }
 
@@ -73,6 +75,7 @@ export async function updateMovement(
       muscles: input.muscles ?? [],
       equipment_list: input.equipment_list ?? [],
       equipment_specifics: input.equipment_specifics?.trim() || null,
+      position: input.position?.trim() || null,
       cues: input.cues?.trim() || null,
       demo_url: input.demo_url?.trim() || null,
       is_core: false,
@@ -80,7 +83,7 @@ export async function updateMovement(
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/coach/exercise-library");
+  revalidatePath("/coach/programming/exercise-library");
   revalidatePath("/coach/programming/build");
   return { ok: true };
 }
@@ -92,7 +95,7 @@ export async function archiveMovement(
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
 
   if (!hasSupabaseEnv()) {
-    revalidatePath("/coach/exercise-library");
+    revalidatePath("/coach/programming/exercise-library");
     return { ok: true };
   }
 
@@ -103,7 +106,7 @@ export async function archiveMovement(
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/coach/exercise-library");
+  revalidatePath("/coach/programming/exercise-library");
   revalidatePath("/coach/programming/build");
   return { ok: true };
 }
