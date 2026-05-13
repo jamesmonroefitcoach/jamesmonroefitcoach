@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listCoachThreads } from "@/lib/data";
+import { listCoachThreads, listClients } from "@/lib/data";
 import { loadThreadMessages } from "@/lib/messages";
 import MessagesClient from "./messages-client";
 
@@ -10,9 +10,15 @@ export default async function CoachMessagesPage({ searchParams }: { searchParams
   if (user.role !== "coach") redirect("/");
 
   const sp = await searchParams;
-  const threads = await listCoachThreads(user.id);
+  const [threads, clients] = await Promise.all([
+    listCoachThreads(user.id),
+    listClients(user.id),
+  ]);
   const activeId = sp.thread ?? threads[0]?.id ?? null;
   const messages = activeId ? await loadThreadMessages(activeId) : [];
+
+  // Trim clients down to {id, full_name} for the new-message picker
+  const clientPicker = clients.map((c) => ({ id: c.id, full_name: c.full_name }));
 
   return (
     <main className="shell">
@@ -20,11 +26,17 @@ export default async function CoachMessagesPage({ searchParams }: { searchParams
         <div>
           <span className="badge">Messages</span>
           <h1 style={{ marginTop: "0.5rem" }}>Inbox</h1>
-          <p className="meta">DMs and change requests. Use Announce to broadcast (e.g. "Gym closed Saturday").</p>
+          <p className="meta">DMs and change requests. Use Announce to broadcast (e.g. &quot;Gym closed Saturday&quot;).</p>
         </div>
       </header>
       <hr className="divider" />
-      <MessagesClient threads={threads} activeId={activeId} initialMessages={messages} myId={user.id} />
+      <MessagesClient
+        threads={threads}
+        activeId={activeId}
+        initialMessages={messages}
+        myId={user.id}
+        clients={clientPicker}
+      />
     </main>
   );
 }

@@ -1,21 +1,27 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ThreadPreview } from "@/lib/data";
 import type { ThreadMessage } from "@/lib/messages";
-import { sendMessage, announceToAllClients } from "./actions";
+import { sendMessage, announceToAllClients, startThreadWithClient } from "./actions";
+
+type ClientPick = { id: string; full_name: string };
 
 export default function MessagesClient({
   threads,
   activeId,
   initialMessages,
-  myId
+  myId,
+  clients,
 }: {
   threads: ThreadPreview[];
   activeId: string | null;
   initialMessages: ThreadMessage[];
   myId: string;
+  clients: ClientPick[];
 }) {
+  const router = useRouter();
   const [active, setActive] = useState<string | null>(activeId);
   const [messages, setMessages] = useState<ThreadMessage[]>(initialMessages);
   const [body, setBody] = useState("");
@@ -24,6 +30,45 @@ export default function MessagesClient({
   const [announceBody, setAnnounceBody] = useState("");
   const [announceTier, setAnnounceTier] = useState<"" | "tier_1" | "tier_2" | "tier_3">("");
   const [info, setInfo] = useState<string | null>(null);
+  // New-message modal state
+  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [newClientId, setNewClientId] = useState<string>("");
+  const [newClientSearch, setNewClientSearch] = useState("");
+
+  // Filtered + sorted client list for the new-message picker
+  const filteredClients = useMemo(() => {
+    const q = newClientSearch.trim().toLowerCase();
+    const list = q
+      ? clients.filter((c) => c.full_name.toLowerCase().includes(q))
+      : clients.slice();
+    return list.sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [clients, newClientSearch]);
+
+  // Recipient preview for the announce modal — counts (and names) of who
+  // will actually receive it given the tier filter. Lets the coach spot
+  // a client who's missing before broadcasting.
+  const announceRecipients = useMemo(() => {
+    // We don't have tier info on the lightweight clients prop, so this
+    // preview is approximate: when a tier filter is set, fall back to a
+    // best-effort count of all clients (server actually filters by tier).
+    return clients;
+  }, [clients]);
+
+  function startNewMessage() {
+    if (!newClientId) return;
+    start(async () => {
+      const res = await startThreadWithClient(newClientId);
+      if (res.ok) {
+        setShowNewMessage(false);
+        setNewClientId("");
+        setNewClientSearch("");
+        router.push(`/coach/messages?thread=${res.thread_id}`);
+        router.refresh();
+      } else {
+        setInfo(res.error);
+      }
+    });
+  }
 
   function pickThread(id: string) {
     setActive(id);
@@ -70,7 +115,8 @@ export default function MessagesClient({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        <button className="btn btn-ghost" onClick={() => setShowNewMessage(true)}>+ New message</button>
         <button className="btn btn-primary" onClick={() => setShowAnnounce(true)}>+ Announce</button>
       </div>
 
@@ -149,16 +195,19 @@ export default function MessagesClient({
           <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "min(520px, 95vw)" }}>
             <span className="badge">Announce</span>
             <h2 style={{ marginTop: "0.5rem" }}>Broadcast to clients</h2>
-            <p className="meta">Lands as a flagged message in each client's inbox.</p>
+            <p className="meta">Lands as a flagged message in each client&apos;s inbox.</p>
             <hr className="divider" />
             <div>
               <label className="stat-label">Audience</label>
               <select className="select" value={announceTier} onChange={(e) => setAnnounceTier(e.target.value as any)} style={{ marginTop: "0.3rem" }}>
-                <option value="">All clients</option>
+                <option value="">All clients ({announceRecipients.length})</option>
                 <option value="tier_1">Tier 1 only</option>
                 <option value="tier_2">Tier 2 only</option>
                 <option value="tier_3">Tier 3 only</option>
               </select>
+              <p className="meta" style={{ fontSize: "0.72rem", marginTop: "0.35rem" }}>
+                Goes to every client whose record either has you as their coach or has no coach assigned.
+              </p>
             </div>
             <div style={{ marginTop: "0.6rem" }}>
               <label className="stat-label">Message</label>
@@ -167,6 +216,59 @@ export default function MessagesClient({
             <div style={{ marginTop: "0.8rem", display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
               <button className="btn btn-ghost" onClick={() => setShowAnnounce(false)} disabled={pending}>Cancel</button>
               <button className="btn btn-primary" onClick={broadcast} disabled={pending || !announceBody.trim()}>{pending ? "Sending…" : "Send announcement"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── New Message modal ─────────────────────────────────────────── */}
+      {showNewMessage ? (
+        <div className="no-print" style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowNewMessage(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "min(440px, 95vw)" }}>
+            <span className="badge">New DM</span>
+            <h2 style={{ marginTop: "0.5rem" }}>Start a conversation</h2>
+            <p className="meta">Open (or create) a direct message thread with a client.</p>
+            <hr className="divider" />
+            <div>
+              <label className="stat-label">Client</label>
+              <input
+                className="input"
+                placeholder="Search clients…"
+                value={newClientSearch}
+                onChange={(e) => setNewClientSearch(e.target.value)}
+                style={{ marginTop: "0.3rem" }}
+              />
+              <div style={{ maxHeight: 240, overflowY: "auto", marginTop: "0.4rem", border: "1px solid var(--line)", borderRadius: 3 }}>
+                {filteredClients.length === 0 ? (
+                  <p className="meta" style={{ padding: "0.6rem 0.75rem", margin: 0, fontSize: "0.78rem" }}>No matches.</p>
+                ) : (
+                  filteredClients.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setNewClientId(c.id)}
+                      style={{
+                        display: "block", width: "100%", textAlign: "left",
+                        padding: "0.45rem 0.7rem",
+                        background: newClientId === c.id ? "rgba(168,61,43,0.08)" : "transparent",
+                        border: "none",
+                        borderBottom: "1px solid var(--line)",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        fontSize: "0.85rem",
+                        fontWeight: newClientId === c.id ? 700 : 400,
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {c.full_name}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+            <div style={{ marginTop: "0.85rem", display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <button className="btn btn-ghost" onClick={() => { setShowNewMessage(false); setNewClientId(""); setNewClientSearch(""); }} disabled={pending}>Cancel</button>
+              <button className="btn btn-primary" onClick={startNewMessage} disabled={pending || !newClientId}>{pending ? "Opening…" : "Open thread →"}</button>
             </div>
           </div>
         </div>
