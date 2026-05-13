@@ -197,6 +197,15 @@ a:hover { text-decoration: underline; }
 }
 .table tr:hover td { background: rgba(168, 61, 43, 0.04); }
 
+/* Sticky table header — add class "table-sticky-head" to the table element */
+.table-sticky-head thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f0ebe0; /* solid equivalent of the translucent header bg */
+  box-shadow: 0 1px 0 var(--line);
+}
+
 /* Badges */
 .badge {
   display: inline-block;
@@ -351,4 +360,7 @@ a:hover { text-decoration: underline; }
   .tbl-sticky-first { position: sticky !important; left: 0; z-index: 1; background: var(--paper) !important; }
   .tbl-sticky-last  { position: sticky !important; right: 0; z-index: 1; background: var(--paper) !important; }
   th.tbl-sticky-first, th.tbl-sticky-last { z-index: 2; background: var(--paper) !important; }
+  /* Corner cells: sticky header + sticky column — must be above both */
+  .table-sticky-head thead th.tbl-sticky-first,
+  .table-sticky-head thead th.tbl-sticky-last { z-index: 4 !important; background: #f0ebe0 !important; }
 }

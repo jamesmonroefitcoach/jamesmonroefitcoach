@@ -467,13 +467,17 @@ export default function DashboardClient({
                         <td>{a.client_name ?? <span className="meta">{a.personal_label ?? "—"}</span>}</td>
                         <td>{fmtMoney(a.rate)}</td>
                         <td style={{ textAlign: "center" }}>
-                          <input
-                            type="checkbox"
-                            checked={a.paid}
-                            onChange={(e) => handleMarkPaid(a.id, e.target.checked)}
-                            style={{ cursor: "pointer", width: 15, height: 15, accentColor: "var(--sage)" }}
-                            title={a.paid ? "Marked paid — click to unmark" : "Mark as paid"}
-                          />
+                          {a.session_type === "session" ? (
+                            <input
+                              type="checkbox"
+                              checked={a.paid}
+                              onChange={(e) => handleMarkPaid(a.id, e.target.checked)}
+                              style={{ cursor: "pointer", width: 15, height: 15, accentColor: "var(--sage)" }}
+                              title={a.paid ? "Marked paid — click to unmark" : "Mark as paid"}
+                            />
+                          ) : (
+                            <span className="meta">—</span>
+                          )}
                         </td>
                         <td>
                           <div className="meta" style={{ fontSize: "0.7rem", marginBottom: "0.25rem" }}>

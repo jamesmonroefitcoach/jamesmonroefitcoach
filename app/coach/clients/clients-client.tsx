@@ -715,7 +715,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
         }
       >
         <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <table className="table">
+          <table className="table table-sticky-head">
             <thead>
               <tr>
                 <SortTh label="Client"         col="name"      current={sortKey} dir={sortDir} onClick={toggleSort} className="tbl-sticky-first" />
@@ -754,7 +754,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           </div>
         ) : (
           <div className="card" style={{ padding: 0, overflow: "auto" }}>
-            <table className="table">
+            <table className="table table-sticky-head">
               <thead>
                 <tr>
                   <th className="tbl-sticky-first">Client</th>
@@ -795,7 +795,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           </div>
         ) : (
           <div className="card" style={{ padding: 0, overflow: "auto" }}>
-            <table className="table">
+            <table className="table table-sticky-head">
               <thead>
                 <tr>
                   <th className="tbl-sticky-first">Name</th>
