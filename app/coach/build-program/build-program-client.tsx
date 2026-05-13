@@ -1433,7 +1433,7 @@ export default function BuildProgramClient({
       </aside>
 
       {/* ─── main column ─── */}
-      <section>
+      <section style={{ minWidth: 0 }}>
         {/* Past programs + at-home pull-from — Session tab only */}
         {programKind === "in_gym" && (
           <div className="card no-print" style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: atHomeForClient.length ? "1fr 1fr" : "1fr", gap: "0.75rem", alignItems: "end" }}>
@@ -1713,6 +1713,7 @@ export default function BuildProgramClient({
             flexDirection: "column",
             gap: "0.75rem",
             paddingBottom: "0.75rem",
+            minWidth: 0,
           }}>
             {days.map((day) => {
               const renderGroups = toRenderGroups(day.items);
@@ -2343,103 +2344,25 @@ function persistPresets(movementId: string, list: ExercisePreset[]) {
   } catch {}
 }
 
-// ─── Variation dropdown (single-select) ─────────────────────────────────────
-function VariationDropdown({ value, onChange }: {
+// ─── Variation select (native — no custom dropdown, no scrollbars) ──────────
+function VariationDropdown({ value, onChange, style }: {
   value: Variation[];
   onChange: (v: Variation[]) => void;
+  style?: React.CSSProperties;
 }) {
-  const [open, setOpen] = useState(false);
-  const [dropPos, setDropPos] = useState<{ top: number; left: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const selected = value[0] ?? null;
-  const label = selected ? VARIATION_LABELS[selected] : "Spec";
-
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, { passive: true, capture: true });
-    return () => window.removeEventListener("scroll", close, { capture: true });
-  }, [open]);
-
-  function openDropdown() {
-    if (btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      setDropPos({ top: rect.bottom + 2, left: rect.left });
-    }
-    setOpen((o) => !o);
-  }
-
-  function selectV(v: Variation) {
-    onChange(selected === v ? [] : [v]);
-    setOpen(false);
-  }
-
+  const selected = value[0] ?? "";
   return (
-    <div style={{ position: "relative", display: "inline-flex" }}>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={openDropdown}
-        style={{
-          fontSize: "0.67rem",
-          padding: "0.16rem 0.28rem",
-          borderRadius: 3,
-          border: selected ? "1px solid var(--ink)" : "1px solid var(--line)",
-          background: selected ? "rgba(0,0,0,0.07)" : "transparent",
-          color: selected ? VARIATION_TEXT[selected] : "var(--muted)",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          whiteSpace: "nowrap",
-          width: 78,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          textAlign: "left",
-          fontWeight: selected ? 600 : undefined,
-        }}
-        title={selected ? VARIATION_LABELS[selected] : "Spec"}
-      >
-        {label} {open ? "▴" : "▾"}
-      </button>
-      {open && (
-        <div style={{
-          position: "fixed",
-          top: dropPos?.top ?? 0,
-          left: dropPos?.left ?? 0,
-          zIndex: 1000,
-          background: "var(--paper)",
-          border: "1px solid var(--line)",
-          borderRadius: 4,
-          padding: "0.25rem 0.35rem",
-          minWidth: 120,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.14)",
-        }}>
-          {VARIATIONS.map((v) => (
-            <button
-              key={v}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => selectV(v)}
-              style={{
-                display: "flex", alignItems: "center", gap: "0.35rem", width: "100%",
-                border: "none", cursor: "pointer",
-                fontSize: "0.72rem", padding: "0.22rem 0.3rem", borderRadius: 3,
-                fontFamily: "inherit", textAlign: "left",
-                color: selected === v ? VARIATION_TEXT[v] : undefined,
-                fontWeight: selected === v ? 700 : undefined,
-                background: selected === v ? VARIATION_COLORS[v] : "transparent",
-              } as React.CSSProperties}
-            >
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                border: `2px solid ${selected === v ? VARIATION_TEXT[v] : "var(--line)"}`,
-                background: selected === v ? VARIATION_TEXT[v] : "transparent",
-              }} />
-              {VARIATION_LABELS[v]}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <select
+      className="select"
+      value={selected}
+      onChange={(e) => onChange(e.target.value ? [e.target.value as Variation] : [])}
+      style={{ fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%", ...style }}
+    >
+      <option value="">—</option>
+      {VARIATIONS.map((v) => (
+        <option key={v} value={v}>{VARIATION_LABELS[v]}</option>
+      ))}
+    </select>
   );
 }
 
@@ -2498,7 +2421,7 @@ function RepsInput({
   );
 }
 
-// ─── Optional field add-button (dropdown) ────────────────────────────────
+// ─── Optional field add — native select, resets after pick ───────────────────
 function AddOptionalFieldButton({
   activeFields,
   onAdd,
@@ -2506,80 +2429,21 @@ function AddOptionalFieldButton({
   activeFields: OptionalField[];
   onAdd: (f: OptionalField) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [dropPos, setDropPos] = useState<{ top: number; right: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
   const available = ALL_OPTIONAL_FIELDS.filter((f) => !activeFields.includes(f));
-
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, { passive: true, capture: true });
-    return () => window.removeEventListener("scroll", close, { capture: true });
-  }, [open]);
-
   if (available.length === 0) return null;
-
-  function openDropdown() {
-    if (btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      // anchor right edge of dropdown to right edge of button
-      setDropPos({ top: rect.bottom + 2, right: window.innerWidth - rect.right });
-    }
-    setOpen((o) => !o);
-  }
-
   return (
-    <div style={{ position: "relative", display: "inline-flex" }}>
-      <button
-        ref={btnRef}
-        type="button"
-        title="Add optional field"
-        onClick={openDropdown}
-        style={{
-          background: "transparent",
-          border: "1px solid var(--line)",
-          borderRadius: 3,
-          fontSize: "0.62rem",
-          padding: "0.06rem 0.22rem",
-          cursor: "pointer",
-          color: "var(--muted)",
-          lineHeight: 1,
-          fontFamily: "inherit",
-        }}
-      >+</button>
-      {open && (
-        <div
-          style={{
-            position: "fixed",
-            top: dropPos?.top ?? 0,
-            right: dropPos?.right ?? 0,
-            zIndex: 1000,
-            background: "var(--paper)", border: "1px solid var(--line)",
-            borderRadius: 3, padding: "0.2rem", minWidth: 110,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
-          }}
-        >
-          {available.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => { onAdd(f); setOpen(false); }}
-              style={{
-                display: "block", width: "100%", textAlign: "left",
-                background: "transparent", border: "none", borderRadius: 2,
-                fontSize: "0.72rem", padding: "0.2rem 0.35rem",
-                cursor: "pointer", fontFamily: "inherit",
-              }}
-              onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(168,61,43,0.08)"; }}
-              onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            >
-              {OPTIONAL_FIELD_CONFIG[f].label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <select
+      className="select"
+      value=""
+      onChange={(e) => { if (e.target.value) onAdd(e.target.value as OptionalField); }}
+      title="Add optional column"
+      style={{ fontSize: "0.65rem", padding: "0.12rem 0.08rem", width: "100%" }}
+    >
+      <option value="">+</option>
+      {available.map((f) => (
+        <option key={f} value={f}>{OPTIONAL_FIELD_CONFIG[f].label}</option>
+      ))}
+    </select>
   );
 }
 
@@ -2794,12 +2658,12 @@ function ExerciseCard({
           letterSpacing: "0.05em", textAlign: "center", alignSelf: "end",
           paddingBottom: "0.12rem", userSelect: "none",
         };
-        const INP: React.CSSProperties = { fontSize: "0.73rem", padding: "0.16rem 0.18rem", textAlign: "center" };
+        const INP: React.CSSProperties = { fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center" };
         const activeFields: OptionalField[] = it.optional_fields ?? [];
         const optColStr = activeFields.map((f) => OPTIONAL_FIELD_CONFIG[f].width).join(" ");
-        // Base cols + optional cols + 22px for the add-field button
-        const SF_COLS = `36px 90px 80px 72px 1fr 84px${optColStr ? ` ${optColStr}` : ""} 22px`;
-        const PS_COLS = `28px 90px 80px 72px 1fr 84px${optColStr ? ` ${optColStr}` : ""} 22px`;
+        // Tightened column widths so the grid fits (or barely scrolls) on a 360px phone
+        const SF_COLS = `32px 76px 62px 60px 1fr 68px 26px${optColStr ? ` ${optColStr}` : ""}`;
+        const PS_COLS = `24px 76px 62px 60px 1fr 68px 26px${optColStr ? ` ${optColStr}` : ""}`;
 
         function removeOptField(f: OptionalField) {
           onPatch({ optional_fields: activeFields.filter((x) => x !== f) });
@@ -3174,104 +3038,32 @@ function LibraryLeafRow({
   );
 }
 
-// ─── Equipment multi-select with Other-specify and Machine-specify ─────
+// ─── Equipment select ─────────────────────────────────────────────────────
 function EquipmentMultiSelect({
   value,
-  specifics,
   onChange,
-  compact = false,
 }: {
   value: Equipment[];
   specifics?: string;
   onChange: (next: Equipment[], specifics: string | undefined) => void;
   compact?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [dropPos, setDropPos] = useState<{ top: number; left: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const showSpecifics = value.includes("machine") || value.includes("other");
-  const fullLabel = value.length === 0 ? "Equipment" : value.length <= 2 ? value.map(v => EQUIPMENT_OPTIONS.find(o => o.value === v)?.label ?? v).join(", ") : `${value.length} equip.`;
-  const compactLabel = value.length === 0 ? "Equip." : value.length <= 1 ? (EQUIPMENT_OPTIONS.find(o => o.value === value[0])?.label ?? value[0]).slice(0, 7) : `${value.length} eq.`;
-  const label = compact ? compactLabel : fullLabel;
-
-  // Close on scroll so the fixed dropdown doesn't drift
-  useEffect(() => {
-    if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, { passive: true, capture: true });
-    return () => window.removeEventListener("scroll", close, { capture: true });
-  }, [open]);
-
-  function openDropdown() {
-    if (btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      setDropPos({ top: rect.bottom + 2, left: rect.left });
-    }
-    setOpen((o) => !o);
-  }
-
-  function toggle(eq: Equipment) {
-    const has = value.includes(eq);
-    const next = has ? value.filter(x => x !== eq) : [...value, eq];
-    onChange(next, next.includes("machine") || next.includes("other") ? specifics : undefined);
-  }
-
+  const selected = value[0] ?? "";
   return (
-    <div style={{ position: "relative", minWidth: 0 }}>
-      <button
-        ref={btnRef}
-        type="button"
-        className="btn btn-ghost"
-        style={{
-          padding: compact ? "0.16rem 0.28rem" : "0.35rem 0.5rem",
-          fontSize: compact ? "0.67rem" : "0.74rem",
-          textAlign: "left",
-          width: "100%",
-          justifyContent: "space-between",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.3rem",
-          whiteSpace: "nowrap",
-          boxSizing: "border-box",
-        }}
-        onClick={openDropdown}
-      >
-        <span style={{ fontWeight: value.length ? 600 : 400, color: value.length ? undefined : "var(--muted)" }}>{label}</span>
-        <span style={{ fontSize: "0.58rem" }}>▾</span>
-      </button>
-      {open ? (
-        <div
-          style={{
-            position: "fixed",
-            top: dropPos?.top ?? 0,
-            left: dropPos?.left ?? 0,
-            zIndex: 1000,
-            background: "var(--paper)",
-            border: "1px solid var(--line)",
-            borderRadius: 3,
-            padding: "0.4rem",
-            minWidth: 200,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
-          }}
-        >
-          {EQUIPMENT_OPTIONS.map((opt) => (
-            <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.18rem 0.2rem", fontSize: "0.78rem", cursor: "pointer" }}>
-              <input type="checkbox" checked={value.includes(opt.value)} onChange={() => toggle(opt.value)} />
-              {opt.label}
-            </label>
-          ))}
-          {showSpecifics ? (
-            <input
-              className="input"
-              placeholder={value.includes("other") ? "Specify other…" : "Specify machine…"}
-              value={specifics ?? ""}
-              onChange={(e) => onChange(value, e.target.value)}
-              style={{ marginTop: "0.4rem", fontSize: "0.78rem" }}
-            />
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    <select
+      className="select"
+      value={selected}
+      onChange={(e) => {
+        const eq = e.target.value as Equipment | "";
+        onChange(eq ? [eq] : [], undefined);
+      }}
+      style={{ fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%" }}
+    >
+      <option value="">—</option>
+      {EQUIPMENT_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
   );
 }
 
