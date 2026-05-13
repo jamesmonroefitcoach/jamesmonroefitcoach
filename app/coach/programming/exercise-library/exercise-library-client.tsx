@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { MovementRow } from "@/lib/data";
 import {
@@ -106,6 +106,164 @@ const POSITION_OPTIONS: { value: string; label: string }[] = [
   { value: "lying", label: "Lying" },
 ];
 
+// ── equipment_specifics encode/decode ─────────────────────────────────────────
+// We support BOTH "machine" and "other" having their own specifics text. They
+// share a single equipment_specifics column. When only one is filled, we store
+// the raw string for back-compat. When both are filled, we store the combined
+// "Machine: X | Other: Y" format and decode it on read.
+function decodeSpecs(equipment_list: string[], specs: string | null | undefined): { machineSpec: string; otherSpec: string } {
+  const hasMachine = equipment_list.includes("machine");
+  const hasOther = equipment_list.includes("other");
+  const s = specs ?? "";
+  if (!s) return { machineSpec: "", otherSpec: "" };
+  const machineMatch = /^Machine:\s*(.*?)(?:\s*\|\s*Other:.*)?$/i.exec(s);
+  const otherMatch = /Other:\s*(.*)$/i.exec(s);
+  if (machineMatch && /Other:/i.test(s)) {
+    return {
+      machineSpec: (machineMatch[1] ?? "").trim(),
+      otherSpec: (otherMatch?.[1] ?? "").trim(),
+    };
+  }
+  // No structured prefix — assign to whichever single option is checked.
+  if (hasMachine && !hasOther) return { machineSpec: s, otherSpec: "" };
+  if (hasOther && !hasMachine) return { machineSpec: "", otherSpec: s };
+  if (hasMachine && hasOther) return { machineSpec: s, otherSpec: "" };
+  return { machineSpec: s, otherSpec: "" };
+}
+
+function encodeSpecs(equipment_list: string[], machineSpec: string, otherSpec: string): string {
+  const m = equipment_list.includes("machine") ? machineSpec.trim() : "";
+  const o = equipment_list.includes("other") ? otherSpec.trim() : "";
+  if (m && o) return `Machine: ${m} | Other: ${o}`;
+  if (m) return m;
+  if (o) return o;
+  return "";
+}
+
+// ── Equipment selector — mirrors the build page's dropdown picker with the
+//     addition of inline specifics text inputs next to Machine and Other when
+//     those options are checked.
+function LibraryEquipmentPicker({
+  equipment_list, machineSpec, otherSpec, onChange,
+}: {
+  equipment_list: string[];
+  machineSpec: string;
+  otherSpec: string;
+  onChange: (next: { equipment_list: string[]; machineSpec: string; otherSpec: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (!btnRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
+    };
+    const scroll = () => setOpen(false);
+    document.addEventListener("mousedown", handle);
+    document.addEventListener("touchstart", handle);
+    window.addEventListener("scroll", scroll, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener("mousedown", handle);
+      document.removeEventListener("touchstart", handle);
+      window.removeEventListener("scroll", scroll, { capture: true });
+    };
+  }, [open]);
+
+  function openPanel() {
+    if (open) { setOpen(false); return; }
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left });
+    }
+    setOpen(true);
+  }
+
+  function toggle(eq: string) {
+    const has = equipment_list.includes(eq);
+    const next = has ? equipment_list.filter((x) => x !== eq) : [...equipment_list, eq];
+    onChange({
+      equipment_list: next,
+      machineSpec: next.includes("machine") ? machineSpec : "",
+      otherSpec: next.includes("other") ? otherSpec : "",
+    });
+  }
+
+  const label = equipment_list.length === 0
+    ? "Equipment"
+    : equipment_list.length <= 2
+      ? equipment_list.map((v) => EQUIPMENT_OPTIONS.find((o) => o.value === v)?.label ?? v).join(", ")
+      : `${equipment_list.length} equip.`;
+
+  return (
+    <div style={{ position: "relative", minWidth: 0 }}>
+      <button
+        ref={btnRef}
+        type="button"
+        className="btn btn-ghost"
+        style={{
+          padding: "0.35rem 0.5rem", fontSize: "0.85rem",
+          textAlign: "left", width: "100%", justifyContent: "space-between",
+          display: "flex", alignItems: "center", gap: "0.3rem",
+          whiteSpace: "nowrap", boxSizing: "border-box",
+        }}
+        onClick={openPanel}
+      >
+        <span style={{ fontWeight: equipment_list.length ? 600 : 400, color: equipment_list.length ? undefined : "var(--muted)" }}>{label}</span>
+        <span style={{ fontSize: "0.62rem" }}>▾</span>
+      </button>
+      {open && (
+        <div
+          ref={panelRef}
+          style={{
+            position: "fixed",
+            top: pos?.top ?? 0, left: pos?.left ?? 0,
+            zIndex: 1000,
+            background: "var(--paper)", border: "1px solid var(--line)",
+            borderRadius: 4, padding: "0.45rem",
+            minWidth: 320, boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+          }}
+        >
+          {EQUIPMENT_OPTIONS.map((opt) => {
+            const checked = equipment_list.includes(opt.value);
+            const isMachine = opt.value === "machine";
+            const isOther = opt.value === "other";
+            return (
+              <div key={opt.value} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.22rem 0.2rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.84rem", cursor: "pointer", minWidth: 110 }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggle(opt.value)} />
+                  {opt.label}
+                </label>
+                {checked && isMachine && (
+                  <input
+                    className="input"
+                    placeholder="Specify machine…"
+                    value={machineSpec}
+                    onChange={(e) => onChange({ equipment_list, machineSpec: e.target.value, otherSpec })}
+                    style={{ flex: 1, fontSize: "0.8rem", padding: "0.16rem 0.3rem" }}
+                  />
+                )}
+                {checked && isOther && (
+                  <input
+                    className="input"
+                    placeholder="Specify other…"
+                    value={otherSpec}
+                    onChange={(e) => onChange({ equipment_list, machineSpec, otherSpec: e.target.value })}
+                    style={{ flex: 1, fontSize: "0.8rem", padding: "0.16rem 0.3rem" }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Exercise form ─────────────────────────────────────────────────────────────
 
 function ExerciseForm({
@@ -124,6 +282,17 @@ function ExerciseForm({
   const [draft, setDraft] = useState<MovementInput>(
     initial ?? { ...BLANK, category: defaultCategory ?? "push", subcategory: defaultSubcategory ?? "" }
   );
+  // machineSpec and otherSpec are split out from equipment_specifics so each
+  // checkbox can have its own inline input. They get re-encoded into the
+  // single equipment_specifics column on submit.
+  const initialSpecs = useMemo(
+    () => decodeSpecs(draft.equipment_list ?? [], draft.equipment_specifics),
+    // Only seed from the initial draft — subsequent edits flow through onChange.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+  const [machineSpec, setMachineSpec] = useState(initialSpecs.machineSpec);
+  const [otherSpec, setOtherSpec] = useState(initialSpecs.otherSpec);
   const [saving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -131,18 +300,13 @@ function ExerciseForm({
     setDraft((d) => ({ ...d, [k]: v }));
   }
 
-  function toggleEquip(val: string) {
-    setDraft((d) => {
-      const list = d.equipment_list ?? [];
-      return { ...d, equipment_list: list.includes(val) ? list.filter((x) => x !== val) : [...list, val] };
-    });
-  }
-
   function submit() {
     if (!draft.name.trim()) { setError("Name is required."); return; }
     if (!draft.subcategory?.trim()) { setError("This form was opened without a library section — open it via the + Add button on the section you want to add to."); return; }
     setError(null);
-    startSave(async () => { await onSave(draft); });
+    const finalSpecs = encodeSpecs(draft.equipment_list ?? [], machineSpec, otherSpec);
+    const finalDraft: MovementInput = { ...draft, equipment_specifics: finalSpecs };
+    startSave(async () => { await onSave(finalDraft); });
   }
 
   // Position parsing — "incline:45" → base "incline" with angle "45"
@@ -168,31 +332,23 @@ function ExerciseForm({
         {/* Category & subcategory are implicit from the library section the
             form was opened under, so no picker is shown. */}
 
-        {/* Equipment */}
+        {/* Equipment — single dropdown selector mirrors the build page. Machine
+            and Other rows show inline specifics text inputs when checked. */}
         <div style={{ gridColumn: "1/-1" }}>
           <span className="meta" style={{ fontSize: "0.74rem" }}>Equipment</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem 0.6rem", marginTop: "0.3rem" }}>
-            {EQUIPMENT_OPTIONS.map((opt) => (
-              <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.85rem", cursor: "pointer" }}>
-                <input type="checkbox"
-                  checked={(draft.equipment_list ?? []).includes(opt.value)}
-                  onChange={() => toggleEquip(opt.value)} />
-                {opt.label}
-              </label>
-            ))}
+          <div style={{ marginTop: "0.3rem", maxWidth: 320 }}>
+            <LibraryEquipmentPicker
+              equipment_list={draft.equipment_list ?? []}
+              machineSpec={machineSpec}
+              otherSpec={otherSpec}
+              onChange={(next) => {
+                set("equipment_list", next.equipment_list);
+                setMachineSpec(next.machineSpec);
+                setOtherSpec(next.otherSpec);
+              }}
+            />
           </div>
         </div>
-
-        {/* Specification (equipment_specifics) — optional free text */}
-        <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>Specification</span>
-          <input
-            className="input"
-            value={draft.equipment_specifics ?? ""}
-            onChange={(e) => set("equipment_specifics", e.target.value)}
-            placeholder="e.g. Preacher curl machine"
-          />
-        </label>
 
         {/* Position */}
         <div style={{ gridColumn: "1/-1" }}>
