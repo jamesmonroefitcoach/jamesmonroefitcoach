@@ -240,12 +240,14 @@ export default function BuildProgramClient({
   const [atHomeEditingHeader, setAtHomeEditingHeader] = useState(false);
   const [pickedExistingId, setPickedExistingId] = useState("");
   // Import picker state. Either a day uid (importing into one day) or
-  // "__whole_session__" / "__whole_program__" sentinels for top-level imports.
+  // "__whole_session__" / "__whole_program__" / "__pick_days__" sentinels for
+  // top-level imports.
   const [importDayModalUid, setImportDayModalUid] = useState<string | null>(null);
   const importScope: ImportScope | null = useMemo(() => {
     if (!importDayModalUid) return null;
     if (importDayModalUid === "__whole_session__") return "session";
     if (importDayModalUid === "__whole_program__") return "program-whole";
+    if (importDayModalUid === "__pick_days__") return "program-pick-days";
     return "program-day";
   }, [importDayModalUid]);
   const [supersetPickerState, setSupersetPickerState] = useState<{
@@ -726,6 +728,18 @@ export default function BuildProgramClient({
     }
 
     const importedDays = result.days.map((d: any, i: number) => freshDay(d, i));
+
+    if (dayUid === "__pick_days__") {
+      // Pick-days scope: overwrite the first N slots of the current program
+      // with the picked days, in the order the coach selected them. Days
+      // beyond N are left alone.
+      setDays((cur) => cur.map((existing, i) => {
+        const replacement = importedDays[i];
+        if (!replacement) return existing;
+        return { ...existing, items: replacement.items, title: replacement.title };
+      }));
+      return;
+    }
 
     if (dayUid) {
       // Replace the contents of a specific day (program-day scope)
@@ -1942,48 +1956,33 @@ export default function BuildProgramClient({
 
       {/* ─── main column ─── */}
       <section style={{ minWidth: 0 }}>
-        {/* Past programs + at-home pull-from — Session tab only */}
-        {programKind === "in_gym" && (
-          <div className="card no-print" style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: atHomeForClient.length ? "1fr 1fr" : "1fr", gap: "0.75rem", alignItems: "end" }}>
+        {/* Pull-day-from-Program — Session tab only (Past programs block was
+            removed in favor of the unified ⇪ Import session button up top). */}
+        {programKind === "in_gym" && atHomeForClient.length > 0 && (
+          <div className="card no-print" style={{ marginTop: "1rem" }}>
             <div>
-              <label className="stat-label">Past programs</label>
-              <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}>
-                <select className="select" value={pastSelId} onChange={(e) => setPastSelId(e.target.value)} style={{ flex: 1 }}>
-                  <option value="">— pick one —</option>
-                  {pastPrograms.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}{p.program_kind === "at_home" ? ` (${fmtDate(p.starts_on)} → ${fmtDate(p.ends_on)})` : ""} · {PROGRAM_KIND_LABEL[p.program_kind]}
+              <label className="stat-label">Pull day from Program</label>
+              <select
+                className="select"
+                defaultValue=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const [pid, n] = e.target.value.split("::");
+                  pullAtHomeDay(pid, Number(n));
+                  e.target.value = "";
+                }}
+                style={{ marginTop: "0.3rem" }}
+              >
+                <option value="">— pick day —</option>
+                {atHomeForClient.flatMap((p) =>
+                  p.days.map((d) => (
+                    <option key={`${p.id}-${d.day_number}`} value={`${p.id}::${d.day_number}`}>
+                      {p.name} · {d.title}
                     </option>
-                  ))}
-                </select>
-                <button className="btn btn-primary" disabled={!pastSelected} onClick={() => pastSelected && copyFromPast(pastSelected)}>Copy</button>
-              </div>
+                  ))
+                )}
+              </select>
             </div>
-            {atHomeForClient.length ? (
-              <div>
-                <label className="stat-label">Pull day from Program</label>
-                <select
-                  className="select"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    const [pid, n] = e.target.value.split("::");
-                    pullAtHomeDay(pid, Number(n));
-                    e.target.value = "";
-                  }}
-                  style={{ marginTop: "0.3rem" }}
-                >
-                  <option value="">— pick day —</option>
-                  {atHomeForClient.flatMap((p) =>
-                    p.days.map((d) => (
-                      <option key={`${p.id}-${d.day_number}`} value={`${p.id}::${d.day_number}`}>
-                        {p.name} · {d.title}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            ) : null}
           </div>
         )}
 
@@ -2187,8 +2186,20 @@ export default function BuildProgramClient({
         {/* ── at_home: multi-day card stack ── */}
         {programKind === "at_home" && (
           <>
+          {/* Import-days button — sits OUTSIDE the days wrapper so it acts on
+              all days at once. Lets the coach pick a subset of past-program
+              days (up to days.length) and drop them into the current slots. */}
+          <div className="no-print" style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.74rem" }}
+              onClick={() => setImportDayModalUid("__pick_days__")}
+              title={`Pick up to ${days.length} day${days.length === 1 ? "" : "s"} from a past program to import`}
+            >⇪ Import days</button>
+          </div>
           <div style={{
-            marginTop: "1rem",
+            marginTop: "0.5rem",
             display: "flex",
             flexDirection: "column",
             gap: "0.75rem",
@@ -2402,7 +2413,8 @@ export default function BuildProgramClient({
     {importDayModalUid && importScope && (() => {
       // Compute "destination is empty" for the confirm-replace dialog.
       const isWhole = importScope === "session" || importScope === "program-whole";
-      const destEmpty = isWhole
+      const isPickDays = importScope === "program-pick-days";
+      const destEmpty = (isWhole || isPickDays)
         ? days.every((d) => d.items.length === 0)
         : (days.find((d) => d.uid === importDayModalUid)?.items.length ?? 0) === 0;
       return (
@@ -2411,9 +2423,11 @@ export default function BuildProgramClient({
           currentClientId={clientId}
           currentClientName={selectedClient?.full_name ?? ""}
           destinationIsEmpty={destEmpty}
+          maxDays={isPickDays ? days.length : undefined}
           onClose={() => setImportDayModalUid(null)}
           onImport={(result) => {
-            if (isWhole) applyImport(result);
+            if (isPickDays) applyImport(result, "__pick_days__");
+            else if (isWhole) applyImport(result);
             else applyImport(result, importDayModalUid!);
             setImportDayModalUid(null);
           }}

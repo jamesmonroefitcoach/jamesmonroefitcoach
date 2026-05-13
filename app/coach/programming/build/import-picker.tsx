@@ -9,15 +9,19 @@ import {
 } from "./actions";
 
 // Scope of the import — what the caller is building right now.
-//   "session"        : building an in-gym session (single day). Picker filters
-//                      to importable items that produce a single day. For a
-//                      multi-day program, the coach picks which day to import.
-//   "program-whole"  : building an at-home program. Imports the whole multi-
-//                      day program in one shot. Single-day sources become a
-//                      one-day program.
-//   "program-day"    : building an at-home program, importing into a specific
-//                      day slot. Coach picks one day from a multi-day source.
-export type ImportScope = "session" | "program-whole" | "program-day";
+//   "session"          : building an in-gym session (single day). Picker filters
+//                        to importable items that produce a single day. For a
+//                        multi-day program, the coach picks which day to import.
+//   "program-whole"    : building an at-home program. Imports the whole multi-
+//                        day program in one shot. Single-day sources become a
+//                        one-day program.
+//   "program-day"      : building an at-home program, importing into a specific
+//                        day slot. Coach picks one day from a multi-day source.
+//   "program-pick-days": building an at-home program. Coach picks a SUBSET of
+//                        days from a past program (up to maxDays) via
+//                        checkboxes. Selected days replace the first N slots
+//                        of the destination.
+export type ImportScope = "session" | "program-whole" | "program-day" | "program-pick-days";
 
 export type ImportResult = {
   // Days the caller should consume. For session / program-day this is a
@@ -38,6 +42,7 @@ export default function ImportPickerModal({
   currentClientId,
   currentClientName,
   destinationIsEmpty,
+  maxDays,
   onClose,
   onImport,
 }: {
@@ -45,6 +50,9 @@ export default function ImportPickerModal({
   currentClientId: string;
   currentClientName: string;
   destinationIsEmpty: boolean;
+  /** For "program-pick-days" scope: how many days of the source the coach may
+   *  pick. Equals the current program's day count. */
+  maxDays?: number;
   onClose: () => void;
   onImport: (result: ImportResult) => void;
 }) {
@@ -57,6 +65,7 @@ export default function ImportPickerModal({
   const [previewProg, setPreviewProg] = useState<ImportedProgram | null>(null);
   const [pendingImport, setPendingImport] = useState<ImportableProgram | null>(null);
   const [pendingDayIdx, setPendingDayIdx] = useState<number | null>(null);
+  const [pendingMultiPick, setPendingMultiPick] = useState<ImportableProgram | null>(null);
   const [confirming, setConfirming] = useState<{ program: ImportableProgram; days: unknown[]; source: ImportedProgram } | null>(null);
 
   // Load the "other client" picker list once when that tab is selected
@@ -96,6 +105,12 @@ export default function ImportPickerModal({
     if (scope === "program-whole") {
       // Take all days from the source
       confirmImport(p, source.days, source);
+      return;
+    }
+    if (scope === "program-pick-days") {
+      // Open the multi-day checkbox picker. Even a single-day source goes
+      // through it for consistency.
+      setPendingMultiPick(p);
       return;
     }
     if (scope === "session") {
@@ -148,6 +163,7 @@ export default function ImportPickerModal({
   const scopeBlurb =
     scope === "session" ? "Building a session — pick a past session or one day of a past program to copy from."
     : scope === "program-whole" ? "Building a program — pick a past program to copy all days from."
+    : scope === "program-pick-days" ? `Pick a past program, then choose up to ${maxDays ?? "N"} day${maxDays === 1 ? "" : "s"} to import.`
     : "Pick a day from a past session or program to drop into this day.";
 
   // Filter & label items to match scope intent (we still allow any choice;
@@ -167,7 +183,10 @@ export default function ImportPickerModal({
           <div>
             <span className="badge">Import</span>
             <h2 style={{ margin: "0.35rem 0 0.15rem" }}>
-              {scope === "session" ? "Import session" : scope === "program-whole" ? "Import whole program" : "Import a day"}
+              {scope === "session" ? "Import session"
+                : scope === "program-whole" ? "Import whole program"
+                : scope === "program-pick-days" ? "Import days"
+                : "Import a day"}
             </h2>
             <p className="meta" style={{ fontSize: "0.78rem", margin: 0 }}>{scopeBlurb}</p>
           </div>
@@ -284,6 +303,19 @@ export default function ImportPickerModal({
           />
         )}
 
+        {/* Multi-day checkbox picker for "program-pick-days" scope */}
+        {pendingMultiPick && (
+          <MultiDayPicker
+            program={pendingMultiPick}
+            maxDays={maxDays ?? 0}
+            onCancel={() => setPendingMultiPick(null)}
+            onConfirm={(picked, source) => {
+              setPendingMultiPick(null);
+              confirmImport(pendingMultiPick, picked, source);
+            }}
+          />
+        )}
+
         {/* Confirm replace sub-popup */}
         {confirming && (
           <div
@@ -385,6 +417,106 @@ function PreviewExercise({ it }: { it: any }) {
       {it.notes && (
         <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: "0.2rem", fontStyle: "italic" }}>{it.notes}</div>
       )}
+    </div>
+  );
+}
+
+// ─── Multi-day checkbox picker — used by the "program-pick-days" scope.
+//     Coach picks a subset of source days, capped at the destination's day
+//     count, then those days are imported into the first N slots of the
+//     destination in pick-order. ───────────────────────────────────────────
+function MultiDayPicker({
+  program,
+  maxDays,
+  onCancel,
+  onConfirm,
+}: {
+  program: ImportableProgram;
+  maxDays: number;
+  onCancel: () => void;
+  onConfirm: (picked: unknown[], source: ImportedProgram) => void;
+}) {
+  const [src, setSrc] = useState<ImportedProgram | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  useEffect(() => {
+    (async () => {
+      const res = await loadProgramForImport(program.id);
+      if (res.ok && res.data) setSrc(res.data);
+    })();
+  }, [program.id]);
+  if (!src) return null;
+  const cap = Math.max(0, maxDays);
+  function toggle(idx: number) {
+    setSelected((cur) => {
+      if (cur.includes(idx)) return cur.filter((x) => x !== idx);
+      if (cap > 0 && cur.length >= cap) return cur; // refuse more than maxDays
+      return [...cur, idx];
+    });
+  }
+  function confirm() {
+    if (!src) return;
+    // Preserve the order the coach checked them in — that's the order they
+    // land in the destination day slots.
+    const picked = selected.map((i) => src.days[i]);
+    onConfirm(picked, src);
+  }
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.55)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onCancel}
+    >
+      <div className="card" style={{ width: "min(480px, 92vw)", padding: "1.1rem 1.25rem", maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ margin: 0 }}>Pick days to import</h3>
+        <p className="meta" style={{ fontSize: "0.78rem", marginTop: "0.25rem" }}>
+          From <strong>{program.name}</strong> · {selected.length}/{cap || src.days.length} selected
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginTop: "0.6rem", overflowY: "auto", paddingRight: 4 }}>
+          {src.days.map((dRaw, idx) => {
+            const d = dRaw as { title?: string; items?: any[] };
+            const isChecked = selected.includes(idx);
+            const order = isChecked ? selected.indexOf(idx) + 1 : null;
+            const capReached = cap > 0 && selected.length >= cap && !isChecked;
+            return (
+              <label
+                key={idx}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.5rem",
+                  padding: "0.4rem 0.55rem", borderRadius: 3,
+                  background: isChecked ? "rgba(168,61,43,0.07)" : "transparent",
+                  border: `1px solid ${isChecked ? "var(--rust)" : "var(--line)"}`,
+                  cursor: capReached ? "not-allowed" : "pointer",
+                  opacity: capReached ? 0.5 : 1,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  disabled={capReached}
+                  onChange={() => toggle(idx)}
+                  style={{ accentColor: "var(--rust)" }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: "0.84rem" }}>
+                    {d.title ?? `Day ${idx + 1}`}
+                    {order != null && (
+                      <span className="badge" style={{ marginLeft: "0.4rem", fontSize: "0.58rem" }}>→ slot {order}</span>
+                    )}
+                  </div>
+                  <div className="meta" style={{ fontSize: "0.68rem" }}>
+                    {(d.items ?? []).length} exercise{(d.items ?? []).length !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.4rem", marginTop: "0.85rem" }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" disabled={selected.length === 0} onClick={confirm}>
+            Import {selected.length} day{selected.length === 1 ? "" : "s"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
