@@ -8,13 +8,11 @@ type NavLink = { href: string; label: string };
 
 const COACH_NAV: NavLink[] = [
   { href: "/coach", label: "Dashboard" },
-  { href: "/coach/clients", label: "Clients" },
+  { href: "/coach/schedule", label: "Schedule" },        // Appointments + Availability live as subtabs under Schedule
   { href: "/coach/programming", label: "Programming" },
+  { href: "/coach/clients", label: "Clients" },
+  { href: "/coach/messages", label: "Messages" },
   { href: "/coach/exercise-library", label: "Exercise Library" },
-  { href: "/coach/schedule", label: "Schedule" },
-  { href: "/coach/availability", label: "Availability" },
-  { href: "/coach/appointments", label: "Appointments" },
-  { href: "/coach/messages", label: "Messages" }
 ];
 
 const CLIENT_NAV: NavLink[] = [
@@ -47,8 +45,18 @@ export default function Sidebar({ user }: { user: SessionUser }) {
     });
   }
 
+  // Sub-tabbed sections — when the user is on a subroute of these "sections",
+  // the top-level link still lights up as active.
+  const SECTION_ROUTES: Record<string, string[]> = {
+    "/coach/schedule": ["/coach/schedule", "/coach/appointments", "/coach/availability"],
+  };
+
   const navLinks = links.map((link) => {
-    const active = pathname === link.href || (link.href !== "/" + user.role && pathname.startsWith(link.href));
+    const sectionPrefixes = SECTION_ROUTES[link.href];
+    const inSection = sectionPrefixes
+      ? sectionPrefixes.some((p) => pathname === p || pathname.startsWith(p + "/"))
+      : false;
+    const active = inSection || pathname === link.href || (link.href !== "/" + user.role && pathname.startsWith(link.href));
     return (
       <Link
         key={link.href}

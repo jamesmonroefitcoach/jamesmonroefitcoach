@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { listClients, listAppointmentsForWeek, startOfWeek } from "@/lib/data";
 import { listSlotOffers } from "./data";
 import AvailabilityClient from "./availability-client";
+import ScheduleTabs from "../schedule/schedule-tabs";
 
 export default async function AvailabilityPage() {
   const user = await getSessionUser();
@@ -16,7 +17,9 @@ export default async function AvailabilityPage() {
   ]);
 
   return (
-    <main className="shell">
+    <>
+    <ScheduleTabs />
+    <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <span className="badge">Coach</span>
@@ -27,5 +30,6 @@ export default async function AvailabilityPage() {
       <hr className="divider" />
       <AvailabilityClient clients={clients} initialOffers={offers} weekAppointments={weekAppts} />
     </main>
+    </>
   );
 }

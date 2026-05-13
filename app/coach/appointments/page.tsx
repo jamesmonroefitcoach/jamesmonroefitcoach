@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForWeek, listAppointmentsForMonth, startOfWeek, listChangeRequestHistory } from "@/lib/data";
 import AppointmentsClient from "./appointments-client";
+import ScheduleTabs from "../schedule/schedule-tabs";
 
 export default async function AppointmentsPage() {
   const user = await getSessionUser();
@@ -28,7 +29,9 @@ export default async function AppointmentsPage() {
   });
 
   return (
-    <main className="shell">
+    <>
+    <ScheduleTabs />
+    <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header>
         <span className="badge">Coach</span>
         <h1 style={{ marginTop: "0.5rem" }}>Appointments</h1>
@@ -37,5 +40,6 @@ export default async function AppointmentsPage() {
       <hr className="divider" />
       <AppointmentsClient initial={all} history={history} />
     </main>
+    </>
   );
 }

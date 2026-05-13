@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForWeek, listAppointmentsForMonth, listClients, startOfWeek } from "@/lib/data";
 import ScheduleView from "./schedule-view";
+import ScheduleTabs from "./schedule-tabs";
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ week?: string; month?: string; view?: string }> }) {
   const user = await getSessionUser();
@@ -19,7 +20,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   ]);
 
   return (
-    <main className="shell">
+    <>
+    <ScheduleTabs />
+    <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <span className="badge">Coach</span>
@@ -37,5 +40,6 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         clients={clients}
       />
     </main>
+    </>
   );
 }
