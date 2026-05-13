@@ -3968,8 +3968,10 @@ function ExerciseCard({
   const libraryMovements = useContext(LibraryMovementsContext);
 
   // ─── Auto-generated preset name ─────────────────────────────────────
-  // Format: "Position Specification Equipment Subcategory" — any piece that's
+  // Format: "Position Variation Equipment Subcategory" — any piece that's
   // missing is skipped, and the coach can type over the result before saving.
+  // For Machine/Other equipment the typed-in spec replaces the generic label
+  // (so "Hammer Strength" shows up instead of "Machine") unless blank.
   function autogenName(): string {
     const positionRaw = it.position ?? "";
     let positionWord = "";
@@ -3979,11 +3981,18 @@ function ExerciseCard({
     } else if (positionRaw) {
       positionWord = positionRaw.charAt(0).toUpperCase() + positionRaw.slice(1);
     }
+    const variation = it.variations?.[0];
+    const variationWord = variation ? VARIATION_LABELS[variation] : "";
+    const { machineSpec, otherSpec } = decodeSpecs(it.equipment_list ?? [], it.equipment_specifics);
     const equipmentWords = (it.equipment_list ?? [])
-      .map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e)
+      .map((e) => {
+        if (e === "machine" && machineSpec.trim()) return machineSpec.trim();
+        if (e === "other" && otherSpec.trim()) return otherSpec.trim();
+        return EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e;
+      })
       .join(" ");
     const subcategory = (it.movement.subcategory || it.movement.name || "").trim();
-    return [positionWord, (it.equipment_specifics ?? "").trim(), equipmentWords, subcategory]
+    return [positionWord, variationWord, equipmentWords, subcategory]
       .map((s) => s.trim())
       .filter(Boolean)
       .join(" ");
