@@ -2405,18 +2405,21 @@ function VariationDropdown({ value, onChange, style }: {
   }
 
   const triggerStyle: React.CSSProperties = {
-    fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%", minWidth: 0,
-    textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+    fontSize: "0.72rem", padding: "0.14rem 0.22rem 0.14rem 0.1rem", width: "100%", minWidth: 0,
+    cursor: "pointer", fontFamily: "inherit",
     background: "#fff", color: selected ? "var(--ink)" : "var(--muted)",
     border: "1px solid var(--line)", borderRadius: 3,
-    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2,
     ...style,
   };
 
   return (
     <div style={{ position: "relative", minWidth: 0 }}>
       <button ref={btnRef} type="button" onClick={toggle} style={triggerStyle}>
-        {selected ? VARIATION_LABELS[selected] : "—"}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+          {selected ? VARIATION_LABELS[selected] : "—"}
+        </span>
+        <span style={{ fontSize: "0.55rem", color: "var(--muted)", flexShrink: 0, lineHeight: 1 }}>▾</span>
       </button>
       {open && (
         <div ref={panelRef} style={{
@@ -3241,17 +3244,20 @@ function EquipmentMultiSelect({
     : `${value.length} equip.`;
 
   const triggerStyle: React.CSSProperties = {
-    fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%", minWidth: 0,
-    textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+    fontSize: "0.72rem", padding: "0.14rem 0.22rem 0.14rem 0.1rem", width: "100%", minWidth: 0,
+    cursor: "pointer", fontFamily: "inherit",
     background: "#fff", color: value.length ? "var(--ink)" : "var(--muted)",
     border: "1px solid var(--line)", borderRadius: 3,
-    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2,
   };
 
   return (
     <div style={{ position: "relative", minWidth: 0 }}>
       <button ref={btnRef} type="button" onClick={toggleOpen} style={triggerStyle}>
-        {label}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+          {label}
+        </span>
+        <span style={{ fontSize: "0.55rem", color: "var(--muted)", flexShrink: 0, lineHeight: 1 }}>▾</span>
       </button>
       {open && (
         <div ref={panelRef} style={{
