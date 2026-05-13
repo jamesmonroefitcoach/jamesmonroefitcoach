@@ -3114,7 +3114,7 @@ function LibraryLeafRow({
   );
 }
 
-// ─── Equipment dropdown (fixed-position, viewport-clamped) ──────────────────
+// ─── Equipment multi-select dropdown (fixed-position, viewport-clamped) ──────
 function EquipmentMultiSelect({
   value,
   onChange,
@@ -3128,12 +3128,11 @@ function EquipmentMultiSelect({
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const selected = (value[0] ?? null) as Equipment | null;
-  const PANEL_W = 128;
+  const PANEL_W = 148;
 
   useClickOutsideTwo(btnRef, panelRef, open, () => setOpen(false));
 
-  function toggle() {
+  function toggleOpen() {
     if (open) { setOpen(false); return; }
     const rect = btnRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -3144,19 +3143,26 @@ function EquipmentMultiSelect({
     setOpen(true);
   }
 
-  const label = selected ? (EQUIPMENT_OPTIONS.find((o) => o.value === selected)?.label ?? selected) : "—";
+  function toggleItem(eq: Equipment) {
+    const next = value.includes(eq) ? value.filter((x) => x !== eq) : [...value, eq];
+    onChange(next, undefined);
+  }
+
+  const label = value.length === 0 ? "—"
+    : value.length === 1 ? (EQUIPMENT_OPTIONS.find((o) => o.value === value[0])?.label ?? value[0])
+    : `${value.length} equip.`;
 
   const triggerStyle: React.CSSProperties = {
     fontSize: "0.72rem", padding: "0.14rem 0.1rem", width: "100%", minWidth: 0,
     textAlign: "left", cursor: "pointer", fontFamily: "inherit",
-    background: "#fff", color: selected ? "var(--ink)" : "var(--muted)",
+    background: "#fff", color: value.length ? "var(--ink)" : "var(--muted)",
     border: "1px solid var(--line)", borderRadius: 3,
     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   };
 
   return (
     <div style={{ position: "relative", minWidth: 0 }}>
-      <button ref={btnRef} type="button" onClick={toggle} style={triggerStyle}>
+      <button ref={btnRef} type="button" onClick={toggleOpen} style={triggerStyle}>
         {label}
       </button>
       {open && (
@@ -3164,21 +3170,18 @@ function EquipmentMultiSelect({
           position: "fixed", top: pos.top, left: pos.left, zIndex: 1000,
           background: "var(--paper)", border: "1px solid var(--line)",
           borderRadius: 3, boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
-          minWidth: PANEL_W,
+          minWidth: PANEL_W, padding: "0.25rem 0",
         }}>
-          {([null, ...EQUIPMENT_OPTIONS.map((o) => o)] as ({ value: Equipment; label: string } | null)[]).map((opt) => (
-            <button key={opt?.value ?? "__none"} type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(opt ? [opt.value] : [], undefined); setOpen(false); }}
-              style={{
-                display: "block", width: "100%", textAlign: "left", border: "none",
-                padding: "0.3rem 0.65rem", fontSize: "0.8rem", cursor: "pointer",
-                fontFamily: "inherit",
-                background: selected === (opt?.value ?? null) ? "rgba(0,0,0,0.07)" : "transparent",
-                fontWeight: selected === (opt?.value ?? null) ? 600 : undefined,
-                color: opt ? "var(--ink)" : "var(--muted)",
-              }}
-            >{opt ? opt.label : "—"}</button>
+          {EQUIPMENT_OPTIONS.map((opt) => (
+            <label key={opt.value} onMouseDown={(e) => e.preventDefault()}
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.28rem 0.65rem", fontSize: "0.8rem", cursor: "pointer", userSelect: "none", background: value.includes(opt.value) ? "rgba(0,0,0,0.05)" : "transparent" }}
+            >
+              <input type="checkbox" checked={value.includes(opt.value)}
+                onChange={() => toggleItem(opt.value)}
+                style={{ cursor: "pointer", accentColor: "var(--rust)", flexShrink: 0 }}
+              />
+              {opt.label}
+            </label>
           ))}
         </div>
       )}
