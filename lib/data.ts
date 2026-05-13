@@ -637,20 +637,28 @@ export async function listCoachThreads(coachId: string): Promise<ThreadPreview[]
   const supabase = createSupabaseAdmin();
   const { data } = await supabase
     .from("message_threads")
-    .select("id, client_id, profiles:client_id ( full_name ), messages ( body, created_at, read_at )")
+    .select("id, client_id, profiles:client_id ( full_name ), messages ( body, created_at, read_at, sender_id )")
     .eq("coach_id", coachId)
     .order("created_at", { ascending: false })
     .limit(20);
   if (!data) return [];
   return data.map((t: any) => {
-    const last = (t.messages ?? []).slice(-1)[0];
+    // Sort messages by created_at so we always grab the truly-latest one,
+    // regardless of how Supabase returned the nested array.
+    const messages = ([...(t.messages ?? [])] as { body: string; created_at: string; read_at: string | null; sender_id: string }[])
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const last = messages.slice(-1)[0];
+    // Only flag the thread as unread for the inbox if the LAST message was
+    // sent by the client AND has not yet been read by the coach. A thread
+    // where the coach just wrote the last message is never "received unread".
+    const isReceivedUnread = !!last && last.sender_id !== coachId && !last.read_at;
     return {
       id: t.id,
       client_id: t.client_id,
       client_name: Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name,
       last_message: last?.body ?? "",
       last_at: last?.created_at ?? "",
-      unread: last && !last.read_at
+      unread: isReceivedUnread,
     } as ThreadPreview;
   });
 }
