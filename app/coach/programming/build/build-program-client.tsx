@@ -697,7 +697,6 @@ export default function BuildProgramClient({
           same_format: true,
           set_rows: [],
           variations: [],
-          rest_seconds: 60,
           equipment_list: [],
           equipment_specifics: undefined,
         };
@@ -873,7 +872,6 @@ export default function BuildProgramClient({
             same_format: true,
             set_rows: [],
             variations: [],
-            rest_seconds: 60,
             notes: it.notes,
             equipment_list: [],
             equipment_specifics: undefined,
@@ -907,7 +905,6 @@ export default function BuildProgramClient({
             same_format: true,
             set_rows: [],
             variations: [],
-            rest_seconds: 60,
             equipment_list: [],
             equipment_specifics: undefined,
           } satisfies ProgramItem;
@@ -1098,7 +1095,6 @@ export default function BuildProgramClient({
           movement: m, is_warmup: false,
           sets: 3, reps: "8-10", exertion_score: 5,
           same_format: true, set_rows: [], variations: [],
-          rest_seconds: 60,
           equipment_list: [],
           equipment_specifics: undefined,
           superset_id: supersetId,
