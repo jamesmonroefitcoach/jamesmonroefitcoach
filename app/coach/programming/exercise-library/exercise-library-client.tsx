@@ -14,10 +14,40 @@ const ALL_CATEGORIES = Array.from(
   new Set(LIBRARY_HIERARCHY.flatMap((g) => g.nodes.map((n) => n.category)))
 ) as Category[];
 
+/** All leaf node labels in the library hierarchy, grouped for a select.
+ *  Used to populate the subcategory dropdown so coaches can't typo. */
+type NodeOption = { value: string; label: string; group: string; category: Category };
+function allNodeOptions(): NodeOption[] {
+  const out: NodeOption[] = [];
+  for (const g of LIBRARY_HIERARCHY) {
+    for (const node of g.nodes) {
+      if (node.children && node.children.length > 0) {
+        for (const c of node.children) {
+          out.push({ value: c.label, label: c.label, group: g.label, category: c.category });
+        }
+      } else {
+        out.push({ value: node.label, label: node.label, group: g.label, category: node.category });
+      }
+    }
+  }
+  return out;
+}
+const NODE_OPTIONS = allNodeOptions();
+const ALL_NODE_LABELS_LC = new Set(NODE_OPTIONS.map((o) => o.value.toLowerCase()));
+
 /** Return all exercises whose subcategory matches a node or child label. */
 function matchExercises(movements: MovementRow[], nodeLabel: string): MovementRow[] {
   const key = nodeLabel.toLowerCase();
   return movements.filter((m) => (m.subcategory ?? "").toLowerCase() === key);
+}
+
+/** Exercises whose subcategory doesn't map to any known node — surfaced
+ *  in a small "Needs subcategory" banner so they don't get lost. */
+function orphanExercises(movements: MovementRow[]): MovementRow[] {
+  return movements.filter((m) => {
+    const sub = (m.subcategory ?? "").trim().toLowerCase();
+    return sub === "" || !ALL_NODE_LABELS_LC.has(sub);
+  });
 }
 
 // ── blank form ────────────────────────────────────────────────────────────────
@@ -84,15 +114,20 @@ function ExerciseForm({
     });
   }
 
-  function submit() {
-    if (!draft.name.trim()) { setError("Name is required."); return; }
-    setError(null);
-    startSave(async () => { await onSave(draft); });
-  }
-
   const needsSpecifics = (draft.equipment_list ?? []).some(
     (e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.allowsSpecifics
   );
+
+  function submit() {
+    if (!draft.name.trim()) { setError("Name is required."); return; }
+    if (!draft.subcategory?.trim()) { setError("Pick a subcategory so this exercise shows up in the right place."); return; }
+    if (needsSpecifics && !draft.equipment_specifics?.trim()) {
+      setError("Specify the machine / other equipment (free-text required when Machine or Other is selected).");
+      return;
+    }
+    setError(null);
+    startSave(async () => { await onSave(draft); });
+  }
 
   // Position parsing — "incline:45" → base "incline" with angle "45"
   const positionRaw = draft.position ?? "";
@@ -127,13 +162,33 @@ function ExerciseForm({
           </label>
         )}
 
-        {/* Subcategory — only shown in full mode */}
+        {/* Subcategory — full mode picks from a dropdown of valid library nodes.
+            Quick mode auto-inherits defaultSubcategory from the node the form
+            was launched from and hides the field. */}
         {mode === "full" && (
           <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-            <span className="meta" style={{ fontSize: "0.74rem" }}>Node / subcategory</span>
-            <input className="input" value={draft.subcategory ?? ""}
-              onChange={(e) => set("subcategory", e.target.value)}
-              placeholder="e.g. Vertical Pull" />
+            <span className="meta" style={{ fontSize: "0.74rem" }}>Subcategory *</span>
+            <select
+              className="select"
+              value={draft.subcategory ?? ""}
+              onChange={(e) => {
+                const sub = e.target.value;
+                set("subcategory", sub);
+                // Also keep category in sync with the node's category so the
+                // exercise is correctly classified end-to-end.
+                const opt = NODE_OPTIONS.find((o) => o.value === sub);
+                if (opt) set("category", opt.category);
+              }}
+            >
+              <option value="">— pick a subcategory —</option>
+              {Array.from(new Set(NODE_OPTIONS.map((o) => o.group))).map((group) => (
+                <optgroup key={group} label={group}>
+                  {NODE_OPTIONS.filter((o) => o.group === group).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
           </label>
         )}
 
@@ -152,13 +207,25 @@ function ExerciseForm({
           </div>
         </div>
 
-        {/* Specification (equipment_specifics) — always visible in both modes. */}
+        {/* Specification (equipment_specifics) — always visible. Required when
+            Machine or Other equipment is selected, to mirror the program
+            builder's equipment selector behaviour. */}
         <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>Specification</span>
-          <input className="input"
+          <span className="meta" style={{ fontSize: "0.74rem" }}>
+            Specification{needsSpecifics ? " *" : ""}
+            {needsSpecifics && (
+              <span style={{ marginLeft: "0.4rem", color: "var(--amber)", fontSize: "0.68rem", fontWeight: 600 }}>
+                required for Machine / Other
+              </span>
+            )}
+          </span>
+          <input
+            className="input"
             value={draft.equipment_specifics ?? ""}
             onChange={(e) => set("equipment_specifics", e.target.value)}
-            placeholder={needsSpecifics ? "e.g. Preacher curl machine" : "e.g. Wide grip, paused, deficit"} />
+            placeholder={needsSpecifics ? "e.g. Preacher curl machine" : "e.g. Wide grip, paused, deficit"}
+            style={needsSpecifics && !draft.equipment_specifics?.trim() ? { borderColor: "var(--amber)" } : undefined}
+          />
         </label>
 
         {/* Position */}
@@ -482,6 +549,75 @@ function GroupSection({
   );
 }
 
+// ── Orphan banner — exercises that don't map to any library node ─────────────
+
+function OrphanBanner({ movements }: { movements: MovementRow[] }) {
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const orphans = useMemo(() => orphanExercises(movements), [movements]);
+  if (orphans.length === 0) return null;
+
+  async function handleUpdate(id: string, input: MovementInput) {
+    await updateMovement(id, input);
+    setEditingId(null);
+  }
+  async function handleArchive(id: string) {
+    if (!confirm("Archive this exercise?")) return;
+    await archiveMovement(id);
+  }
+
+  return (
+    <section
+      style={{
+        marginBottom: "1.25rem",
+        padding: "0.6rem 0.85rem",
+        border: "1px dashed var(--amber)",
+        borderRadius: 4,
+        background: "rgba(217,119,6,0.06)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%", background: "none", border: "none", padding: 0,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
+        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--amber)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          {open ? "▾" : "▸"} Needs subcategory ({orphans.length})
+        </span>
+        <span className="meta" style={{ fontSize: "0.7rem" }}>
+          These exercises aren&apos;t assigned to a library node — pick one via Edit so they show up under the right group.
+        </span>
+      </button>
+      {open && (
+        <div style={{ marginTop: "0.65rem", paddingTop: "0.5rem", borderTop: "1px solid rgba(217,119,6,0.3)" }}>
+          {orphans.map((m) => (
+            editingId === m.id ? (
+              <ExerciseForm
+                key={m.id}
+                initial={movementToInput(m)}
+                mode="full"
+                onSave={(input) => handleUpdate(m.id, input)}
+                onCancel={() => setEditingId(null)}
+              />
+            ) : (
+              <ExerciseRow
+                key={m.id}
+                m={m}
+                onEdit={() => setEditingId(m.id)}
+                onArchive={handleArchive}
+              />
+            )
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ExerciseLibraryClient({ movements }: { movements: MovementRow[] }) {
@@ -542,6 +678,11 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
           style={{ maxWidth: 380 }}
         />
       </div>
+
+      {/* Needs-subcategory banner — only renders when an orphan exists.
+          Lets the coach find and re-classify exercises that slipped through
+          (e.g. saved with no subcategory) instead of being invisible. */}
+      <OrphanBanner movements={filtered} />
 
       {/* Hierarchy groups */}
       {LIBRARY_HIERARCHY.map((group) => (
