@@ -68,30 +68,6 @@ function readLocalPresets(): Record<string, LocalPreset[]> {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-const ALL_CATEGORIES = Array.from(
-  new Set(LIBRARY_HIERARCHY.flatMap((g) => g.nodes.map((n) => n.category)))
-) as Category[];
-
-/** All leaf node labels in the library hierarchy, grouped for a select.
- *  Used to populate the subcategory dropdown so coaches can't typo. */
-type NodeOption = { value: string; label: string; group: string; category: Category };
-function allNodeOptions(): NodeOption[] {
-  const out: NodeOption[] = [];
-  for (const g of LIBRARY_HIERARCHY) {
-    for (const node of g.nodes) {
-      if (node.children && node.children.length > 0) {
-        for (const c of node.children) {
-          out.push({ value: c.label, label: c.label, group: g.label, category: c.category });
-        }
-      } else {
-        out.push({ value: node.label, label: node.label, group: g.label, category: node.category });
-      }
-    }
-  }
-  return out;
-}
-const NODE_OPTIONS = allNodeOptions();
-
 /** Return all exercises whose subcategory matches a node or child label. */
 function matchExercises(movements: MovementRow[], nodeLabel: string): MovementRow[] {
   const key = nodeLabel.toLowerCase();
@@ -162,13 +138,9 @@ function ExerciseForm({
     });
   }
 
-  const needsSpecifics = (draft.equipment_list ?? []).some(
-    (e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.allowsSpecifics
-  );
-
   function submit() {
     if (!draft.name.trim()) { setError("Name is required."); return; }
-    if (!draft.subcategory?.trim()) { setError("Pick a subcategory so this exercise shows up in the right place."); return; }
+    if (!draft.subcategory?.trim()) { setError("This form was opened without a library section — open it via the + Add button on the section you want to add to."); return; }
     setError(null);
     startSave(async () => { await onSave(draft); });
   }
@@ -193,48 +165,8 @@ function ExerciseForm({
             placeholder="e.g. Incline DB Press" autoFocus />
         </label>
 
-        {/* Category — only shown in full mode (quick mode locks it to the node) */}
-        {mode === "full" && (
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-            <span className="meta" style={{ fontSize: "0.74rem" }}>Category</span>
-            <select className="select" value={draft.category}
-              onChange={(e) => set("category", e.target.value as Category)}>
-              {ALL_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c.replace("_", " ")}</option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        {/* Subcategory — full mode picks from a dropdown of valid library nodes.
-            Quick mode auto-inherits defaultSubcategory from the node the form
-            was launched from and hides the field. */}
-        {mode === "full" && (
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-            <span className="meta" style={{ fontSize: "0.74rem" }}>Subcategory *</span>
-            <select
-              className="select"
-              value={draft.subcategory ?? ""}
-              onChange={(e) => {
-                const sub = e.target.value;
-                set("subcategory", sub);
-                // Also keep category in sync with the node's category so the
-                // exercise is correctly classified end-to-end.
-                const opt = NODE_OPTIONS.find((o) => o.value === sub);
-                if (opt) set("category", opt.category);
-              }}
-            >
-              <option value="">— pick a subcategory —</option>
-              {Array.from(new Set(NODE_OPTIONS.map((o) => o.group))).map((group) => (
-                <optgroup key={group} label={group}>
-                  {NODE_OPTIONS.filter((o) => o.group === group).map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-        )}
+        {/* Category & subcategory are implicit from the library section the
+            form was opened under, so no picker is shown. */}
 
         {/* Equipment */}
         <div style={{ gridColumn: "1/-1" }}>
@@ -251,24 +183,14 @@ function ExerciseForm({
           </div>
         </div>
 
-        {/* Specification (equipment_specifics) — always visible. Required when
-            Machine or Other equipment is selected, to mirror the program
-            builder's equipment selector behaviour. */}
+        {/* Specification (equipment_specifics) — optional free text */}
         <label style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>
-            Specification{needsSpecifics ? " *" : ""}
-            {needsSpecifics && (
-              <span style={{ marginLeft: "0.4rem", color: "var(--amber)", fontSize: "0.68rem", fontWeight: 600 }}>
-                required for Machine / Other
-              </span>
-            )}
-          </span>
+          <span className="meta" style={{ fontSize: "0.74rem" }}>Specification</span>
           <input
             className="input"
             value={draft.equipment_specifics ?? ""}
             onChange={(e) => set("equipment_specifics", e.target.value)}
-            placeholder={needsSpecifics ? "e.g. Preacher curl machine" : "e.g. Wide grip, paused, deficit"}
-            style={needsSpecifics && !draft.equipment_specifics?.trim() ? { borderColor: "var(--amber)" } : undefined}
+            placeholder="e.g. Preacher curl machine"
           />
         </label>
 
@@ -597,9 +519,7 @@ function GroupSection({
 
 export default function ExerciseLibraryClient({ movements }: { movements: MovementRow[] }) {
   const [search, setSearch] = useState("");
-  const [addingGlobal, setAddingGlobal] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [, startSave] = useTransition();
   const router = useRouter();
 
   // Count of presets sitting in localStorage but not yet in the database. Drives
@@ -694,47 +614,27 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
 
   const searchActive = !!search.trim();
 
-  async function handleGlobalAdd(input: MovementInput) {
-    const res = await addMovement(input);
-    if (res.ok) setAddingGlobal(false);
-  }
-
   return (
     <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header className="page-hdr">
         <div>
           <span className="badge">Coach</span>
           <h1 style={{ marginTop: "0.5rem" }}>Exercise Library</h1>
-          <p className="meta">{movements.length} exercises</p>
+          <p className="meta">{movements.length} exercises — use the + Add button on any section to add an exercise to that group.</p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          {pendingImportCount > 0 && (
-            <button
-              className="btn btn-ghost"
-              onClick={importLocalPresets}
-              disabled={importing}
-              title="Import named presets saved on this browser into the Exercise Library"
-            >
-              {importing ? "Importing…" : `Import ${pendingImportCount} saved preset${pendingImportCount === 1 ? "" : "s"}`}
-            </button>
-          )}
-          <button className="btn btn-primary" onClick={() => setAddingGlobal((o) => !o)}>
-            {addingGlobal ? "Cancel" : "+ Add Exercise"}
+        {pendingImportCount > 0 && (
+          <button
+            className="btn btn-ghost"
+            onClick={importLocalPresets}
+            disabled={importing}
+            title="Import named presets saved on this browser into the Exercise Library"
+          >
+            {importing ? "Importing…" : `Import ${pendingImportCount} saved preset${pendingImportCount === 1 ? "" : "s"}`}
           </button>
-        </div>
+        )}
       </header>
 
       <hr className="divider" />
-
-      {addingGlobal && (
-        <div style={{ marginBottom: "1.5rem" }}>
-          <ExerciseForm
-            mode="full"
-            onSave={handleGlobalAdd}
-            onCancel={() => setAddingGlobal(false)}
-          />
-        </div>
-      )}
 
       {/* Search */}
       <div style={{ marginBottom: "1.25rem" }}>
