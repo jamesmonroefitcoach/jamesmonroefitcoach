@@ -240,6 +240,32 @@ export default function BuildProgramClient({
   const [isDraftSaved, setIsDraftSaved] = useState(false);
   const [draftedApptIds, setDraftedApptIds] = useState<Set<string>>(new Set());
 
+  // ── Draft persistence via localStorage ──────────────────────────────────────
+  // key: build_program_drafts_{clientId}  value: { [apptId]: programId }
+  function draftKey(cid: string) { return `build_program_drafts_${cid}`; }
+  function readDraftMap(cid: string): Record<string, string> {
+    try { return JSON.parse(localStorage.getItem(draftKey(cid)) ?? "{}"); } catch { return {}; }
+  }
+  function writeDraftMap(cid: string, map: Record<string, string>) {
+    try { localStorage.setItem(draftKey(cid), JSON.stringify(map)); } catch {}
+  }
+
+  // Restore drafted appt set when the client changes
+  useEffect(() => {
+    if (!clientId) return;
+    const map = readDraftMap(clientId);
+    setDraftedApptIds(new Set(Object.keys(map)));
+  }, [clientId]);
+
+  // Restore savedProgramId when the selected appointment changes
+  useEffect(() => {
+    if (!clientId || !selectedApptId) { setSavedProgramId(null); setIsDraftSaved(false); return; }
+    const map = readDraftMap(clientId);
+    const pid = map[selectedApptId] ?? null;
+    setSavedProgramId(pid);
+    setIsDraftSaved(!!pid);
+  }, [clientId, selectedApptId]);
+
   // library controls
   const [searchTerm, setSearchTerm] = useState("");
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set()); // all groups collapsed by default
@@ -705,9 +731,16 @@ export default function BuildProgramClient({
       if (!res.ok) {
         if (res.error.startsWith("Supabase not configured")) {
           if (!publish && selectedApptId) {
+            const map = readDraftMap(clientId);
+            map[selectedApptId] = "local";
+            writeDraftMap(clientId, map);
             setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
             setIsDraftSaved(true);
-          } else if (publish) {
+          } else if (publish && selectedApptId) {
+            const map = readDraftMap(clientId);
+            delete map[selectedApptId];
+            writeDraftMap(clientId, map);
+            setDraftedApptIds((prev) => { const n = new Set(prev); n.delete(selectedApptId); return n; });
             setIsDraftSaved(false);
           }
           setSaveMessage(`${publish ? "Published" : "Drafted"} locally — Supabase not configured yet.`);
@@ -716,12 +749,24 @@ export default function BuildProgramClient({
         }
         return;
       }
-      if (res.data?.id) setSavedProgramId(res.data.id);
+      const pid = res.data?.id ?? null;
+      if (pid) setSavedProgramId(pid);
       if (!publish) {
-        if (selectedApptId) setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
+        if (selectedApptId) {
+          const map = readDraftMap(clientId);
+          map[selectedApptId] = pid ?? "saved";
+          writeDraftMap(clientId, map);
+          setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
+        }
         setIsDraftSaved(true);
         setSaveMessage("Drafted.");
       } else {
+        if (selectedApptId) {
+          const map = readDraftMap(clientId);
+          delete map[selectedApptId];
+          writeDraftMap(clientId, map);
+          setDraftedApptIds((prev) => { const n = new Set(prev); n.delete(selectedApptId); return n; });
+        }
         setIsDraftSaved(false);
         setSaveMessage("Published. Visible on the client's portal.");
       }
