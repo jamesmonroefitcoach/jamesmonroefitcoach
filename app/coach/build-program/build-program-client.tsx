@@ -147,6 +147,9 @@ type ProgramDay = {
   items: ProgramItem[];
 };
 
+type PlanLogEntry = { weights: string[]; notes: string };
+type PlanLog = Record<string, PlanLogEntry>; // itemUid → entry
+
 const NEW_DAY = (n: number): ProgramDay => ({
   uid: `day-${n}-${Date.now()}`,
   title: `Day ${n}`,
@@ -239,6 +242,32 @@ export default function BuildProgramClient({
   const [savedProgramId, setSavedProgramId] = useState<string | null>(null);
   const [isDraftSaved, setIsDraftSaved] = useState(false);
   const [draftedApptIds, setDraftedApptIds] = useState<Set<string>>(new Set());
+
+  // ── Plan / completed view ────────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<"builder" | "plan" | "completed">("builder");
+  const [planLog, setPlanLog] = useState<PlanLog>({});
+  const [summaryOpen, setSummaryOpen] = useState(false);
+
+  function initPlanLog(src: ProgramDay[]): PlanLog {
+    const log: PlanLog = {};
+    for (const day of src) {
+      for (const it of day.items) {
+        const count = it.same_format ? it.sets : Math.max(it.sets, it.set_rows.length);
+        log[it.uid] = { weights: Array<string>(count).fill(""), notes: "" };
+      }
+    }
+    return log;
+  }
+  function setPlanWeight(itemUid: string, idx: number, val: string) {
+    setPlanLog((p) => {
+      const e = p[itemUid] ?? { weights: [], notes: "" };
+      const w = [...e.weights]; w[idx] = val;
+      return { ...p, [itemUid]: { ...e, weights: w } };
+    });
+  }
+  function setPlanNotes(itemUid: string, val: string) {
+    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? { weights: [], notes: "" }), notes: val } }));
+  }
 
   // ── Draft persistence via localStorage ──────────────────────────────────────
   // key: build_program_drafts_{clientId}  value: { [apptId]: programId }
@@ -769,6 +798,8 @@ export default function BuildProgramClient({
         }
         setIsDraftSaved(false);
         setSaveMessage("Published. Visible on the client's portal.");
+        setPlanLog(initPlanLog(days));
+        setViewMode("plan");
       }
     });
   }
@@ -1004,6 +1035,23 @@ export default function BuildProgramClient({
 
   return (
     <div>
+      {viewMode !== "builder" && (
+        <SessionPlanView
+          days={days}
+          programKind={programKind}
+          clientName={selectedClient?.full_name ?? ""}
+          sessionTitle={programKind === "in_gym" ? (days[0]?.title ?? "Session") : programName}
+          planLog={planLog}
+          completed={viewMode === "completed"}
+          summaryOpen={summaryOpen}
+          onSummaryToggle={() => setSummaryOpen((o) => !o)}
+          onSetWeight={setPlanWeight}
+          onSetNotes={setPlanNotes}
+          onEdit={() => setViewMode("builder")}
+          onComplete={() => setViewMode("completed")}
+        />
+      )}
+      {viewMode === "builder" && <>
       {/* ─── Page-level tab bar ─── */}
       <div style={{ borderBottom: "2px solid var(--line)", marginBottom: "1.5rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
         <div style={{ display: "flex" }}>
@@ -1980,6 +2028,156 @@ export default function BuildProgramClient({
     )}
     </>
     )}
+      </>}{/* end viewMode === "builder" */}
+    </div>
+  );
+}
+
+// ─── Session plan view (published / completed) ────────────────────────────────
+function SessionPlanView({
+  days,
+  programKind,
+  clientName,
+  sessionTitle,
+  planLog,
+  completed,
+  summaryOpen,
+  onSummaryToggle,
+  onSetWeight,
+  onSetNotes,
+  onEdit,
+  onComplete,
+}: {
+  days: ProgramDay[];
+  programKind: ProgramKind;
+  clientName: string;
+  sessionTitle: string;
+  planLog: PlanLog;
+  completed: boolean;
+  summaryOpen: boolean;
+  onSummaryToggle: () => void;
+  onSetWeight: (itemUid: string, idx: number, val: string) => void;
+  onSetNotes: (itemUid: string, val: string) => void;
+  onEdit: () => void;
+  onComplete: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {/* ─── Header ─── */}
+      <div className="card" style={{ borderLeft: "4px solid var(--rust)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <span className="badge badge-sage">Published</span>
+            <h2 style={{ margin: "0.35rem 0 0.15rem" }}>{sessionTitle}</h2>
+            <div className="meta" style={{ fontSize: "0.82rem" }}>{clientName}</div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: "0.78rem" }}
+            onClick={onEdit}
+          >{programKind === "in_gym" ? "✎ Edit Session" : "✎ Edit Program"}</button>
+        </div>
+      </div>
+
+      {/* ─── Post Session Summary (completed only) ─── */}
+      {completed && (
+        <div className="card">
+          <button
+            type="button"
+            onClick={onSummaryToggle}
+            style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, width: "100%" }}
+          >
+            <span style={{ fontFamily: "var(--font-heading,Oswald)", fontWeight: 700, fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Post Session Summary</span>
+            <span style={{ fontSize: "0.7rem", color: "var(--muted)", marginLeft: "auto" }}>{summaryOpen ? "▲" : "▼"}</span>
+          </button>
+          {summaryOpen && (
+            <div style={{ marginTop: "0.75rem", padding: "0.75rem", background: "rgba(0,0,0,0.03)", borderRadius: 3 }}>
+              <p className="meta" style={{ margin: 0, fontSize: "0.84rem" }}>Coming soon.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Days ─── */}
+      {days.map((day) => (
+        <div key={day.uid} className="card">
+          <h3 style={{ marginBottom: "0.75rem" }}>{day.title}</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {day.items.map((it) => {
+              const entry = planLog[it.uid] ?? { weights: [], notes: "" };
+              const setCount = it.same_format ? it.sets : Math.max(it.sets, it.set_rows.length);
+              return (
+                <div key={it.uid} style={{ borderLeft: "3px solid var(--line)", paddingLeft: "0.75rem" }}>
+                  {/* Exercise name */}
+                  <div style={{ fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.45rem" }}>
+                    {it.movement.name}
+                    {it.is_warmup && <span className="badge" style={{ marginLeft: "0.5rem", fontSize: "0.6rem" }}>Warmup</span>}
+                  </div>
+                  {/* Sets */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.5rem" }}>
+                    {Array.from({ length: setCount }).map((_, si) => {
+                      const reps = it.same_format ? it.reps : (it.set_rows[si]?.reps ?? it.reps);
+                      const w = entry.weights[si] ?? "";
+                      return (
+                        <div key={si} style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "0.78rem", color: "var(--muted)", minWidth: 40 }}>Set {si + 1}</span>
+                          <span style={{ fontSize: "0.82rem" }}>{reps} reps</span>
+                          {completed ? (
+                            <span style={{ fontSize: "0.82rem", color: w ? "var(--ink)" : "var(--muted)" }}>
+                              {w ? `${w} lbs` : "—"}
+                            </span>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                              <input
+                                className="input"
+                                type="number"
+                                min={0}
+                                placeholder="lbs"
+                                value={w}
+                                onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
+                                style={{ width: 70, fontSize: "0.8rem", padding: "0.18rem 0.35rem" }}
+                              />
+                              <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>lbs</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Notes */}
+                  {completed ? (
+                    entry.notes ? (
+                      <div style={{ fontSize: "0.8rem", color: "var(--muted)", fontStyle: "italic", marginTop: "0.25rem" }}>{entry.notes}</div>
+                    ) : null
+                  ) : (
+                    <textarea
+                      className="textarea"
+                      rows={2}
+                      placeholder="Notes…"
+                      value={entry.notes}
+                      onChange={(e) => onSetNotes(it.uid, e.target.value)}
+                      style={{ fontSize: "0.8rem", padding: "0.25rem 0.4rem", resize: "vertical", width: "100%" }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {/* ─── Bottom action ─── */}
+      {!completed && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+          <button className="btn btn-primary" onClick={onComplete}>Complete Program</button>
+        </div>
+      )}
+      {completed && (
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+          <span style={{ alignSelf: "center", fontSize: "0.82rem", color: "var(--sage)", fontWeight: 600 }}>✓ Completed</span>
+        </div>
+      )}
     </div>
   );
 }
