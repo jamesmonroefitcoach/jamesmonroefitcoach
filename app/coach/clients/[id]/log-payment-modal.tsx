@@ -164,7 +164,14 @@ function LogPaymentModal({
                       <td style={{ fontSize: "0.82rem" }}>{fmtWhen(a.starts_at)}</td>
                       <td style={{ textAlign: "right", fontSize: "0.82rem" }}>{fmtMoney(a.rate)}</td>
                       <td>
-                        <span className="badge" style={{ fontSize: "0.66rem" }}>{a.status}</span>
+                        <span
+                          className={
+                            "badge"
+                            + (a.status === "cancelled" || a.status === "no_show" ? " badge-red" : "")
+                            + (a.status === "completed" ? " badge-sage" : "")
+                          }
+                          style={{ fontSize: "0.66rem" }}
+                        >{a.status}</span>
                       </td>
                     </tr>
                   );

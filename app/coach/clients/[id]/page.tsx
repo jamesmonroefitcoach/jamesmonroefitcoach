@@ -145,14 +145,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       session_program_id: a.session_program_id ?? null,
     }));
   // Sessions to show in the Log Payment modal — every session-type appt for
-  // this client (any status except cancelled), newest first. Unpaid bubble up
-  // automatically inside the modal.
+  // this client, regardless of status. Cancelled sessions still need to be
+  // marked paid (cancellation fees, late-cancel policy), so they belong here
+  // too. Unpaid sessions bubble up automatically inside the modal.
   const paymentAppts: PaymentApptRow[] = appts
-    .filter((a) =>
-      a.session_type === "session" &&
-      a.client_id === id &&
-      a.status !== "cancelled"
-    )
+    .filter((a) => a.session_type === "session" && a.client_id === id)
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
     .map((a) => ({
       id: a.id,

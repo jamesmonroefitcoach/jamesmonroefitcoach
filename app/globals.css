@@ -206,6 +206,14 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 1px 0 var(--line);
 }
 
+/* Roster section card wrapper — no overflow on desktop so sticky thead
+   attaches to the viewport (any overflow-x value coerces overflow-y to auto
+   per CSS spec, which would trap the sticky inside the card). */
+.roster-card {
+  padding: 0 !important;
+  overflow: visible;
+}
+
 /* Badges */
 .badge {
   display: inline-block;
@@ -278,6 +286,13 @@ a:hover { text-decoration: underline; }
   }
   .plan-print .textarea {
     min-height: 1.6rem;
+  }
+  /* Hide placeholders so the print sheet shows truly blank lines to write on
+     (no faded "actual" / "lbs" / "Notes…" hints). */
+  .plan-print .input::placeholder,
+  .plan-print .textarea::placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
   }
   /* Number inputs: kill the spinner so they look like a flat line */
   .plan-print input[type="number"]::-webkit-outer-spin-button,

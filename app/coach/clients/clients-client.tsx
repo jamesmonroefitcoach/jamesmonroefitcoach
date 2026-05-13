@@ -728,7 +728,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
           </>
         }
       >
-        <div className="card" style={{ padding: 0, overflowX: "auto", overflowY: "visible" }}>
+        <div className="card roster-card">
           <table className="table table-sticky-head">
             <thead>
               <tr>
@@ -767,7 +767,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
             <p className="meta">No past clients.</p>
           </div>
         ) : (
-          <div className="card" style={{ padding: 0, overflowX: "auto", overflowY: "visible" }}>
+          <div className="card roster-card">
             <table className="table table-sticky-head">
               <thead>
                 <tr>
@@ -808,7 +808,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
             <p className="meta">No potential new clients yet.</p>
           </div>
         ) : (
-          <div className="card" style={{ padding: 0, overflowX: "auto", overflowY: "visible" }}>
+          <div className="card roster-card">
             <table className="table table-sticky-head">
               <thead>
                 <tr>

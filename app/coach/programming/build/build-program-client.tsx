@@ -2363,6 +2363,99 @@ function ExerciseInfoPopup({ movement, onClose }: { movement: Movement; onClose:
   );
 }
 
+// Format helpers for plan-view metadata chips
+function fmtPosition(p: string | undefined): string | null {
+  if (!p) return null;
+  if (p.startsWith("incline")) {
+    const angle = p.slice("incline:".length);
+    return angle ? `Incline ${angle}°` : "Incline";
+  }
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}
+function fmtRest(s: number | undefined): string | null {
+  if (s == null || s <= 0) return null;
+  if (s >= 60 && s % 60 === 0) return `${s / 60}m rest`;
+  return `${s}s rest`;
+}
+function fmtEquipment(list: Equipment[] | undefined, specifics: string | undefined): string | null {
+  const parts: string[] = [];
+  if (list && list.length > 0) {
+    parts.push(list.map((eq) => {
+      const opt = EQUIPMENT_OPTIONS.find((o) => o.value === eq);
+      return opt?.label ?? eq;
+    }).join(", "));
+  }
+  if (specifics) parts.push(specifics);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+// Item-level metadata strip (shown under exercise name)
+function ExerciseMetaStrip({ it }: { it: ProgramItem }) {
+  const chips: { label: string; value: string }[] = [];
+  const equipment = fmtEquipment(it.equipment_list, it.equipment_specifics);
+  if (equipment) chips.push({ label: "Equipment", value: equipment });
+  if (it.same_format) {
+    // Show item-level extras only when the prescription is uniform across sets;
+    // when same_format=false we show per-set differences in each row instead.
+    if (it.tempo) chips.push({ label: "Tempo", value: it.tempo });
+    const pos = fmtPosition(it.position);
+    if (pos) chips.push({ label: "Position", value: pos });
+    if (it.rir != null) chips.push({ label: "RIR", value: String(it.rir) });
+    if (it.half_reps != null && it.half_reps > 0) chips.push({ label: "½ reps", value: String(it.half_reps) });
+    const rest = fmtRest(it.rest_seconds);
+    if (rest) chips.push({ label: "Rest", value: rest });
+    if (it.exertion_score) chips.push({ label: "Effort", value: EXERTION_LABELS[it.exertion_score] ?? EXERTION_SHORT[it.exertion_score] ?? String(it.exertion_score) });
+  }
+  if (it.variations.length > 0) {
+    chips.push({ label: "Variation", value: it.variations.map((v) => VARIATION_LABELS[v]).join(", ") });
+  }
+  if (chips.length === 0) return null;
+  return (
+    <div style={{
+      display: "flex", flexWrap: "wrap", gap: "0.4rem 0.85rem",
+      fontSize: "0.74rem", color: "var(--muted)",
+      marginBottom: "0.45rem",
+    }}>
+      {chips.map((c) => (
+        <span key={c.label}>
+          <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.66rem", color: "#8a7e72" }}>{c.label}:</span>
+          {" "}
+          <span style={{ color: "var(--ink)" }}>{c.value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Per-set extras line (shown when same_format=false and the set row has differences)
+function SetRowMeta({ row, fallbackEffort }: { row: SetRow | undefined; fallbackEffort?: number }) {
+  if (!row) return null;
+  const bits: string[] = [];
+  const effort = row.exertion_score ?? fallbackEffort;
+  if (effort) {
+    const label = EXERTION_SHORT[effort] ?? EXERTION_LABELS[effort] ?? String(effort);
+    bits.push(label);
+  }
+  if (row.tempo) bits.push(`tempo ${row.tempo}`);
+  if (row.rir != null) bits.push(`RIR ${row.rir}`);
+  if (row.half_reps != null && row.half_reps > 0) bits.push(`½×${row.half_reps}`);
+  const pos = fmtPosition(row.position);
+  if (pos) bits.push(pos);
+  const rest = fmtRest(row.rest_seconds);
+  if (rest) bits.push(rest);
+  const eq = fmtEquipment(row.equipment_list, row.equipment_specifics);
+  if (eq) bits.push(eq);
+  if (row.variations && row.variations.length > 0) {
+    bits.push(row.variations.map((v) => VARIATION_LABELS[v]).join("/"));
+  }
+  if (bits.length === 0) return null;
+  return (
+    <span style={{ fontSize: "0.7rem", color: "var(--muted)", fontStyle: "italic" }}>
+      {bits.join(" · ")}
+    </span>
+  );
+}
+
 function PlanExerciseBlock({
   clientId, it, entry, completed, isCompletedView,
   onSetWeight, onSetActualReps, onSetNotes, onSetExerciseCompleted,
@@ -2523,45 +2616,65 @@ function PlanExerciseBlock({
           }}>New</span>
         )}
         {it.is_warmup && <span className="badge" style={{ fontSize: "0.6rem" }}>Warmup</span>}
+        {it.superset_id && (
+          <span className="badge badge-amber" style={{ fontSize: "0.58rem" }}>Superset</span>
+        )}
       </div>
+
+      {/* Item-level metadata strip (equipment, tempo, position, RIR, etc.) */}
+      <ExerciseMetaStrip it={it} />
 
       {/* Sets */}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.5rem" }}>
         {Array.from({ length: setCount }).map((_, si) => {
           const prescribedReps = it.same_format ? it.reps : (it.set_rows[si]?.reps ?? it.reps);
+          const setRow = it.same_format ? undefined : it.set_rows[si];
           const w = entry.weights[si] ?? "";
           const ar = (entry.actual_reps ?? [])[si] ?? "";
           // Previous set reference — same set index from the most recent prior log
           const prevSet = priorSnapshot.lastEntry?.sets[si] ?? null;
           return (
-            <div key={si} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "0.78rem", color: "var(--muted)", minWidth: 40 }}>Set {si + 1}</span>
-              <span style={{ fontSize: "0.82rem", minWidth: 64 }}>{prescribedReps} reps</span>
-              <input
-                className="input"
-                type="number"
-                min={0}
-                placeholder="actual"
-                value={ar}
-                onChange={(e) => onSetActualReps(it.uid, si, e.target.value)}
-                style={{ width: 56, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
-                title="Actual reps performed"
-              />
-              <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>reps</span>
-              <input
-                className="input"
-                type="number"
-                min={0}
-                placeholder="lbs"
-                value={w}
-                onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
-                style={{ width: 64, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
-              />
-              <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>lbs</span>
-              {prevSet && prevSet.weight_lb > 0 && (
-                <span style={{ fontSize: "0.7rem", color: "#a89e90", fontStyle: "italic" }} title="Last time this set">
-                  prev: {prevSet.weight_lb} lbs{prevSet.reps ? ` × ${prevSet.reps}` : ""}
-                </span>
+            <div key={si} style={{ display: "flex", flexDirection: "column", gap: "0.18rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--muted)", minWidth: 40 }}>Set {si + 1}</span>
+                <span style={{ fontSize: "0.82rem", minWidth: 64 }}>{prescribedReps} reps</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  placeholder="actual"
+                  value={ar}
+                  onChange={(e) => onSetActualReps(it.uid, si, e.target.value)}
+                  style={{ width: 56, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
+                  title="Actual reps performed"
+                />
+                <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>reps</span>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  placeholder="lbs"
+                  value={w}
+                  onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
+                  style={{ width: 64, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
+                />
+                <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>lbs</span>
+                {prevSet && prevSet.weight_lb > 0 && (
+                  <span style={{ fontSize: "0.7rem", color: "#a89e90", fontStyle: "italic" }} title="Last time this set">
+                    prev: {prevSet.weight_lb} lbs{prevSet.reps ? ` × ${prevSet.reps}` : ""}
+                  </span>
+                )}
+              </div>
+              {/* Per-set extras when the prescription varies between sets */}
+              {!it.same_format && (
+                <div style={{ paddingLeft: "calc(40px + 0.5rem)", display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <SetRowMeta row={setRow} fallbackEffort={it.exertion_score} />
+                  {setRow?.notes && (
+                    <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>
+                      <span style={{ fontStyle: "italic" }}>note:</span> {setRow.notes}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           );
