@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listClients, listAppointmentsForClient, listAppointmentsForWeek, startOfWeek } from "@/lib/data";
+import { listClients, listAppointmentsForClient, listAppointmentsForWeek, listMovements, startOfWeek } from "@/lib/data";
 import BuildProgramClient from "./build-program-client";
 import { pastProgramsForClient, type ProgramKind } from "@/lib/programs";
 
@@ -24,6 +24,7 @@ export default async function BuildProgramPage({
 
   const sp = await searchParams;
   const clients = await listClients(user.id);
+  const libraryMovements = await listMovements();
 
   const initialClientId = sp.client ?? clients[0]?.id ?? "";
   const initialApptId = sp.appt ?? "";
@@ -121,6 +122,7 @@ export default async function BuildProgramPage({
         initialView={sp.view === "plan" ? "plan" : "builder"}
         weekSessions={weekSessions}
         clientProgramSummary={clientProgramSummary}
+        libraryMovements={libraryMovements}
       />
     </main>
   );

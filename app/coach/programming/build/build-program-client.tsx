@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { ClientRow } from "@/lib/data";
+import type { ClientRow, MovementRow } from "@/lib/data";
 import {
   CATEGORY_LABELS,
   MOVEMENT_LIBRARY,
@@ -187,6 +187,11 @@ type DragPayload =
   | { kind: "item"; dayUid: string; itemUid: string }
   | { kind: "superset"; dayUid: string; supersetId: string };
 
+// Library movements (saved Exercise Library rows) flow down to ExerciseCard via
+// context so we don't have to thread an extra prop through every render
+// branch. Used to populate the preset dropdown with library entries.
+const LibraryMovementsContext = createContext<MovementRow[]>([]);
+
 export default function BuildProgramClient({
   clients,
   initialClientId,
@@ -197,6 +202,7 @@ export default function BuildProgramClient({
   initialView = "builder",
   weekSessions = [],
   clientProgramSummary = [],
+  libraryMovements = [],
 }: {
   clients: ClientRow[];
   initialClientId?: string;
@@ -208,6 +214,7 @@ export default function BuildProgramClient({
   initialView?: "builder" | "plan";
   weekSessions?: WeekSession[];
   clientProgramSummary?: ClientProgramItem[];
+  libraryMovements?: MovementRow[];
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(initialClientId ?? clients[0]?.id ?? "");
@@ -1324,6 +1331,7 @@ export default function BuildProgramClient({
   }
 
   return (
+    <LibraryMovementsContext.Provider value={libraryMovements}>
     <div>
       {/* ─── Page-level Session / Program tab bar — always visible, lives at the
             very top regardless of viewMode (plan view, builder, etc.) ─── */}
@@ -2415,6 +2423,7 @@ export default function BuildProgramClient({
     )}
       </>}{/* end viewMode === "builder" */}
     </div>
+    </LibraryMovementsContext.Provider>
   );
 }
 
@@ -3950,25 +3959,42 @@ function ExerciseCard({
   bottomSlot?: React.ReactNode;
 }) {
   // ─── Preset state ─────────────────────────────────────────────────
-  const [presets, setPresets] = useState<ExercisePreset[]>(() => loadPresets(it.movement.id));
+  const [localPresets, setLocalPresets] = useState<ExercisePreset[]>(() => loadPresets(it.movement.id));
   const [showNameInput, setShowNameInput] = useState(false);
   const [presetDraft, setPresetDraft] = useState("");
   const [savingPreset, setSavingPreset] = useState(false);
   const cardRouter = useRouter();
+  const libraryMovements = useContext(LibraryMovementsContext);
+
+  // Merge library entries (whose subcategory matches this parent movement) with
+  // localStorage presets. Dedupe by lowercase name so a library row "wins" over
+  // a local preset of the same name. Both sources show up in the dropdown so
+  // the coach sees every named preset regardless of where it was saved.
+  const parentKey = (it.movement.subcategory || it.movement.name).trim().toLowerCase();
+  const libraryEntries: ExercisePreset[] = libraryMovements
+    .filter((m) => (m.subcategory ?? "").trim().toLowerCase() === parentKey)
+    .map((m) => ({
+      id: `lib-${m.id}`,
+      name: m.name,
+      movementId: it.movement.id,
+      sets: it.sets,
+      reps: it.reps,
+      exertion_score: it.exertion_score,
+      variations: it.variations,
+      equipment_list: (m.equipment_list ?? []) as Equipment[],
+      equipment_specifics: m.equipment_specifics ?? undefined,
+      notes: undefined,
+    }));
+  const presets: ExercisePreset[] = (() => {
+    const seen = new Set<string>(libraryEntries.map((p) => p.name.trim().toLowerCase()));
+    const localOnly = localPresets.filter((p) => !seen.has(p.name.trim().toLowerCase()));
+    return [...libraryEntries, ...localOnly];
+  })();
 
   async function saveCurrentAsPreset() {
     const name = presetDraft.trim();
     if (!name) return;
     if (savingPreset) return;
-
-    // Validate: Machine/Other equipment requires equipment_specifics
-    const requiresSpecifics = (it.equipment_list ?? []).some(
-      (e) => e === "machine" || e === "other"
-    );
-    if (requiresSpecifics && !(it.equipment_specifics ?? "").trim()) {
-      alert("Machine or Other equipment requires you to specify which machine or item. Please fill in the equipment specifics before saving.");
-      return;
-    }
 
     setSavingPreset(true);
 
@@ -3985,8 +4011,8 @@ function ExerciseCard({
       equipment_specifics: it.equipment_specifics,
       notes: it.notes,
     };
-    const next = [...presets, preset];
-    setPresets(next);
+    const next = [...localPresets, preset];
+    setLocalPresets(next);
     persistPresets(it.movement.id, next);
 
     // 2) Persist to the Exercise Library under the parent movement's category.

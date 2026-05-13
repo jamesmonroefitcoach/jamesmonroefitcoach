@@ -169,10 +169,6 @@ function ExerciseForm({
   function submit() {
     if (!draft.name.trim()) { setError("Name is required."); return; }
     if (!draft.subcategory?.trim()) { setError("Pick a subcategory so this exercise shows up in the right place."); return; }
-    if (needsSpecifics && !draft.equipment_specifics?.trim()) {
-      setError("Specify the machine / other equipment (free-text required when Machine or Other is selected).");
-      return;
-    }
     setError(null);
     startSave(async () => { await onSave(draft); });
   }
