@@ -27,7 +27,6 @@ export type SaveProgramDay = {
 
 export type SaveProgramInput = {
   program_id?: string;
-  appt_id?: string | null;  // if set, this program is linked to a session appointment
   client_id: string;
   name: string;
   starts_on: string;        // YYYY-MM-DD
@@ -37,9 +36,6 @@ export type SaveProgramInput = {
   days: SaveProgramDay[];
   program_kind: ProgramKind;
   at_home_cadence?: string | null;
-  // Lossless snapshot of the builder UI state (set_rows, variations, supersets,
-  // optional fields, etc.) — used to restore the builder exactly on re-edit.
-  builder_state?: unknown;
 };
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
@@ -58,8 +54,6 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
 
   let programId = input.program_id;
 
-  const builderStateJson = input.builder_state ?? null;
-
   if (programId) {
     const { error } = await supabase
       .from("programs")
@@ -72,8 +66,7 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
         is_published: input.publish,
         is_current: input.publish,
         program_kind: input.program_kind,
-        at_home_cadence: input.at_home_cadence ?? null,
-        builder_state: builderStateJson,
+        at_home_cadence: input.at_home_cadence ?? null
       })
       .eq("id", programId);
     if (error) return { ok: false, error: error.message };
@@ -107,8 +100,7 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
         is_published: input.publish,
         is_current: input.publish,
         program_kind: input.program_kind,
-        at_home_cadence: input.at_home_cadence ?? null,
-        builder_state: builderStateJson,
+        at_home_cadence: input.at_home_cadence ?? null
       })
       .select("id")
       .single();
@@ -166,73 +158,11 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
     }
   }
 
-  // Link the program back to its appointment + update program_status.
-  // Publishing overwrites any prior draft naturally because we re-use the same
-  // programs row when program_id is passed in.
-  if (input.appt_id && programId) {
-    const nextStatus = input.publish ? "programmed" : "draft";
-    await supabase
-      .from("appointments")
-      .update({
-        session_program_id: programId,
-        program_status: nextStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", input.appt_id)
-      .eq("coach_id", me.id);
-  }
-
   revalidatePath(`/coach/clients/${input.client_id}`);
   revalidatePath("/coach/clients");
   revalidatePath("/coach/build-program");
-  revalidatePath("/coach/schedule");
-  revalidatePath("/coach");
   if (!programId) return { ok: false, error: "program id missing after save" };
   return { ok: true, data: { id: programId } };
-}
-
-// ─── Load existing program (draft or published) for editing ──────────────────
-export type LoadedProgram = {
-  id: string;
-  name: string;
-  starts_on: string;
-  ends_on: string | null;
-  duration_weeks: number;
-  is_published: boolean;
-  program_kind: ProgramKind;
-  at_home_cadence: string | null;
-  builder_state: unknown | null;
-};
-
-export async function loadProgramForEdit(programId: string): Promise<Result<LoadedProgram | null>> {
-  const me = await getSessionUser();
-  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
-  if (!hasSupabaseEnv()) return { ok: true, data: null };
-  const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("programs")
-    .select("id, name, starts_on, ends_on, duration_weeks, is_published, program_kind, at_home_cadence, builder_state")
-    .eq("id", programId)
-    .eq("coach_id", me.id)
-    .maybeSingle();
-  if (error) return { ok: false, error: error.message };
-  if (!data) return { ok: true, data: null };
-  return { ok: true, data: data as LoadedProgram };
-}
-
-export async function loadProgramForAppointment(apptId: string): Promise<Result<LoadedProgram | null>> {
-  const me = await getSessionUser();
-  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
-  if (!hasSupabaseEnv()) return { ok: true, data: null };
-  const supabase = createSupabaseAdmin();
-  const { data: appt } = await supabase
-    .from("appointments")
-    .select("session_program_id")
-    .eq("id", apptId)
-    .eq("coach_id", me.id)
-    .maybeSingle();
-  if (!appt?.session_program_id) return { ok: true, data: null };
-  return loadProgramForEdit(appt.session_program_id);
 }
 
 export type ApptOption = {
@@ -240,8 +170,7 @@ export type ApptOption = {
   starts_at: string;
   ends_at: string;
   status: string;
-  program_status: "programmed" | "draft" | "needs_programming" | "n/a";
-  session_program_id?: string | null;
+  program_status: string;
 };
 
 export async function getClientAppointments(clientId: string): Promise<ApptOption[]> {
@@ -256,8 +185,7 @@ export async function getClientAppointments(clientId: string): Promise<ApptOptio
       starts_at: a.starts_at,
       ends_at: a.ends_at,
       status: a.status,
-      program_status: a.program_status ?? "needs_programming",
-      session_program_id: a.session_program_id ?? null,
+      program_status: a.program_status ?? "needs_programming"
     }));
 }
 

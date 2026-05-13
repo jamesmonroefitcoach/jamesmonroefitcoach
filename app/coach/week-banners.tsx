@@ -7,8 +7,7 @@ export type WeekSessionItem = {
   client_id: string;
   client_name: string | null;
   starts_at: string;
-  is_programmed: boolean;  // true when status is "programmed" OR "draft" — kept for back-compat
-  program_status?: "programmed" | "draft" | "needs_programming";
+  is_programmed: boolean;
 };
 
 export type WeekProgramItem = {
@@ -97,101 +96,66 @@ function ColHeader({ color, label, count }: { color: string; label: string; coun
 // ─── Banner 1: Sessions This Week ──────────────────────────────────────────
 function SessionsBanner({ sessions }: { sessions: WeekSessionItem[] }) {
   const [open, setOpen] = useState(false);
-  // Derive 3-way status, falling back on the legacy boolean if no enum value is supplied.
-  const statusFor = (s: WeekSessionItem) =>
-    s.program_status ?? (s.is_programmed ? "programmed" : "needs_programming");
-  const published = sessions.filter((s) => statusFor(s) === "programmed");
-  const drafts    = sessions.filter((s) => statusFor(s) === "draft");
-  const needs     = sessions.filter((s) => statusFor(s) === "needs_programming");
+  const programmed = sessions.filter((s) => s.is_programmed);
+  const needs = sessions.filter((s) => !s.is_programmed);
 
   return (
     <BannerShell
       title="Sessions This Week"
-      summary={`${sessions.length} total · ${published.length} published · ${drafts.length} draft · ${needs.length} pending`}
+      summary={`${sessions.length} total · ${programmed.length} programmed · ${needs.length} pending`}
       open={open}
       onToggle={() => setOpen((v) => !v)}
     >
-      <div className="banner-two-col sessions-banner-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.85rem" }}>
-        {/* Published */}
-        <div>
-          <ColHeader color="var(--sage)" label="✓ Published" count={published.length} />
-          {published.length === 0 ? (
-            <p className="meta" style={{ fontSize: "0.75rem" }}>None yet this week.</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-              {published.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/coach/build-program?tab=session&client=${s.client_id}&appt=${s.id}`}
-                  style={{
+      <TwoCol
+        left={
+          <div>
+            <ColHeader color="var(--sage)" label="✓ Programmed" count={programmed.length} />
+            {programmed.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.75rem" }}>None yet this week.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                {programmed.map((s) => (
+                  <div key={s.id} style={{
                     padding: "0.25rem 0.45rem", borderRadius: 3,
                     background: "rgba(90,107,74,0.07)",
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
-                    textDecoration: "none", color: "var(--fg)",
-                  }}
-                >
-                  <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0 }}>{s.client_name ?? "—"}</span>
-                  <span className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap" }}>{fmtSessionTime(s.starts_at)}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Drafts */}
-        <div>
-          <ColHeader color="var(--amber)" label="● Drafted" count={drafts.length} />
-          {drafts.length === 0 ? (
-            <p className="meta" style={{ fontSize: "0.75rem" }}>No drafts.</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-              {drafts.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/coach/build-program?tab=session&client=${s.client_id}&appt=${s.id}`}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
-                    padding: "0.25rem 0.45rem", borderRadius: 3,
-                    background: "rgba(217,119,6,0.10)",
-                    border: "1px dashed rgba(217,119,6,0.45)",
-                    textDecoration: "none", color: "var(--fg)",
-                  }}
-                >
-                  <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0 }}>{s.client_name ?? "—"}</span>
-                  <span style={{ fontSize: "0.68rem", color: "var(--amber)", whiteSpace: "nowrap" }}>{fmtSessionTime(s.starts_at)} →</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Needs programming */}
-        <div>
-          <ColHeader color="var(--amber)" label="⚠ Needs Programming" count={needs.length} />
-          {needs.length === 0 ? (
-            <p className="meta" style={{ fontSize: "0.75rem" }}>All sessions programmed 🎉</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-              {needs.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/coach/build-program?tab=session&client=${s.client_id}&appt=${s.id}`}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
-                    padding: "0.25rem 0.45rem", borderRadius: 3,
-                    background: "rgba(217,119,6,0.07)",
-                    border: "1px solid rgba(217,119,6,0.2)",
-                    textDecoration: "none",
-                  }}
-                >
-                  <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0, color: "var(--fg)" }}>{s.client_name ?? "—"}</span>
-                  <span style={{ fontSize: "0.68rem", color: "var(--amber)", whiteSpace: "nowrap" }}>{fmtSessionTime(s.starts_at)} →</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+                  }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0 }}>{s.client_name ?? "—"}</span>
+                    <span className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap" }}>{fmtSessionTime(s.starts_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        }
+        right={
+          <div>
+            <ColHeader color="var(--amber)" label="⚠ Needs Programming" count={needs.length} />
+            {needs.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.75rem" }}>All sessions programmed 🎉</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                {needs.map((s) => (
+                  <Link
+                    key={s.id}
+                    href={`/coach/build-program?tab=session&client=${s.client_id}&appt=${s.id}`}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
+                      padding: "0.25rem 0.45rem", borderRadius: 3,
+                      background: "rgba(217,119,6,0.07)",
+                      border: "1px solid rgba(217,119,6,0.2)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0, color: "var(--fg)" }}>{s.client_name ?? "—"}</span>
+                    <span style={{ fontSize: "0.68rem", color: "var(--amber)", whiteSpace: "nowrap" }}>{fmtSessionTime(s.starts_at)} →</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        }
+      />
     </BannerShell>
   );
 }

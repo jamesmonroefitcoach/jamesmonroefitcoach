@@ -35,7 +35,7 @@ export type ApptInput = {
   status: AppointmentRow["status"];
   notes?: string | null;
   session_program_id?: string | null;
-  program_status?: "programmed" | "draft" | "needs_programming" | "n/a";
+  program_status?: "programmed" | "needs_programming" | "n/a";
   cancel_reason?: CancelReason | null;
   cancel_reason_other?: string | null;
   repeat?: RepeatInput;
@@ -65,7 +65,6 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
     status: input.status,
     notes: input.notes ?? null,
     session_program_id: input.session_program_id ?? null,
-    program_status: isPersonal ? "n/a" : (input.program_status ?? "needs_programming"),
     cancel_reason: isCancelled ? (input.cancel_reason ?? null) : null,
     cancel_reason_other: isCancelled && input.cancel_reason === "other" ? (input.cancel_reason_other ?? null) : null,
     updated_at: new Date().toISOString()

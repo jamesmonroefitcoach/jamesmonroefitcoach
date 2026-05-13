@@ -23,7 +23,7 @@ import {
   type LibraryLeaf,
   pastProgramsForClient
 } from "@/lib/programs";
-import { saveProgram, getClientAppointments, loadProgramForAppointment, type ApptOption } from "./actions";
+import { saveProgram, getClientAppointments, type ApptOption } from "./actions";
 import { fmtDate } from "@/lib/format";
 import type { ProgramKind } from "@/lib/programs";
 import type { ClientProgramItem } from "./page";
@@ -269,40 +269,31 @@ export default function BuildProgramClient({
     setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? { weights: [], notes: "" }), notes: val } }));
   }
 
-  // ── Draft status sourced from appointments DB ───────────────────────────────
-  // The "drafted" set comes from program_status === 'draft' on each appointment.
-  // No localStorage fallback — the DB is the source of truth.
-  useEffect(() => {
-    setDraftedApptIds(new Set(appts.filter((a) => a.program_status === "draft").map((a) => a.id)));
-  }, [appts]);
+  // ── Draft persistence via localStorage ──────────────────────────────────────
+  // key: build_program_drafts_{clientId}  value: { [apptId]: programId }
+  function draftKey(cid: string) { return `build_program_drafts_${cid}`; }
+  function readDraftMap(cid: string): Record<string, string> {
+    try { return JSON.parse(localStorage.getItem(draftKey(cid)) ?? "{}"); } catch { return {}; }
+  }
+  function writeDraftMap(cid: string, map: Record<string, string>) {
+    try { localStorage.setItem(draftKey(cid), JSON.stringify(map)); } catch {}
+  }
 
-  // When the selected appointment changes, restore the linked program (draft OR
-  // published) so the builder shows exactly what was saved before. session_program_id
-  // is set on the appointment whenever a coach has saved a program against it.
+  // Restore drafted appt set when the client changes
   useEffect(() => {
-    if (!selectedApptId) { setSavedProgramId(null); setIsDraftSaved(false); return; }
-    const appt = appts.find((a) => a.id === selectedApptId);
-    const pid = appt?.session_program_id ?? null;
+    if (!clientId) return;
+    const map = readDraftMap(clientId);
+    setDraftedApptIds(new Set(Object.keys(map)));
+  }, [clientId]);
+
+  // Restore savedProgramId when the selected appointment changes
+  useEffect(() => {
+    if (!clientId || !selectedApptId) { setSavedProgramId(null); setIsDraftSaved(false); return; }
+    const map = readDraftMap(clientId);
+    const pid = map[selectedApptId] ?? null;
     setSavedProgramId(pid);
-    setIsDraftSaved(appt?.program_status === "draft");
-    if (!pid) return;
-    let cancelled = false;
-    (async () => {
-      const res = await loadProgramForAppointment(selectedApptId);
-      if (cancelled || !res.ok || !res.data) return;
-      const bs = res.data.builder_state as
-        | { days?: ProgramDay[]; programName?: string; durationWeeks?: number; daysPerWeek?: number; startsOn?: string }
-        | null;
-      if (bs?.days?.length) {
-        setDays(bs.days);
-        if (bs.programName) setProgramName(bs.programName);
-        if (bs.durationWeeks) setDurationWeeks(bs.durationWeeks);
-        if (bs.daysPerWeek) setDaysPerWeek(bs.daysPerWeek);
-        if (bs.startsOn) setStartsOn(bs.startsOn);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedApptId, appts]);
+    setIsDraftSaved(!!pid);
+  }, [clientId, selectedApptId]);
 
   // library controls
   const [searchTerm, setSearchTerm] = useState("");
@@ -737,8 +728,6 @@ export default function BuildProgramClient({
         : programName;
       const res = await saveProgram({
         program_id: savedProgramId ?? undefined,
-        appt_id: programKind === "in_gym" ? (selectedApptId || null) : null,
-        builder_state: { days, programName, durationWeeks, daysPerWeek, startsOn },
         client_id: clientId,
         name: autoName,
         starts_on: startsOn,
@@ -771,9 +760,15 @@ export default function BuildProgramClient({
       if (!res.ok) {
         if (res.error.startsWith("Supabase not configured")) {
           if (!publish && selectedApptId) {
+            const map = readDraftMap(clientId);
+            map[selectedApptId] = "local";
+            writeDraftMap(clientId, map);
             setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
             setIsDraftSaved(true);
           } else if (publish && selectedApptId) {
+            const map = readDraftMap(clientId);
+            delete map[selectedApptId];
+            writeDraftMap(clientId, map);
             setDraftedApptIds((prev) => { const n = new Set(prev); n.delete(selectedApptId); return n; });
             setIsDraftSaved(false);
           }
@@ -785,21 +780,22 @@ export default function BuildProgramClient({
       }
       const pid = res.data?.id ?? null;
       if (pid) setSavedProgramId(pid);
-      // Optimistically reflect the new program_status on the local appts list so
-      // the dropdown badge updates without a server round-trip. The DB-driven
-      // useEffect will reconcile on next refresh.
-      if (selectedApptId) {
-        setAppts((prev) => prev.map((a) => a.id === selectedApptId
-          ? { ...a, program_status: publish ? "programmed" : "draft", session_program_id: pid ?? a.session_program_id ?? null }
-          : a
-        ));
-      }
       if (!publish) {
-        if (selectedApptId) setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
+        if (selectedApptId) {
+          const map = readDraftMap(clientId);
+          map[selectedApptId] = pid ?? "saved";
+          writeDraftMap(clientId, map);
+          setDraftedApptIds((prev) => new Set([...prev, selectedApptId]));
+        }
         setIsDraftSaved(true);
         setSaveMessage("Drafted.");
       } else {
-        if (selectedApptId) setDraftedApptIds((prev) => { const n = new Set(prev); n.delete(selectedApptId); return n; });
+        if (selectedApptId) {
+          const map = readDraftMap(clientId);
+          delete map[selectedApptId];
+          writeDraftMap(clientId, map);
+          setDraftedApptIds((prev) => { const n = new Set(prev); n.delete(selectedApptId); return n; });
+        }
         setIsDraftSaved(false);
         setSaveMessage("Published. Visible on the client's portal.");
         setPlanLog(initPlanLog(days));
@@ -1138,18 +1134,16 @@ export default function BuildProgramClient({
                   onChange={(e) => {
                     const id = e.target.value;
                     setSelectedApptId(id);
+                    setSavedProgramId(null);
+                    setIsDraftSaved(false);
                     setSaveMessage(null);
                     const appt = appts.find((a) => a.id === id);
-                    // Default to an empty single day; useEffect on selectedApptId
-                    // will overwrite with the loaded program if one exists.
-                    if (!appt?.session_program_id) {
-                      setDays([{
-                        uid: `day-1-${Date.now()}`,
-                        title: appt ? fmtSessionTitle(appt.starts_at) : "Session",
-                        collapsed: false,
-                        items: [],
-                      }]);
-                    }
+                    setDays([{
+                      uid: `day-1-${Date.now()}`,
+                      title: appt ? fmtSessionTitle(appt.starts_at) : "Session",
+                      collapsed: false,
+                      items: [],
+                    }]);
                   }}
                   disabled={apptsPending}
                 >
@@ -1157,9 +1151,7 @@ export default function BuildProgramClient({
                   {appts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {new Date(a.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                      {a.program_status === "draft" ? "  · Drafted"
-                        : a.program_status === "programmed" ? "  ✓ Published"
-                        : ""}
+                      {draftedApptIds.has(a.id) ? "  · Drafted" : a.program_status === "programmed" ? "  ✓ programmed" : ""}
                     </option>
                   ))}
                 </select>
@@ -1167,12 +1159,7 @@ export default function BuildProgramClient({
                   className="btn btn-primary"
                   disabled={!selectedApptId}
                   onClick={() => setInGymStep("builder")}
-                >{(() => {
-                  const a = appts.find((x) => x.id === selectedApptId);
-                  return a?.program_status === "programmed" ? "View →"
-                    : a?.program_status === "draft" ? "Edit →"
-                    : "Build →";
-                })()}</button>
+                >Build →</button>
               </div>
             </div>
           )}
