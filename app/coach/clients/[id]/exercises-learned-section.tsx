@@ -1,60 +1,158 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { hierarchyLeaves, CATEGORY_LABELS, type Category } from "@/lib/programs";
+import {
+  LIBRARY_HIERARCHY,
+  CATEGORY_LABELS,
+  type Category,
+  type LibraryGroup,
+  type LibraryLeaf,
+} from "@/lib/programs";
 import { readLearned, type LearnedExercise } from "@/lib/exercises-learned";
-
-type LeafEntry = {
-  key: string;            // movement_id when available, else name-based key
-  name: string;
-  category: Category;
-  learned: LearnedExercise | null;
-};
 
 function normalizeKey(movementId: string | undefined, name: string): string {
   if (movementId && !movementId.startsWith("ph-")) return movementId;
   return `name:${name.trim().toLowerCase()}`;
 }
 
+// Flatten a LibraryGroup → list of leaves (handles nodes with `children`)
+function leavesForGroup(g: LibraryGroup): LibraryLeaf[] {
+  const out: LibraryLeaf[] = [];
+  for (const node of g.nodes) {
+    if (node.children && node.children.length > 0) {
+      out.push(...node.children);
+    } else {
+      out.push({
+        id: node.id,
+        label: node.label,
+        description: node.description,
+        category: node.category,
+        is_core: node.is_core,
+      });
+    }
+  }
+  return out;
+}
+
+type Row = {
+  key: string;
+  name: string;
+  category: Category;
+  learned: LearnedExercise | null;
+};
+
+// One library group → its rows, plus the rows split into learned/unlearned arrays.
+type GroupView = {
+  id: string;
+  label: string;
+  rows: Row[];
+  learned: Row[];
+  unlearned: Row[];
+};
+
+function GroupBlock({ g }: { g: GroupView }) {
+  const [open, setOpen] = useState(false);
+  // Build a side-by-side row layout so learned and unlearned line up. Two
+  // separate vertical columns; their items are independent (no row matching),
+  // but they share the same group context so it's visually paired.
+  return (
+    <div style={{ border: "1px solid var(--line)", borderRadius: 4, overflow: "hidden" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", background: "rgba(0,0,0,0.025)", border: "none",
+          padding: "0.4rem 0.6rem", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          fontFamily: "inherit",
+        }}
+      >
+        <span style={{ fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.04em" }}>
+          {open ? "▾" : "▸"} {g.label}
+        </span>
+        <span className="meta" style={{ fontSize: "0.68rem" }}>
+          <span style={{ color: "var(--sage)" }}>{g.learned.length} learned</span>
+          {" · "}
+          <span style={{ color: "var(--clay)" }}>{g.unlearned.length} to learn</span>
+        </span>
+      </button>
+      {open && (
+        <div
+          className="banner-two-col"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "0",
+            borderTop: "1px solid var(--line)",
+          }}
+        >
+          {/* Learned column */}
+          <div style={{ padding: "0.4rem 0.55rem", borderRight: "1px solid var(--line)" }}>
+            {g.learned.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.7rem", margin: 0, fontStyle: "italic" }}>None yet</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.18rem" }}>
+                {g.learned.map((r) => (
+                  <div key={r.key} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: "0.4rem", padding: "0.18rem 0.35rem", borderRadius: 3,
+                    background: "rgba(90,107,74,0.06)",
+                  }}>
+                    <span style={{ fontSize: "0.74rem", fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+                    {r.learned && r.learned.heaviest_weight_lb > 0 && (
+                      <span style={{ fontSize: "0.66rem", color: "var(--muted)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        {r.learned.heaviest_weight_lb}{r.learned.reps_at_heaviest ? `×${r.learned.reps_at_heaviest}` : ""}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* To-learn column */}
+          <div style={{ padding: "0.4rem 0.55rem" }}>
+            {g.unlearned.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.7rem", margin: 0, fontStyle: "italic" }}>All learned 🎉</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.18rem" }}>
+                {g.unlearned.map((r) => (
+                  <div key={r.key} style={{
+                    fontSize: "0.74rem", padding: "0.18rem 0.35rem", color: "var(--ink)",
+                  }}>{r.name}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ExercisesLearnedSection({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [tick, setTick] = useState(0);  // re-read storage on tab focus
 
-  useEffect(() => {
-    setMounted(true);
-    const onFocus = () => setTick((t) => t + 1);
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
-  const { learned, toLearn } = useMemo(() => {
-    if (!mounted) return { learned: [] as LeafEntry[], toLearn: [] as LeafEntry[] };
+  const { totalLearned, totalToLearn, groups } = useMemo(() => {
+    if (!mounted) return { totalLearned: 0, totalToLearn: 0, groups: [] as GroupView[] };
     const learnedMap = readLearned(clientId);
-    // Build a unified leaf list from the library hierarchy.
-    const leaves = hierarchyLeaves();
-    const lEntries: LeafEntry[] = [];
-    const tEntries: LeafEntry[] = [];
-    const seenKeys = new Set<string>();
-    for (const leaf of leaves) {
-      const key = normalizeKey(leaf.id, leaf.label);
-      seenKeys.add(key);
-      const learnedEntry = learnedMap[key] ?? null;
-      const row: LeafEntry = { key, name: leaf.label, category: leaf.category, learned: learnedEntry };
-      if (learnedEntry) lEntries.push(row);
-      else tEntries.push(row);
-    }
-    // Include any learned entries that aren't in the hierarchy (ad-hoc additions).
-    for (const [k, val] of Object.entries(learnedMap)) {
-      if (!seenKeys.has(k)) {
-        lEntries.push({ key: k, name: val.name, category: val.category as Category, learned: val });
-      }
-    }
-    // Sort
-    lEntries.sort((a, b) => a.name.localeCompare(b.name));
-    tEntries.sort((a, b) => a.name.localeCompare(b.name));
-    return { learned: lEntries, toLearn: tEntries };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, mounted, tick]);
+    const groups: GroupView[] = LIBRARY_HIERARCHY.map((g) => {
+      const leaves = leavesForGroup(g);
+      const rows: Row[] = leaves.map((leaf) => {
+        const key = normalizeKey(leaf.id, leaf.label);
+        const learnedEntry = learnedMap[key] ?? null;
+        return { key, name: leaf.label, category: leaf.category, learned: learnedEntry };
+      });
+      rows.sort((a, b) => a.name.localeCompare(b.name));
+      const learned = rows.filter((r) => r.learned !== null);
+      const unlearned = rows.filter((r) => r.learned === null);
+      return { id: g.id, label: g.label, rows, learned, unlearned };
+    });
+    const totalLearned = groups.reduce((s, g) => s + g.learned.length, 0);
+    const totalToLearn = groups.reduce((s, g) => s + g.unlearned.length, 0);
+    return { totalLearned, totalToLearn, groups };
+  }, [clientId, mounted]);
 
   return (
     <div style={{ marginTop: "1rem" }}>
@@ -71,76 +169,36 @@ export default function ExercisesLearnedSection({ clientId }: { clientId: string
         }}
       >
         <span style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--muted)" }}>
-          {open ? "▾" : "▸"} Exercises {mounted ? `(${learned.length} learned · ${toLearn.length} to learn)` : ""}
+          {open ? "▾" : "▸"} Exercises {mounted ? `(${totalLearned} learned · ${totalToLearn} to learn)` : ""}
         </span>
       </button>
 
       {open && (
-        <div className="banner-two-col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", marginTop: "0.6rem" }}>
-          {/* Learned column */}
-          <div>
-            <div style={{
-              fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase",
-              letterSpacing: "0.07em", color: "var(--sage)",
-              paddingBottom: "0.3rem", borderBottom: "1px solid var(--line)",
-              marginBottom: "0.5rem",
-            }}>Exercises Learned</div>
-            {!mounted ? (
-              <p className="meta" style={{ fontSize: "0.74rem" }}>Loading…</p>
-            ) : learned.length === 0 ? (
-              <p className="meta" style={{ fontSize: "0.74rem" }}>None yet — complete an exercise to add it here.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                {learned.map((e) => (
-                  <div key={e.key} style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: "0.5rem", padding: "0.25rem 0.4rem", borderRadius: 3,
-                    background: "rgba(90,107,74,0.05)",
-                  }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>{e.name}</span>
-                      <span className="meta" style={{ fontSize: "0.66rem", marginLeft: "0.4rem" }}>{CATEGORY_LABELS[e.category]}</span>
-                    </div>
-                    {e.learned && e.learned.heaviest_weight_lb > 0 && (
-                      <span style={{ fontSize: "0.72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                        heaviest: {e.learned.heaviest_weight_lb} lbs
-                        {e.learned.reps_at_heaviest ? ` × ${e.learned.reps_at_heaviest}` : ""}
-                      </span>
-                    )}
-                  </div>
-                ))}
+        <div style={{ marginTop: "0.5rem" }}>
+          {!mounted ? (
+            <p className="meta" style={{ fontSize: "0.74rem" }}>Loading…</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+              {/* Header row — labels align with the per-group two-column grid */}
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0,
+                paddingLeft: "0.6rem", paddingRight: "0.6rem",
+              }}>
+                <div style={{
+                  fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
+                  letterSpacing: "0.07em", color: "var(--sage)",
+                }}>Learned</div>
+                <div style={{
+                  fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
+                  letterSpacing: "0.07em", color: "var(--clay)",
+                }}>To Learn</div>
               </div>
-            )}
-          </div>
 
-          {/* To learn column */}
-          <div>
-            <div style={{
-              fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase",
-              letterSpacing: "0.07em", color: "var(--clay)",
-              paddingBottom: "0.3rem", borderBottom: "1px solid var(--line)",
-              marginBottom: "0.5rem",
-            }}>Exercises to Learn</div>
-            {!mounted ? (
-              <p className="meta" style={{ fontSize: "0.74rem" }}>Loading…</p>
-            ) : toLearn.length === 0 ? (
-              <p className="meta" style={{ fontSize: "0.74rem" }}>All library exercises completed 🎉</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                {toLearn.map((e) => (
-                  <div key={e.key} style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: "0.5rem", padding: "0.25rem 0.4rem", borderRadius: 3,
-                  }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <span style={{ fontSize: "0.78rem" }}>{e.name}</span>
-                      <span className="meta" style={{ fontSize: "0.66rem", marginLeft: "0.4rem" }}>{CATEGORY_LABELS[e.category]}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+              {groups.map((g) => (
+                <GroupBlock key={g.id} g={g} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

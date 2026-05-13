@@ -152,6 +152,14 @@ function fmtShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function fmtFullDateTime(iso: string): string {
+  // e.g. "Wed, May 14 · 7:00 AM"
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${date} · ${time}`;
+}
+
 function statusColor(status: "Programmed" | "Drafted" | "Not Programmed" | "published" | "draft" | "none"): string {
   if (status === "Programmed" || status === "published") return "var(--sage)";
   if (status === "Drafted" || status === "draft") return "var(--amber)";
@@ -168,12 +176,15 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
     : active.programStatus === "draft" ? "Drafted"
     : "Not Programmed";
 
+  // Full date range when both ends are known; otherwise show what's available
   const programDateText = active.program
-    ? (active.program.ends_on
-        ? `ends ${fmtShortDate(active.program.ends_on)}`
-        : active.program.starts_on
-          ? `from ${fmtShortDate(active.program.starts_on)}`
-          : "")
+    ? (active.program.starts_on && active.program.ends_on
+        ? `${fmtShortDate(active.program.starts_on)} → ${fmtShortDate(active.program.ends_on)}`
+        : active.program.ends_on
+          ? `ends ${fmtShortDate(active.program.ends_on)}`
+          : active.program.starts_on
+            ? `from ${fmtShortDate(active.program.starts_on)}`
+            : "")
     : "";
 
   return (
@@ -191,7 +202,7 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
             }}
           >{block.clientName}</Link>
           <div className="meta" style={{ fontSize: "0.72rem", marginTop: "0.25rem", display: "flex", flexWrap: "wrap", gap: "0.15rem 0.85rem" }}>
-            {/* Next Session — status word is a link that jumps to view/edit/build */}
+            {/* Next Session — full date+time first, status link to the right */}
             <span>
               <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Next Session:</span>{" "}
               {nextSession ? (() => {
@@ -203,19 +214,20 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
                   : "Build";
                 return (
                   <>
+                    <span style={{ color: "var(--ink)" }}>{fmtFullDateTime(nextSession.starts_at)}</span>
+                    {" · "}
                     <Link
                       href={href}
                       title={`${verb} session program`}
                       style={{ color: statusColor(nextSession.status), fontWeight: 600, textDecoration: "underline" }}
                     >{nextSession.status}</Link>
-                    <span style={{ color: "var(--ink)" }}> · {fmtShortDate(nextSession.starts_at)}</span>
                   </>
                 );
               })() : (
                 <span style={{ color: "var(--muted)" }}>None scheduled</span>
               )}
             </span>
-            {/* Program — status word links to view/edit/build for the at-home program */}
+            {/* Program — date range first, status link to the right */}
             {(() => {
               const viewParam = programStatusLabel === "Programmed" ? "&view=plan" : "";
               const href = `/coach/programming/build?tab=program&client=${block.clientId}${viewParam}`;
@@ -225,12 +237,12 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
               return (
                 <span>
                   <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Program:</span>{" "}
+                  {programDateText && <><span style={{ color: "var(--ink)" }}>{programDateText}</span>{" · "}</>}
                   <Link
                     href={href}
                     title={`${verb} program`}
                     style={{ color: statusColor(programStatusLabel), fontWeight: 600, textDecoration: "underline" }}
                   >{programStatusLabel}</Link>
-                  {programDateText && <span style={{ color: "var(--ink)" }}> · {programDateText}</span>}
                 </span>
               );
             })()}
