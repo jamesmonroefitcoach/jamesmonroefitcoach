@@ -50,6 +50,7 @@ type SetRow = {
   rir?: number;
   half_reps?: number;
   rest_seconds?: number;   // rest after this specific set (seconds)
+  position?: string;       // e.g. "standing" | "seated" | "lying" | "incline:45"
 };
 
 type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
@@ -70,13 +71,14 @@ const VARIATION_TEXT: Record<Variation, string> = {
 };
 
 // ─── Optional per-set fields ─────────────────────────────────────────────
-type OptionalField = "tempo" | "rir" | "half_reps" | "rest_after";
-const ALL_OPTIONAL_FIELDS: OptionalField[] = ["tempo", "rir", "half_reps", "rest_after"];
+type OptionalField = "tempo" | "rir" | "half_reps" | "rest_after" | "position";
+const ALL_OPTIONAL_FIELDS: OptionalField[] = ["tempo", "rir", "half_reps", "rest_after", "position"];
 const OPTIONAL_FIELD_CONFIG: Record<OptionalField, { label: string; shortLabel: string; width: string }> = {
   tempo:      { label: "Tempo",     shortLabel: "Tempo", width: "56px" },
   rir:        { label: "RIR",       shortLabel: "RIR",   width: "44px" },
   half_reps:  { label: "½ Reps",    shortLabel: "½",     width: "44px" },
   rest_after: { label: "Rest (s)",  shortLabel: "Rest",  width: "50px" },
+  position:   { label: "Position",  shortLabel: "Pos",   width: "88px" },
 };
 
 type ProgramItem = {
@@ -105,6 +107,7 @@ type ProgramItem = {
   tempo?: string;
   rir?: number;
   half_reps?: number;
+  position?: string;       // "standing" | "seated" | "lying" | "incline:45"
 };
 
 type RenderGroup =
@@ -2565,6 +2568,12 @@ function AddOptionalFieldButton({
 }
 
 // ─── Single optional-field input cell ─────────────────────────────────────
+const POSITION_OPTIONS = ["standing", "seated", "incline", "lying"] as const;
+type PositionBase = typeof POSITION_OPTIONS[number];
+const POSITION_LABELS: Record<PositionBase, string> = {
+  standing: "Standing", seated: "Seated", incline: "Incline", lying: "Lying",
+};
+
 function OptionalFieldInput({
   field, value, onChange, style,
 }: {
@@ -2584,6 +2593,44 @@ function OptionalFieldInput({
       />
     );
   }
+
+  if (field === "position") {
+    const raw = (value as string) ?? "";
+    const isIncline = raw.startsWith("incline");
+    const base: PositionBase | "" = isIncline ? "incline" : (raw as PositionBase | "");
+    const angle = isIncline ? raw.slice("incline:".length) : "";
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 2, width: "100%", boxSizing: "border-box" }}>
+        <select
+          className="select"
+          value={base}
+          onChange={(e) => {
+            const v = e.target.value as PositionBase | "";
+            onChange(v === "incline" ? "incline:" : (v || undefined));
+          }}
+          style={{ fontSize: "0.68rem", padding: "0.1rem 0.06rem", flex: 1, minWidth: 0 }}
+        >
+          <option value="">—</option>
+          {POSITION_OPTIONS.map((p) => (
+            <option key={p} value={p}>{POSITION_LABELS[p]}</option>
+          ))}
+        </select>
+        {isIncline && (
+          <input
+            className="input"
+            type="number"
+            min={0}
+            max={90}
+            placeholder="°"
+            value={angle}
+            onChange={(e) => onChange(`incline:${e.target.value}`)}
+            style={{ width: 28, fontSize: "0.68rem", padding: "0.1rem 0.1rem", textAlign: "center", flexShrink: 0 }}
+          />
+        )}
+      </div>
+    );
+  }
+
   // rir, half_reps, rest_after are all numeric
   return (
     <input
@@ -2855,7 +2902,7 @@ function ExerciseCard({
                   <OptionalFieldInput
                     key={`inp-${f}`}
                     field={f}
-                    value={f === "rest_after" ? it.rest_seconds : f === "tempo" ? it.tempo : f === "rir" ? it.rir : it.half_reps}
+                    value={f === "rest_after" ? it.rest_seconds : f === "tempo" ? it.tempo : f === "rir" ? it.rir : f === "half_reps" ? it.half_reps : f === "position" ? it.position : undefined}
                     onChange={(v) => onPatch(f === "rest_after" ? { rest_seconds: v as number | undefined } : { [f]: v } as Partial<ProgramItem>)}
                     style={{ ...INP, width: "100%", boxSizing: "border-box" as const }}
                   />
@@ -2930,7 +2977,7 @@ function ExerciseCard({
                         <OptionalFieldInput
                           key={`opt-${f}-${si}`}
                           field={f}
-                          value={f === "rest_after" ? row.rest_seconds : f === "tempo" ? row.tempo : f === "rir" ? row.rir : row.half_reps}
+                          value={f === "rest_after" ? row.rest_seconds : f === "tempo" ? row.tempo : f === "rir" ? row.rir : f === "half_reps" ? row.half_reps : f === "position" ? row.position : undefined}
                           onChange={(v) => onPatchSetRow(si, f === "rest_after" ? { rest_seconds: v as number | undefined } : { [f]: v } as Partial<SetRow>)}
                           style={{ ...INP, width: "100%", boxSizing: "border-box" as const }}
                         />
