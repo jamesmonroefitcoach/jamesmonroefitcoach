@@ -201,9 +201,21 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
               textDecoration: "none",
             }}
           >{block.clientName}</Link>
-          <div className="meta" style={{ fontSize: "0.72rem", marginTop: "0.25rem", display: "flex", flexWrap: "wrap", gap: "0.15rem 0.85rem" }}>
+          <div
+            className="meta"
+            style={{
+              fontSize: "0.72rem",
+              marginTop: "0.25rem",
+              display: "grid",
+              // Five fixed proportional columns so every row's stats line up.
+              gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1.15fr) minmax(0, 0.75fr) minmax(0, 0.65fr) minmax(0, 0.7fr)",
+              columnGap: "1rem",
+              rowGap: "0.15rem",
+              alignItems: "baseline",
+            }}
+          >
             {/* Next Session — full date+time first, status link to the right */}
-            <span>
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Next Session:</span>{" "}
               {nextSession ? (() => {
                 const startsParam = encodeURIComponent(nextSession.starts_at);
@@ -235,7 +247,7 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
                 : programStatusLabel === "Drafted" ? "Edit"
                 : "Build";
               return (
-                <span>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Program:</span>{" "}
                   {programDateText && <><span style={{ color: "var(--ink)" }}>{programDateText}</span>{" · "}</>}
                   <Link
@@ -247,17 +259,17 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
               );
             })()}
             {/* This-month count */}
-            <span>
+            <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
               <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>This month:</span>{" "}
               <span style={{ color: "var(--ink)" }}>{scheduledThisMonth} session{scheduledThisMonth !== 1 ? "s" : ""}</span>
             </span>
             {/* Past sessions */}
-            <span>
+            <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
               <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past sessions:</span>{" "}
               <span style={{ color: "var(--ink)" }}>{historicalSessions.length}</span>
             </span>
             {/* Past programs */}
-            <span>
+            <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
               <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past programs:</span>{" "}
               <span style={{ color: "var(--ink)" }}>{historicalPrograms.length}</span>
             </span>
