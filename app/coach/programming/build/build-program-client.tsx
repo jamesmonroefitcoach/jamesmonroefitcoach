@@ -29,6 +29,7 @@ import type { ProgramKind } from "@/lib/programs";
 import type { ClientProgramItem } from "./page";
 import { isLearned, recordLearned, markPerformed } from "@/lib/exercises-learned";
 import { appendLog, lastEntry, historyFor, priorHeaviest, hasHistory, type ExerciseLogEntry } from "@/lib/exercise-logs";
+import ImportPickerModal, { type ImportScope, type ImportResult } from "./import-picker";
 import { readFeedback, savePre, savePost, savePerDay, type SessionFeedback } from "@/lib/session-feedback";
 import { queueFollowup } from "@/lib/client-followups";
 import { PreSessionForm, PostFeedbackForm, PostAnswersDisplay, type PostAnswersDraft } from "./feedback-forms";
@@ -229,7 +230,15 @@ export default function BuildProgramClient({
   );
   const [atHomeEditingHeader, setAtHomeEditingHeader] = useState(false);
   const [pickedExistingId, setPickedExistingId] = useState("");
+  // Import picker state. Either a day uid (importing into one day) or
+  // "__whole_session__" / "__whole_program__" sentinels for top-level imports.
   const [importDayModalUid, setImportDayModalUid] = useState<string | null>(null);
+  const importScope: ImportScope | null = useMemo(() => {
+    if (!importDayModalUid) return null;
+    if (importDayModalUid === "__whole_session__") return "session";
+    if (importDayModalUid === "__whole_program__") return "program-whole";
+    return "program-day";
+  }, [importDayModalUid]);
   const [supersetPickerState, setSupersetPickerState] = useState<{
     dayUid: string; supersetId: string;
   } | null>(null);
@@ -615,6 +624,57 @@ export default function BuildProgramClient({
   function isMobile() { return typeof window !== "undefined" && window.innerWidth <= 640; }
   function addDay() { setDays((d) => [...d, { ...NEW_DAY(d.length + 1), collapsed: isMobile() }]); }
   function removeDay(uid: string) { setDays((d) => d.filter((x) => x.uid !== uid)); }
+
+  // Apply an imported program into the current builder. Strips client info
+  // (the destination client populates from the program being built), gives
+  // imported days/items fresh uids so they don't collide, and respects scope.
+  function applyImport(result: ImportResult, dayUid?: string) {
+    function freshDay(d: any, idx: number): ProgramDay {
+      const newDayUid = `day-imp-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+      // Map old superset_id values to fresh ones (consistent within this day)
+      const ssMap = new Map<string, string>();
+      const items: ProgramItem[] = (d.items ?? []).map((it: any, j: number): ProgramItem => {
+        let newSsId: string | undefined = undefined;
+        if (it.superset_id) {
+          let m = ssMap.get(it.superset_id);
+          if (!m) { m = `ss-imp-${Date.now()}-${idx}-${ssMap.size}-${Math.random().toString(36).slice(2, 5)}`; ssMap.set(it.superset_id, m); }
+          newSsId = m;
+        }
+        return {
+          ...it,
+          uid: `it-imp-${Date.now()}-${idx}-${j}-${Math.random().toString(36).slice(2, 5)}`,
+          superset_id: newSsId,
+        } as ProgramItem;
+      });
+      return {
+        uid: newDayUid,
+        title: d.title ?? `Day ${idx + 1}`,
+        focus: d.focus,
+        collapsed: false,
+        items,
+      };
+    }
+
+    const importedDays = result.days.map((d: any, i: number) => freshDay(d, i));
+
+    if (dayUid) {
+      // Replace the contents of a specific day (program-day scope)
+      const replacement = importedDays[0];
+      if (!replacement) return;
+      setDays((cur) => cur.map((existing) => existing.uid === dayUid
+        ? { ...existing, items: replacement.items, title: replacement.title }
+        : existing
+      ));
+    } else {
+      // Whole replacement (session or program-whole). Replace all days outright.
+      setDays(importedDays.length > 0 ? importedDays : [NEW_DAY(1)]);
+      // For program-whole, also adopt the source's name/dates when destination
+      // was effectively empty (no exercises across all days).
+      const destEmpty = days.every((d) => d.items.length === 0);
+      if (destEmpty && result.source.name) setProgramName(result.source.name);
+      if (destEmpty && result.source.duration_weeks) setDurationWeeks(result.source.duration_weeks);
+    }
+  }
   function toggleCollapse(uid: string) {
     setDays((d) => d.map((x) => (x.uid === uid ? { ...x, collapsed: !x.collapsed } : x)));
   }
@@ -875,6 +935,8 @@ export default function BuildProgramClient({
         publish,
         program_kind: programKind,
         at_home_cadence: programKind === "at_home" ? `${daysPerWeek}x/week` : null,
+        // Full builder snapshot — enables lossless re-import elsewhere
+        builder_state: { days, programName, durationWeeks, daysPerWeek, startsOn },
         days: days.map((d, idx) => ({
           day_number: idx + 1,
           title: d.title,
@@ -1516,7 +1578,14 @@ export default function BuildProgramClient({
                   {selectedClient?.full_name} · Starts {new Date(startsOn).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {durationWeeks}wk · {daysPerWeek}×/wk
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ fontSize: "0.78rem" }}
+                  onClick={() => setImportDayModalUid("__whole_program__")}
+                  title="Copy a past program (all days)"
+                >⇪ Import whole program</button>
                 <button
                   type="button"
                   className="btn btn-ghost"
@@ -1571,12 +1640,21 @@ export default function BuildProgramClient({
                 {selectedClient?.full_name} · In-gym training session
               </div>
             </div>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ fontSize: "0.78rem" }}
-              onClick={() => setInGymStep("picker")}
-            >← Back</button>
+            <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: "0.78rem" }}
+                onClick={() => setImportDayModalUid("__whole_session__")}
+                title="Copy a past session or one day of a past program"
+              >⇪ Import session</button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: "0.78rem" }}
+                onClick={() => setInGymStep("picker")}
+              >← Back</button>
+            </div>
           </div>
         </div>
       )}
@@ -2231,21 +2309,28 @@ export default function BuildProgramClient({
       <button className="btn btn-primary" onClick={() => persist(true)} disabled={savePending}>{savePending ? "Publishing…" : "Publish"}</button>
     </div>
 
-    {/* ─── Import from Programs modal (stub) ─── */}
-    {importDayModalUid && (
-      <div
-        style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.45)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center" }}
-        onClick={() => setImportDayModalUid(null)}
-      >
-        <div className="card" style={{ width: "min(520px, 90vw)", padding: "1.5rem" }} onClick={(e) => e.stopPropagation()}>
-          <h3 style={{ margin: 0 }}>Import from Programs</h3>
-          <p className="meta" style={{ marginTop: "0.5rem", fontSize: "0.84rem" }}>
-            Past program browser — coming soon. This will let you browse and copy days from previous programs into this day.
-          </p>
-          <button className="btn btn-ghost" style={{ marginTop: "1rem" }} onClick={() => setImportDayModalUid(null)}>Close</button>
-        </div>
-      </div>
-    )}
+    {/* ─── Import picker ─── */}
+    {importDayModalUid && importScope && (() => {
+      // Compute "destination is empty" for the confirm-replace dialog.
+      const isWhole = importScope === "session" || importScope === "program-whole";
+      const destEmpty = isWhole
+        ? days.every((d) => d.items.length === 0)
+        : (days.find((d) => d.uid === importDayModalUid)?.items.length ?? 0) === 0;
+      return (
+        <ImportPickerModal
+          scope={importScope}
+          currentClientId={clientId}
+          currentClientName={selectedClient?.full_name ?? ""}
+          destinationIsEmpty={destEmpty}
+          onClose={() => setImportDayModalUid(null)}
+          onImport={(result) => {
+            if (isWhole) applyImport(result);
+            else applyImport(result, importDayModalUid!);
+            setImportDayModalUid(null);
+          }}
+        />
+      );
+    })()}
     </>
     )}
       </>}{/* end viewMode === "builder" */}

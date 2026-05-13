@@ -37,6 +37,11 @@ export type SaveProgramInput = {
   days: SaveProgramDay[];
   program_kind: ProgramKind;
   at_home_cadence?: string | null;
+  // Lossless snapshot of the builder UI state (set_rows, supersets, optional
+  // fields, variations, etc.) — written to programs.builder_state. Lets us
+  // restore and import programs without losing data the normalized tables
+  // don't have columns for.
+  builder_state?: unknown;
 };
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
@@ -55,6 +60,8 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
 
   let programId = input.program_id;
 
+  const builderStateJson = input.builder_state ?? null;
+
   if (programId) {
     const { error } = await supabase
       .from("programs")
@@ -67,7 +74,8 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
         is_published: input.publish,
         is_current: input.publish,
         program_kind: input.program_kind,
-        at_home_cadence: input.at_home_cadence ?? null
+        at_home_cadence: input.at_home_cadence ?? null,
+        builder_state: builderStateJson,
       })
       .eq("id", programId);
     if (error) return { ok: false, error: error.message };
@@ -101,7 +109,8 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
         is_published: input.publish,
         is_current: input.publish,
         program_kind: input.program_kind,
-        at_home_cadence: input.at_home_cadence ?? null
+        at_home_cadence: input.at_home_cadence ?? null,
+        builder_state: builderStateJson,
       })
       .select("id")
       .single();
@@ -240,6 +249,202 @@ export async function getClientAppointments(clientId: string): Promise<ApptOptio
       program_status: a.program_status ?? "needs_programming",
       session_program_id: a.session_program_id ?? null,
     }));
+}
+
+// ─── Import: list importable past programs ─────────────────────────────────
+export type ImportableProgram = {
+  id: string;
+  name: string;
+  program_kind: ProgramKind;
+  starts_on: string | null;
+  ends_on: string | null;
+  duration_weeks: number | null;
+  day_count: number;
+  exercise_count: number;
+  is_current: boolean;
+  has_builder_state: boolean;
+};
+
+export async function listImportableProgramsForClient(clientId: string): Promise<ImportableProgram[]> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return [];
+  if (!hasSupabaseEnv()) return [];
+  const supabase = createSupabaseAdmin();
+  // Pull published programs for this client. Older drafts are filtered out so
+  // the picker only shows finalised work.
+  const { data: progs } = await supabase
+    .from("programs")
+    .select("id, name, program_kind, starts_on, ends_on, duration_weeks, is_current, builder_state")
+    .eq("coach_id", me.id)
+    .eq("client_id", clientId)
+    .eq("is_published", true)
+    .order("starts_on", { ascending: false, nullsFirst: false });
+  if (!progs || progs.length === 0) return [];
+  const ids = progs.map((p: { id: string }) => p.id);
+  // Day + exercise counts from program_days/program_movements
+  const { data: days } = await supabase
+    .from("program_days")
+    .select("id, program_id")
+    .in("program_id", ids);
+  const dayIds = (days ?? []).map((d: { id: string }) => d.id);
+  const { data: moves } = dayIds.length > 0
+    ? await supabase.from("program_movements").select("program_day_id").in("program_day_id", dayIds)
+    : { data: [] as { program_day_id: string }[] };
+  const dayCount = new Map<string, number>();
+  for (const d of days ?? []) dayCount.set(d.program_id, (dayCount.get(d.program_id) ?? 0) + 1);
+  const dayToProg = new Map<string, string>();
+  for (const d of days ?? []) dayToProg.set(d.id, d.program_id);
+  const exerciseCount = new Map<string, number>();
+  for (const m of moves ?? []) {
+    const pid = dayToProg.get(m.program_day_id);
+    if (pid) exerciseCount.set(pid, (exerciseCount.get(pid) ?? 0) + 1);
+  }
+  return progs.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    program_kind: p.program_kind,
+    starts_on: p.starts_on,
+    ends_on: p.ends_on,
+    duration_weeks: p.duration_weeks,
+    day_count: dayCount.get(p.id) ?? 0,
+    exercise_count: exerciseCount.get(p.id) ?? 0,
+    is_current: !!p.is_current,
+    has_builder_state: p.builder_state != null,
+  }));
+}
+
+// ─── Import: lightweight client list for the "other client" picker ─────────
+export async function listClientsForImport(): Promise<{ id: string; full_name: string }[]> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return [];
+  if (!hasSupabaseEnv()) return [];
+  const supabase = createSupabaseAdmin();
+  const { data } = await supabase
+    .from("profiles")
+    .select(`
+      id, full_name,
+      details:client_details!client_details_profile_id_fkey ( coach_id, lifecycle )
+    `)
+    .order("full_name", { ascending: true });
+  if (!data) return [];
+  return (data as any[])
+    .filter((r) => r.details?.coach_id === me.id)
+    .map((r) => ({ id: r.id, full_name: r.full_name }));
+}
+
+// ─── Import: load full program for copying ─────────────────────────────────
+// Returns the raw builder_state JSON when available (full fidelity). Falls
+// back to reconstructing a minimal days[] structure from the normalized tables
+// for programs saved before builder_state existed.
+export type ImportedProgram = {
+  id: string;
+  name: string;
+  program_kind: ProgramKind;
+  starts_on: string | null;
+  ends_on: string | null;
+  duration_weeks: number | null;
+  at_home_cadence: string | null;
+  // The builder days[] array (typed as unknown — caller asserts to ProgramDay[])
+  days: unknown[];
+  // True if days came from builder_state (full fidelity); false if reconstructed
+  full_fidelity: boolean;
+};
+
+export async function loadProgramForImport(programId: string): Promise<{ ok: true; data: ImportedProgram | null } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: true, data: null };
+  const supabase = createSupabaseAdmin();
+  const { data: prog, error } = await supabase
+    .from("programs")
+    .select("id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, builder_state")
+    .eq("id", programId)
+    .eq("coach_id", me.id)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!prog) return { ok: true, data: null };
+
+  // Preferred: builder_state JSON has the full UI state
+  const bs = (prog as any).builder_state as { days?: unknown[] } | null;
+  if (bs && Array.isArray(bs.days) && bs.days.length > 0) {
+    return {
+      ok: true,
+      data: {
+        id: prog.id,
+        name: prog.name,
+        program_kind: prog.program_kind,
+        starts_on: prog.starts_on,
+        ends_on: prog.ends_on,
+        duration_weeks: prog.duration_weeks,
+        at_home_cadence: (prog as any).at_home_cadence ?? null,
+        days: bs.days,
+        full_fidelity: true,
+      },
+    };
+  }
+
+  // Fallback: reconstruct from program_days + program_movements
+  const { data: dayRows } = await supabase
+    .from("program_days")
+    .select("id, day_number, title, focus, notes")
+    .eq("program_id", programId)
+    .order("day_number", { ascending: true });
+  const dayIds = (dayRows ?? []).map((d: any) => d.id);
+  const { data: moves } = dayIds.length > 0
+    ? await supabase
+        .from("program_movements")
+        .select("id, program_day_id, movement_id, order_index, is_warmup, sets, reps, exertion, rest_seconds, notes, equipment_list, equipment_specifics, exertion_score, movement:movements!program_movements_movement_id_fkey(id, name, category)")
+        .in("program_day_id", dayIds)
+        .order("order_index", { ascending: true })
+    : { data: [] as any[] };
+
+  // Map to builder ProgramDay[] shape (minimum fields — supersets/set_rows/etc. lost)
+  const movesByDay = new Map<string, any[]>();
+  for (const m of moves ?? []) {
+    const arr = movesByDay.get(m.program_day_id) ?? [];
+    arr.push(m);
+    movesByDay.set(m.program_day_id, arr);
+  }
+  const days = (dayRows ?? []).map((d: any) => ({
+    uid: `imp-day-${d.id}`,
+    title: d.title || `Day ${d.day_number}`,
+    focus: d.focus ?? undefined,
+    collapsed: false,
+    items: (movesByDay.get(d.id) ?? []).map((m: any, i: number) => ({
+      uid: `imp-it-${m.id}`,
+      movement: {
+        id: m.movement?.id ?? `mv-${m.movement_id}`,
+        name: m.movement?.name ?? "Exercise",
+        category: m.movement?.category ?? "push",
+      },
+      is_warmup: !!m.is_warmup,
+      sets: m.sets ?? 3,
+      reps: m.reps ?? "",
+      exertion_score: m.exertion_score ?? 5,
+      same_format: true,
+      set_rows: [],
+      variations: [],
+      rest_seconds: m.rest_seconds ?? undefined,
+      notes: m.notes ?? undefined,
+      equipment_list: m.equipment_list ?? [],
+      equipment_specifics: m.equipment_specifics ?? undefined,
+    })),
+  }));
+
+  return {
+    ok: true,
+    data: {
+      id: prog.id,
+      name: prog.name,
+      program_kind: prog.program_kind,
+      starts_on: prog.starts_on,
+      ends_on: prog.ends_on,
+      duration_weeks: prog.duration_weeks,
+      at_home_cadence: (prog as any).at_home_cadence ?? null,
+      days,
+      full_fidelity: false,
+    },
+  };
 }
 
 // Client-side movement logging (per set). Used during/after a session.
