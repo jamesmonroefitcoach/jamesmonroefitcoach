@@ -840,11 +840,17 @@ export default function BuildProgramClient({
     );
   }
   function removeSuperset(dayUid: string, supersetId: string) {
+    // Ungroup: strip superset_id from each item so they stay as standalone exercises
     setDays((d) =>
       d.map((day) =>
         day.uid !== dayUid
           ? day
-          : { ...day, items: day.items.filter((it) => it.superset_id !== supersetId) }
+          : {
+              ...day,
+              items: day.items.map((it) =>
+                it.superset_id === supersetId ? { ...it, superset_id: undefined } : it
+              ),
+            }
       )
     );
   }
