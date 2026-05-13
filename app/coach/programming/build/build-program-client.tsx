@@ -25,6 +25,7 @@ import {
 } from "@/lib/programs";
 import { saveProgram, getClientAppointments, loadProgramForAppointment, type ApptOption } from "./actions";
 import { addMovement } from "../exercise-library/actions";
+import { decodeSpecs, encodeSpecs } from "@/lib/equipment-specs";
 import { fmtDate } from "@/lib/format";
 import type { ProgramKind } from "@/lib/programs";
 import type { ClientProgramItem } from "./page";
@@ -3966,6 +3967,28 @@ function ExerciseCard({
   const cardRouter = useRouter();
   const libraryMovements = useContext(LibraryMovementsContext);
 
+  // ─── Auto-generated preset name ─────────────────────────────────────
+  // Format: "Position Specification Equipment Subcategory" — any piece that's
+  // missing is skipped, and the coach can type over the result before saving.
+  function autogenName(): string {
+    const positionRaw = it.position ?? "";
+    let positionWord = "";
+    if (positionRaw.startsWith("incline")) {
+      const angle = positionRaw.slice("incline:".length).trim();
+      positionWord = angle ? `Incline ${angle}°` : "Incline";
+    } else if (positionRaw) {
+      positionWord = positionRaw.charAt(0).toUpperCase() + positionRaw.slice(1);
+    }
+    const equipmentWords = (it.equipment_list ?? [])
+      .map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e)
+      .join(" ");
+    const subcategory = (it.movement.subcategory || it.movement.name || "").trim();
+    return [positionWord, (it.equipment_specifics ?? "").trim(), equipmentWords, subcategory]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(" ");
+  }
+
   // Merge library entries (whose subcategory matches this parent movement) with
   // localStorage presets. Dedupe by lowercase name so a library row "wins" over
   // a local preset of the same name. Both sources show up in the dropdown so
@@ -3995,6 +4018,18 @@ function ExerciseCard({
     const name = presetDraft.trim();
     if (!name) return;
     if (savingPreset) return;
+
+    // Require specifics whenever Machine or Other is checked.
+    const list = it.equipment_list ?? [];
+    const { machineSpec, otherSpec } = decodeSpecs(list, it.equipment_specifics);
+    if (list.includes("machine") && !machineSpec.trim()) {
+      alert("Specify the machine — required when Machine is checked. Open the equipment selector and fill it in.");
+      return;
+    }
+    if (list.includes("other") && !otherSpec.trim()) {
+      alert("Specify the equipment — required when Other is checked. Open the equipment selector and fill it in.");
+      return;
+    }
 
     setSavingPreset(true);
 
@@ -4358,9 +4393,10 @@ function ExerciseCard({
             <input
               className="input"
               autoFocus
-              style={{ width: 96, fontSize: "0.69rem", padding: "0.1rem 0.22rem" }}
+              style={{ minWidth: 200, flex: 1, fontSize: "0.69rem", padding: "0.1rem 0.22rem" }}
               placeholder="Name…"
               value={presetDraft}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => setPresetDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") saveCurrentAsPreset();
@@ -4374,7 +4410,7 @@ function ExerciseCard({
           <button
             className="btn btn-ghost"
             style={{ fontSize: "0.63rem", padding: "0.06rem 0.28rem", color: "var(--muted)" }}
-            onClick={() => setShowNameInput(true)}
+            onClick={() => { setPresetDraft(autogenName()); setShowNameInput(true); }}
             title="Save current config as a named preset"
           >+ Name</button>
         )}
@@ -4544,7 +4580,7 @@ function LibraryLeafRow({
   );
 }
 
-// ─── Equipment multi-select with Other-specify and Machine-specify ─────
+// ─── Equipment multi-select with inline Machine/Other specifics ─────
 function EquipmentMultiSelect({
   value,
   specifics,
@@ -4559,7 +4595,7 @@ function EquipmentMultiSelect({
   const [open, setOpen] = useState(false);
   const [dropPos, setDropPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const showSpecifics = value.includes("machine") || value.includes("other");
+  const { machineSpec, otherSpec } = decodeSpecs(value, specifics);
   const fullLabel = value.length === 0 ? "Equipment" : value.length <= 2 ? value.map(v => EQUIPMENT_OPTIONS.find(o => o.value === v)?.label ?? v).join(", ") : `${value.length} equip.`;
   const compactLabel = value.length === 0 ? "Equip." : value.length <= 1 ? (EQUIPMENT_OPTIONS.find(o => o.value === value[0])?.label ?? value[0]).slice(0, 7) : `${value.length} eq.`;
   const label = compact ? compactLabel : fullLabel;
@@ -4580,10 +4616,15 @@ function EquipmentMultiSelect({
     setOpen((o) => !o);
   }
 
+  function emit(nextList: Equipment[], nextMachine: string, nextOther: string) {
+    const encoded = encodeSpecs(nextList, nextMachine, nextOther);
+    onChange(nextList, encoded || undefined);
+  }
+
   function toggle(eq: Equipment) {
     const has = value.includes(eq);
     const next = has ? value.filter(x => x !== eq) : [...value, eq];
-    onChange(next, next.includes("machine") || next.includes("other") ? specifics : undefined);
+    emit(next, machineSpec, otherSpec);
   }
 
   return (
@@ -4619,26 +4660,42 @@ function EquipmentMultiSelect({
             background: "var(--paper)",
             border: "1px solid var(--line)",
             borderRadius: 3,
-            padding: "0.4rem",
-            minWidth: 200,
+            padding: "0.45rem",
+            minWidth: 280,
             boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
           }}
         >
-          {EQUIPMENT_OPTIONS.map((opt) => (
-            <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.18rem 0.2rem", fontSize: "0.78rem", cursor: "pointer" }}>
-              <input type="checkbox" checked={value.includes(opt.value)} onChange={() => toggle(opt.value)} />
-              {opt.label}
-            </label>
-          ))}
-          {showSpecifics ? (
-            <input
-              className="input"
-              placeholder={value.includes("other") ? "Specify other…" : "Specify machine…"}
-              value={specifics ?? ""}
-              onChange={(e) => onChange(value, e.target.value)}
-              style={{ marginTop: "0.4rem", fontSize: "0.78rem" }}
-            />
-          ) : null}
+          {EQUIPMENT_OPTIONS.map((opt) => {
+            const checked = value.includes(opt.value);
+            const isMachine = opt.value === "machine";
+            const isOther = opt.value === "other";
+            return (
+              <div key={opt.value} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.18rem 0.2rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", cursor: "pointer", minWidth: 100 }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggle(opt.value)} />
+                  {opt.label}
+                </label>
+                {checked && isMachine && (
+                  <input
+                    className="input"
+                    placeholder="Specify machine…"
+                    value={machineSpec}
+                    onChange={(e) => emit(value, e.target.value, otherSpec)}
+                    style={{ flex: 1, fontSize: "0.74rem", padding: "0.14rem 0.28rem", borderColor: machineSpec.trim() ? undefined : "var(--amber)" }}
+                  />
+                )}
+                {checked && isOther && (
+                  <input
+                    className="input"
+                    placeholder="Specify other…"
+                    value={otherSpec}
+                    onChange={(e) => emit(value, machineSpec, e.target.value)}
+                    style={{ flex: 1, fontSize: "0.74rem", padding: "0.14rem 0.28rem", borderColor: otherSpec.trim() ? undefined : "var(--amber)" }}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>

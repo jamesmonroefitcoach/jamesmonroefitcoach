@@ -8,6 +8,7 @@ import {
   type Category, type LibraryNode, type LibraryGroup,
 } from "@/lib/programs";
 import { addMovement, updateMovement, archiveMovement, type MovementInput } from "./actions";
+import { decodeSpecs, encodeSpecs } from "@/lib/equipment-specs";
 
 // ── Local-preset backfill helpers ─────────────────────────────────────────────
 // Mirrors the ExercisePreset shape from build-program-client.tsx so we can
@@ -105,40 +106,6 @@ const POSITION_OPTIONS: { value: string; label: string }[] = [
   { value: "incline", label: "Incline" },
   { value: "lying", label: "Lying" },
 ];
-
-// ── equipment_specifics encode/decode ─────────────────────────────────────────
-// We support BOTH "machine" and "other" having their own specifics text. They
-// share a single equipment_specifics column. When only one is filled, we store
-// the raw string for back-compat. When both are filled, we store the combined
-// "Machine: X | Other: Y" format and decode it on read.
-function decodeSpecs(equipment_list: string[], specs: string | null | undefined): { machineSpec: string; otherSpec: string } {
-  const hasMachine = equipment_list.includes("machine");
-  const hasOther = equipment_list.includes("other");
-  const s = specs ?? "";
-  if (!s) return { machineSpec: "", otherSpec: "" };
-  const machineMatch = /^Machine:\s*(.*?)(?:\s*\|\s*Other:.*)?$/i.exec(s);
-  const otherMatch = /Other:\s*(.*)$/i.exec(s);
-  if (machineMatch && /Other:/i.test(s)) {
-    return {
-      machineSpec: (machineMatch[1] ?? "").trim(),
-      otherSpec: (otherMatch?.[1] ?? "").trim(),
-    };
-  }
-  // No structured prefix — assign to whichever single option is checked.
-  if (hasMachine && !hasOther) return { machineSpec: s, otherSpec: "" };
-  if (hasOther && !hasMachine) return { machineSpec: "", otherSpec: s };
-  if (hasMachine && hasOther) return { machineSpec: s, otherSpec: "" };
-  return { machineSpec: s, otherSpec: "" };
-}
-
-function encodeSpecs(equipment_list: string[], machineSpec: string, otherSpec: string): string {
-  const m = equipment_list.includes("machine") ? machineSpec.trim() : "";
-  const o = equipment_list.includes("other") ? otherSpec.trim() : "";
-  if (m && o) return `Machine: ${m} | Other: ${o}`;
-  if (m) return m;
-  if (o) return o;
-  return "";
-}
 
 // ── Equipment selector — mirrors the build page's dropdown picker with the
 //     addition of inline specifics text inputs next to Machine and Other when
@@ -303,8 +270,17 @@ function ExerciseForm({
   function submit() {
     if (!draft.name.trim()) { setError("Name is required."); return; }
     if (!draft.subcategory?.trim()) { setError("This form was opened without a library section — open it via the + Add button on the section you want to add to."); return; }
+    const list = draft.equipment_list ?? [];
+    if (list.includes("machine") && !machineSpec.trim()) {
+      setError("Specify the machine — required when Machine is checked.");
+      return;
+    }
+    if (list.includes("other") && !otherSpec.trim()) {
+      setError("Specify the equipment — required when Other is checked.");
+      return;
+    }
     setError(null);
-    const finalSpecs = encodeSpecs(draft.equipment_list ?? [], machineSpec, otherSpec);
+    const finalSpecs = encodeSpecs(list, machineSpec, otherSpec);
     const finalDraft: MovementInput = { ...draft, equipment_specifics: finalSpecs };
     startSave(async () => { await onSave(finalDraft); });
   }
