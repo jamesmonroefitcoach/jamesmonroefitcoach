@@ -263,6 +263,8 @@ export default function DashboardClient({
   monthAppts,
   openReq,
   threads,
+  changeRequests,
+  claimedSlots,
   baseWeekStart,
   clientProgramInfo,
 }: {
@@ -271,6 +273,8 @@ export default function DashboardClient({
   monthAppts: AppointmentRow[];
   openReq: number;
   threads: { id: string; client_name: string | null; last_message: string | null; last_at: string | null; unread: boolean }[];
+  changeRequests: { id: string; client_name: string | null; starts_at: string; requested_starts_at: string | null }[];
+  claimedSlots: { id: string; starts_at: string; claimed_by_name: string | null; claimed_at: string | null }[];
   baseWeekStart: Date;
   clientProgramInfo: Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null }>;
 }) {
@@ -576,40 +580,86 @@ export default function DashboardClient({
           <div className="card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h2>Inbox</h2>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                {openReq > 0 && (
-                  <Link
-                    href="/coach/schedule"
-                    style={{
-                      fontSize: "0.72rem", fontWeight: 700, padding: "0.15rem 0.5rem",
-                      borderRadius: 99,
-                      background: "rgba(217,119,6,0.12)", color: "var(--amber)",
-                      border: "1px solid rgba(217,119,6,0.3)",
-                      textDecoration: "none", whiteSpace: "nowrap",
-                    }}
-                  >
-                    {openReq} open request{openReq !== 1 ? "s" : ""} →
-                  </Link>
-                )}
-                <Link href="/coach/messages" className="meta">All →</Link>
-              </div>
+              <Link href="/coach/messages" className="meta">All →</Link>
             </div>
             <hr className="divider" />
-            {threads.length === 0 ? (
-              <p className="meta">No messages.</p>
-            ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                {threads.slice(0, 6).map((t) => (
-                  <li key={t.id} style={{ borderLeft: t.unread ? "3px solid var(--rust)" : "3px solid transparent", paddingLeft: "0.6rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <strong>{t.client_name}</strong>
-                      <span className="meta">{t.last_at ? new Date(t.last_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span>
-                    </div>
-                    <p style={{ margin: 0 }} className="meta">{t.last_message}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {(() => {
+              const unread = threads.filter((t) => t.unread);
+              const total = unread.length + changeRequests.length + claimedSlots.length;
+              if (total === 0) {
+                return <p className="meta">All caught up — nothing pending.</p>;
+              }
+              const fmtTime = (iso: string | null) => iso
+                ? new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                : "";
+              return (
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+                  {/* Availability reschedule requests (change-requested appointments) */}
+                  {changeRequests.map((c) => (
+                    <li
+                      key={`cr-${c.id}`}
+                      style={{
+                        borderLeft: "3px solid var(--amber)",
+                        paddingLeft: "0.6rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.4rem" }}>
+                        <Link href="/coach/appointments" style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 700, fontSize: "0.88rem" }}>
+                          <span style={{ color: "var(--amber)", marginRight: "0.3rem" }}>↻</span>
+                          {c.client_name ?? "—"}
+                        </Link>
+                        <span className="meta" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }}>{fmtTime(c.starts_at)}</span>
+                      </div>
+                      <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>
+                        Reschedule request{c.requested_starts_at ? <> → <strong style={{ color: "var(--ink)" }}>{fmtTime(c.requested_starts_at)}</strong></> : null}
+                      </p>
+                    </li>
+                  ))}
+
+                  {/* Appointment bids — slot_offers a client has claimed */}
+                  {claimedSlots.map((s) => (
+                    <li
+                      key={`bid-${s.id}`}
+                      style={{
+                        borderLeft: "3px solid var(--clay)",
+                        paddingLeft: "0.6rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.4rem" }}>
+                        <Link href="/coach/availability" style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 700, fontSize: "0.88rem" }}>
+                          <span style={{ color: "var(--clay)", marginRight: "0.3rem" }}>+</span>
+                          {s.claimed_by_name ?? "—"}
+                        </Link>
+                        <span className="meta" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }}>{fmtTime(s.starts_at)}</span>
+                      </div>
+                      <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>
+                        Claimed an open slot — confirm to schedule
+                      </p>
+                    </li>
+                  ))}
+
+                  {/* Unread messages */}
+                  {unread.map((t) => (
+                    <li
+                      key={`m-${t.id}`}
+                      style={{
+                        borderLeft: "3px solid var(--rust)",
+                        paddingLeft: "0.6rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.4rem" }}>
+                        <Link href={`/coach/messages?thread=${t.id}`} style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 700, fontSize: "0.88rem" }}>
+                          <span style={{ color: "var(--rust)", marginRight: "0.3rem" }}>✉</span>
+                          {t.client_name ?? "—"}
+                        </Link>
+                        <span className="meta" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }}>{t.last_at ? new Date(t.last_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span>
+                      </div>
+                      <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>{t.last_message}</p>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
           </div>
 
           <TodoBlock />

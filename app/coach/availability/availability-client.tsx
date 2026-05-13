@@ -388,11 +388,14 @@ export default function AvailabilityClient({
 
   function save() {
     setErr(null);
+    // Slots are always 1 hour long — derive ends_at from starts_at at save
+    // time so legacy offers with weird durations get normalized when re-saved.
+    const oneHourEnd = new Date(new Date(draft.starts_at).getTime() + 60 * 60 * 1000).toISOString();
     start(async () => {
       const res = await saveSlotOffer({
         id: mode?.kind === "edit" ? mode.offer.id : undefined,
         starts_at: draft.starts_at,
-        ends_at:   draft.ends_at,
+        ends_at:   oneHourEnd,
         notes:     draft.notes,
         notify_only:      draft.notify_only,
         target_tier:      draft.target_tier,
@@ -511,11 +514,23 @@ export default function AvailabilityClient({
             </div>
 
             <div>
-              <label className="stat-label">Window</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.3rem" }}>
-                <input className="input" type="datetime-local" value={toLocalInput(draft.starts_at)} onChange={(e) => setDraft({ ...draft, starts_at: fromLocalInput(e.target.value) })} />
-                <input className="input" type="datetime-local" value={toLocalInput(draft.ends_at)}   onChange={(e) => setDraft({ ...draft, ends_at:   fromLocalInput(e.target.value) })} />
+              <label className="stat-label">Start time</label>
+              <div style={{ marginTop: "0.3rem" }}>
+                <input
+                  className="input"
+                  type="datetime-local"
+                  value={toLocalInput(draft.starts_at)}
+                  onChange={(e) => {
+                    // 1-hour slots assumed — set end automatically from start.
+                    const newStart = fromLocalInput(e.target.value);
+                    const newEnd = new Date(new Date(newStart).getTime() + 60 * 60 * 1000).toISOString();
+                    setDraft({ ...draft, starts_at: newStart, ends_at: newEnd });
+                  }}
+                />
               </div>
+              <p className="meta" style={{ fontSize: "0.7rem", marginTop: "0.25rem", fontStyle: "italic" }}>
+                Slot is always 1 hour long.
+              </p>
             </div>
 
             <div>

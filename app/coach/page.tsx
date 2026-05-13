@@ -4,6 +4,7 @@ import {
   listClients, listAppointmentsForWeek, listAppointmentsForMonth,
   countOpenRequests, listCoachThreads, startOfWeek,
 } from "@/lib/data";
+import { listSlotOffers } from "./availability/data";
 import { pastProgramsForClient } from "@/lib/programs";
 import DashboardClient from "./dashboard-client";
 
@@ -16,13 +17,41 @@ export default async function CoachDashboard() {
   const weekStart = startOfWeek(new Date());
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-  const [clients, appts, monthAppts, openReq, threads] = await Promise.all([
+  const [clients, appts, monthAppts, openReq, threads, slotOffers] = await Promise.all([
     listClients(user.id),
     listAppointmentsForWeek(user.id),
     listAppointmentsForMonth(user.id, monthStart),
     countOpenRequests(user.id),
     listCoachThreads(user.id),
+    listSlotOffers(user.id),
   ]);
+
+  // Inbox feeds — change-requested appointments + claimed slot offers
+  const seenIds = new Set<string>();
+  const allAppts = [...appts, ...monthAppts].filter((a) => {
+    if (seenIds.has(a.id)) return false;
+    seenIds.add(a.id);
+    return true;
+  });
+  const clientNameById = new Map(clients.map((c) => [c.id, c.full_name]));
+  const changeRequests = allAppts
+    .filter((a) => a.status === "change_requested")
+    .map((a) => ({
+      id: a.id,
+      client_name: a.client_name ?? (a.client_id ? clientNameById.get(a.client_id) ?? null : null),
+      starts_at: a.starts_at,
+      requested_starts_at: a.requested_starts_at ?? null,
+    }))
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const claimedSlots = slotOffers
+    .filter((s) => s.status === "claimed" && !!s.claimed_at)
+    .map((s) => ({
+      id: s.id,
+      starts_at: s.starts_at,
+      claimed_by_name: s.claimed_by ? clientNameById.get(s.claimed_by) ?? null : null,
+      claimed_at: s.claimed_at,
+    }))
+    .sort((a, b) => (a.claimed_at ?? "").localeCompare(b.claimed_at ?? ""));
 
   // Build client program info map (used in session table)
   const clientProgramInfo = new Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null }>();
@@ -58,6 +87,8 @@ export default async function CoachDashboard() {
         monthAppts={monthAppts}
         openReq={openReq}
         threads={threads}
+        changeRequests={changeRequests}
+        claimedSlots={claimedSlots}
         baseWeekStart={weekStart}
         clientProgramInfo={clientProgramInfo}
       />
