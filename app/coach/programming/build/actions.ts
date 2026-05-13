@@ -172,7 +172,7 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
 
   revalidatePath(`/coach/clients/${input.client_id}`);
   revalidatePath("/coach/clients");
-  revalidatePath("/coach/build-program");
+  revalidatePath("/coach/programming/build");
   revalidatePath("/coach/schedule");
   revalidatePath("/coach");
   if (!programId) return { ok: false, error: "program id missing after save" };

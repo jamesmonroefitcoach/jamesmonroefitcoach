@@ -1292,7 +1292,7 @@ export default function ScheduleView({
                   <div style={{ marginTop: "0.4rem" }}>
                     {draft.client_id ? (
                       <Link
-                        href={`/coach/build-program?tab=session&appt=${draft.appt_id ?? ""}&client=${draft.client_id}&starts=${encodeURIComponent(draft.starts_at)}`}
+                        href={`/coach/programming/build?tab=session&appt=${draft.appt_id ?? ""}&client=${draft.client_id}&starts=${encodeURIComponent(draft.starts_at)}`}
                         className="btn btn-primary"
                         style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem", display: "inline-block" }}
                       >

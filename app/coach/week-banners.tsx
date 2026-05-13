@@ -121,7 +121,7 @@ function SessionsBanner({ sessions }: { sessions: WeekSessionItem[] }) {
               {published.map((s) => (
                 <Link
                   key={s.id}
-                  href={`/coach/build-program?tab=session&client=${s.client_id}&appt=${s.id}`}
+                  href={`/coach/programming/build?tab=session&client=${s.client_id}&appt=${s.id}`}
                   style={{
                     padding: "0.25rem 0.45rem", borderRadius: 3,
                     background: "rgba(90,107,74,0.07)",
@@ -147,7 +147,7 @@ function SessionsBanner({ sessions }: { sessions: WeekSessionItem[] }) {
               {drafts.map((s) => (
                 <Link
                   key={s.id}
-                  href={`/coach/build-program?tab=session&client=${s.client_id}&appt=${s.id}`}
+                  href={`/coach/programming/build?tab=session&client=${s.client_id}&appt=${s.id}`}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
                     padding: "0.25rem 0.45rem", borderRadius: 3,
@@ -174,7 +174,7 @@ function SessionsBanner({ sessions }: { sessions: WeekSessionItem[] }) {
               {needs.map((s) => (
                 <Link
                   key={s.id}
-                  href={`/coach/build-program?tab=session&client=${s.client_id}&appt=${s.id}`}
+                  href={`/coach/programming/build?tab=session&client=${s.client_id}&appt=${s.id}`}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
                     padding: "0.25rem 0.45rem", borderRadius: 3,
@@ -247,7 +247,7 @@ function ProgramsBanner({ items }: { items: WeekProgramItem[] }) {
                 {needs.map((item) => (
                   <Link
                     key={item.clientId}
-                    href={`/coach/build-program?tab=program&client=${item.clientId}`}
+                    href={`/coach/programming/build?tab=program&client=${item.clientId}`}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
                       padding: "0.25rem 0.45rem", borderRadius: 3,

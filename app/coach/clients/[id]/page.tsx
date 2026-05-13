@@ -2,11 +2,14 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { getClient, listAppointmentsForClient, getClientReminderPrefs, getHighLevelPlan } from "@/lib/data";
-import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, PROGRAM_KIND_LABEL, type Category, type PastProgramFull } from "@/lib/programs";
+import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, type Category, type PastProgramFull } from "@/lib/programs";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import ClientSettings from "./client-settings";
 import { CoachProfileCard, ClientProfileCard } from "./client-profile-edit";
 import { HighLevelPlanSection } from "./high-level-plan";
+import PastPrograms, { type PastSessionItem } from "./past-programs";
+import ExercisesLearnedSection from "./exercises-learned-section";
+import LogPaymentButton, { type PaymentApptRow } from "./log-payment-modal";
 
 const FORM_SECTIONS: { title: string; keys: string[] }[] = [
   {
@@ -57,21 +60,33 @@ const FORM_SECTIONS: { title: string; keys: string[] }[] = [
   },
 ];
 
-function ProgramCard({ label, prog, clientId }: { label: string; prog: PastProgramFull | null; clientId: string }) {
+function ProgramCard({ label, prog, clientId, status }: {
+  label: string;
+  prog: PastProgramFull | null;
+  clientId: string;
+  status: "published" | "draft" | "none";
+}) {
   if (!prog) {
     return (
       <div className="card" style={{ padding: "0.85rem" }}>
         <span className="badge">{label}</span>
-        <p className="meta" style={{ marginTop: "0.5rem" }}>No active {label.toLowerCase()} program. <Link href={`/coach/build-program?client=${clientId}`}>Build one →</Link></p>
+        <p className="meta" style={{ marginTop: "0.5rem" }}>No active {label.toLowerCase()} program. <Link href={`/coach/programming/build?client=${clientId}`}>Build one →</Link></p>
       </div>
     );
   }
   const expiring = isExpiringSoon(prog);
+  const tabParam = prog.program_kind === "at_home" ? "program" : "session";
   return (
-    <div className="day-card" style={{ borderLeftColor: expiring ? "var(--red)" : "var(--rust)" }}>
+    <div className="day-card" style={{ borderLeftColor: expiring ? "var(--red)" : status === "draft" ? "var(--amber)" : "var(--rust)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <span className="badge badge-rust">{label}</span>
+          {status === "published" && (
+            <span className="badge badge-sage" style={{ marginLeft: "0.4rem", fontSize: "0.62rem" }}>published</span>
+          )}
+          {status === "draft" && (
+            <span className="badge badge-amber" style={{ marginLeft: "0.4rem", fontSize: "0.62rem" }}>draft</span>
+          )}
           <strong style={{ marginLeft: "0.5rem" }}>{prog.name}</strong>
           {expiring ? <span className="badge badge-red" style={{ marginLeft: "0.5rem" }}>expiring soon</span> : null}
           {prog.program_kind === "at_home" ? (
@@ -90,7 +105,11 @@ function ProgramCard({ label, prog, clientId }: { label: string; prog: PastProgr
               .join(" · ")}
           </div>
         </div>
-        <Link className="btn btn-ghost" href={`/coach/build-program?client=${clientId}`} style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }}>edit</Link>
+        <Link
+          className="btn btn-ghost"
+          href={`/coach/programming/build?tab=${tabParam}&client=${clientId}${status === "published" ? "&view=plan" : ""}`}
+          style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }}
+        >view →</Link>
       </div>
     </div>
   );
@@ -115,6 +134,33 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const currentInGym = programs.find((p) => p.is_current && p.program_kind === "in_gym") ?? null;
   const currentAtHome = programs.find((p) => p.is_current && p.program_kind === "at_home") ?? null;
   const pastList = programs.filter((p) => !p.is_current);
+  // Past session appointments — feed into the two-column "Past programs" view.
+  const pastSessions: PastSessionItem[] = past
+    .filter((a) => a.session_type === "session" && a.client_id === id)
+    .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
+    .map((a) => ({
+      id: a.id,
+      starts_at: a.starts_at,
+      program_status: a.program_status,
+      session_program_id: a.session_program_id ?? null,
+    }));
+  // Sessions to show in the Log Payment modal — every session-type appt for
+  // this client (any status except cancelled), newest first. Unpaid bubble up
+  // automatically inside the modal.
+  const paymentAppts: PaymentApptRow[] = appts
+    .filter((a) =>
+      a.session_type === "session" &&
+      a.client_id === id &&
+      a.status !== "cancelled"
+    )
+    .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
+    .map((a) => ({
+      id: a.id,
+      starts_at: a.starts_at,
+      status: a.status,
+      rate: a.rate,
+      paid: a.paid,
+    }));
 
   return (
     <main className="shell">
@@ -137,9 +183,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             )}
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <Link className="btn btn-ghost" href={`/coach/messages?client=${client.id}`}>Message</Link>
-          <Link className="btn btn-primary" href={`/coach/build-program?client=${client.id}`}>New program</Link>
+          <LogPaymentButton clientName={client.full_name} appts={paymentAppts} />
+          <Link className="btn btn-primary" href={`/coach/programming/build?client=${client.id}`}>New program</Link>
         </div>
       </header>
 
@@ -271,42 +318,32 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       <section className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2>Programs</h2>
-          <Link className="btn btn-primary" href={`/coach/build-program?client=${client.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.75rem" }}>+ New program</Link>
+          <Link className="btn btn-primary" href={`/coach/programming/build?client=${client.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.75rem" }}>+ New program</Link>
         </div>
         <hr className="divider" />
 
         <div className="grid-2col" style={{ gap: "0.85rem" }}>
-          <ProgramCard label="Sessions" prog={currentInGym} clientId={client.id} />
-          <ProgramCard label="Program" prog={currentAtHome} clientId={client.id} />
+          <ProgramCard
+            label="Sessions"
+            prog={currentInGym}
+            clientId={client.id}
+            status={currentInGym ? "published" : "none"}
+          />
+          <ProgramCard
+            label="Program"
+            prog={currentAtHome}
+            clientId={client.id}
+            status={currentAtHome ? "published" : "none"}
+          />
         </div>
 
-        {pastList.length > 0 ? (
-          <>
-            <h3 style={{ marginTop: "1rem", fontSize: "0.75rem" }}>Past programs</h3>
-            <table className="table">
-              <thead>
-                <tr><th>Program</th><th>Type</th><th>Window</th><th>Days</th><th>Mix</th></tr>
-              </thead>
-              <tbody>
-                {pastList.map((p) => (
-                  <tr key={p.id}>
-                    <td><strong>{p.name}</strong></td>
-                    <td className="meta" style={{ fontSize: "0.78rem" }}>{PROGRAM_KIND_LABEL[p.program_kind]}</td>
-                    <td className="meta">
-                      {p.program_kind === "at_home"
-                        ? `${fmtDate(p.starts_on)} → ${fmtDate(p.ends_on)}`
-                        : <span style={{ fontStyle: "italic" }}>on schedule</span>}
-                    </td>
-                    <td>{p.day_count}</td>
-                    <td className="meta" style={{ fontSize: "0.78rem" }}>
-                      {Object.entries(p.category_counts).map(([k, v]) => `${v} ${CATEGORY_LABELS[k as Category].toLowerCase()}`).join(" · ")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        ) : null}
+        <PastPrograms
+          clientId={client.id}
+          sessions={pastSessions}
+          programs={pastList.filter((p) => p.program_kind === "at_home")}
+        />
+
+        <ExercisesLearnedSection clientId={client.id} />
       </section>
 
       <hr className="divider" />

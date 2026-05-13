@@ -16,7 +16,7 @@ export type ClientProgramItem = {
 export default async function BuildProgramPage({
   searchParams,
 }: {
-  searchParams: Promise<{ client?: string; appt?: string; type?: string; tab?: string; starts?: string }>;
+  searchParams: Promise<{ client?: string; appt?: string; type?: string; tab?: string; starts?: string; view?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -104,13 +104,13 @@ export default async function BuildProgramPage({
   });
 
   return (
-    <main className="shell">
-      <header>
+    <main className="shell" style={{ paddingTop: "0.75rem" }}>
+      <header className="no-print">
         <span className="badge">Coach</span>
-        <h1 style={{ marginTop: "0.5rem" }}>Build a program</h1>
+        <h1 style={{ marginTop: "0.5rem" }}>Build Program</h1>
         <p className="meta">Pick a client. Build the day. Add movements with sets, reps, weight, equipment, and demo links. Print for the floor.</p>
       </header>
-      <hr className="divider" />
+      <hr className="divider no-print" />
       <BuildProgramClient
         clients={clients}
         initialClientId={initialClientId}
@@ -118,6 +118,7 @@ export default async function BuildProgramPage({
         initialApptId={initialApptId}
         initialStartsAt={initialStartsAt}
         initialType={initialType}
+        initialView={sp.view === "plan" ? "plan" : "builder"}
         weekSessions={weekSessions}
         clientProgramSummary={clientProgramSummary}
       />

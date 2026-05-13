@@ -9,7 +9,7 @@ type NavLink = { href: string; label: string };
 const COACH_NAV: NavLink[] = [
   { href: "/coach", label: "Dashboard" },
   { href: "/coach/clients", label: "Clients" },
-  { href: "/coach/build-program", label: "Build Program" },
+  { href: "/coach/programming", label: "Programming" },
   { href: "/coach/exercise-library", label: "Exercise Library" },
   { href: "/coach/schedule", label: "Schedule" },
   { href: "/coach/availability", label: "Availability" },

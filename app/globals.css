@@ -243,6 +243,67 @@ a:hover { text-decoration: underline; }
   .app-main { padding: 0; }
   .card, .day-card, .stat { border: 1px solid #000; box-shadow: none; }
   .btn { display: none !important; }
+
+  /* ── Plan view print sheet ────────────────────────────────────────────
+     Mirrors the on-screen published plan so the coach can carry it to the
+     floor. Inputs become underlined blanks for handwritten weights/reps.   */
+  .plan-print {
+    padding-top: 0 !important;
+    gap: 0.4rem !important;
+  }
+  .plan-print .card,
+  .plan-print .day-card {
+    padding: 0.55rem 0.75rem !important;
+    margin-bottom: 0.45rem;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .plan-print h2 { font-size: 1.2rem !important; }
+  .plan-print h3 { font-size: 0.85rem !important; }
+  .plan-print .stat-label { font-size: 0.62rem !important; }
+
+  /* Inputs & textareas → underlined blanks. Empty fields print as a blank
+     line; values you typed in show as plain text. */
+  .plan-print .input,
+  .plan-print .textarea,
+  .plan-print .select {
+    border: none !important;
+    border-bottom: 1px solid #999 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 0.15rem !important;
+    box-shadow: none !important;
+    font-size: 0.82rem !important;
+    color: #000 !important;
+  }
+  .plan-print .textarea {
+    min-height: 1.6rem;
+  }
+  /* Number inputs: kill the spinner so they look like a flat line */
+  .plan-print input[type="number"]::-webkit-outer-spin-button,
+  .plan-print input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .plan-print input[type="number"] { -moz-appearance: textfield; }
+
+  /* Each exercise block — keep on one page */
+  .plan-print .day-card > div,
+  .plan-print [style*="borderLeft"] {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Badges: monochrome for print */
+  .plan-print .badge,
+  .plan-print .badge-sage,
+  .plan-print .badge-amber,
+  .plan-print .badge-rust,
+  .plan-print .badge-red {
+    background: #fff !important;
+    color: #000 !important;
+    border: 1px solid #000 !important;
+  }
+
 }
 
 /* Responsive column header labels — show full name on desktop, short on mobile */
@@ -363,4 +424,8 @@ a:hover { text-decoration: underline; }
   /* Corner cells: sticky header + sticky column — must be above both */
   .table-sticky-head thead th.tbl-sticky-first,
   .table-sticky-head thead th.tbl-sticky-last { z-index: 4 !important; background: #f0ebe0 !important; }
+
+  /* On mobile the fixed top nav (48px) covers top:0, so sit the sticky
+     header just below it instead of disappearing behind it. */
+  .table-sticky-head thead th { top: 48px; }
 }

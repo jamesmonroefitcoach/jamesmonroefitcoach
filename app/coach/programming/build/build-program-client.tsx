@@ -27,6 +27,11 @@ import { saveProgram, getClientAppointments, loadProgramForAppointment, type App
 import { fmtDate } from "@/lib/format";
 import type { ProgramKind } from "@/lib/programs";
 import type { ClientProgramItem } from "./page";
+import { isLearned, recordLearned, markPerformed } from "@/lib/exercises-learned";
+import { appendLog, lastEntry, historyFor, priorHeaviest, hasHistory, type ExerciseLogEntry } from "@/lib/exercise-logs";
+import { readFeedback, savePre, savePost, savePerDay, type SessionFeedback } from "@/lib/session-feedback";
+import { queueFollowup } from "@/lib/client-followups";
+import { PreSessionForm, PostFeedbackForm, PostAnswersDisplay, type PostAnswersDraft } from "./feedback-forms";
 
 export type WeekSession = {
   id: string;
@@ -147,7 +152,12 @@ type ProgramDay = {
   items: ProgramItem[];
 };
 
-type PlanLogEntry = { weights: string[]; notes: string };
+type PlanLogEntry = {
+  weights: string[];
+  actual_reps?: string[];   // per-set actual reps performed
+  notes: string;
+  completed?: boolean;      // per-exercise complete flag (collapses block)
+};
 type PlanLog = Record<string, PlanLogEntry>; // itemUid → entry
 
 const NEW_DAY = (n: number): ProgramDay => ({
@@ -181,6 +191,7 @@ export default function BuildProgramClient({
   initialApptId = "",
   initialStartsAt = "",
   initialType = "in_gym",
+  initialView = "builder",
   weekSessions = [],
   clientProgramSummary = [],
 }: {
@@ -191,6 +202,7 @@ export default function BuildProgramClient({
   /** starts_at of the targeted appointment — used as title fallback when appt isn't in initialAppts */
   initialStartsAt?: string;
   initialType?: ProgramKind;
+  initialView?: "builder" | "plan";
   weekSessions?: WeekSession[];
   clientProgramSummary?: ClientProgramItem[];
 }) {
@@ -244,7 +256,7 @@ export default function BuildProgramClient({
   const [draftedApptIds, setDraftedApptIds] = useState<Set<string>>(new Set());
 
   // ── Plan / completed view ────────────────────────────────────────────────────
-  const [viewMode, setViewMode] = useState<"builder" | "plan" | "completed">("builder");
+  const [viewMode, setViewMode] = useState<"builder" | "plan" | "completed">(initialView);
   const [planLog, setPlanLog] = useState<PlanLog>({});
   const [summaryOpen, setSummaryOpen] = useState(false);
 
@@ -260,14 +272,33 @@ export default function BuildProgramClient({
   }
   function setPlanWeight(itemUid: string, idx: number, val: string) {
     setPlanLog((p) => {
-      const e = p[itemUid] ?? { weights: [], notes: "" };
+      const e = p[itemUid] ?? { weights: [], actual_reps: [], notes: "" };
       const w = [...e.weights]; w[idx] = val;
       return { ...p, [itemUid]: { ...e, weights: w } };
     });
   }
-  function setPlanNotes(itemUid: string, val: string) {
-    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? { weights: [], notes: "" }), notes: val } }));
+  function setPlanActualReps(itemUid: string, idx: number, val: string) {
+    setPlanLog((p) => {
+      const e = p[itemUid] ?? { weights: [], actual_reps: [], notes: "" };
+      const ar = [...(e.actual_reps ?? [])]; ar[idx] = val;
+      return { ...p, [itemUid]: { ...e, actual_reps: ar } };
+    });
   }
+  function setPlanNotes(itemUid: string, val: string) {
+    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? { weights: [], actual_reps: [], notes: "" }), notes: val } }));
+  }
+  function setPlanExerciseCompleted(itemUid: string, val: boolean) {
+    setPlanLog((p) => ({ ...p, [itemUid]: { ...(p[itemUid] ?? { weights: [], actual_reps: [], notes: "" }), completed: val } }));
+  }
+  // Per-day completion is tracked separately so it survives independent of items.
+  const [completedDays, setCompletedDays] = useState<Set<string>>(new Set());
+  function toggleDayCompleted(dayUid: string) {
+    setCompletedDays((s) => { const n = new Set(s); n.has(dayUid) ? n.delete(dayUid) : n.add(dayUid); return n; });
+  }
+
+  // Feedback storage — re-read after every save so the plan view re-renders.
+  const [feedbackTick, setFeedbackTick] = useState(0);
+  const bumpFeedback = () => setFeedbackTick((t) => t + 1);
 
   // ── Draft persistence via localStorage ──────────────────────────────────────
   // key: build_program_drafts_{clientId}  value: { [apptId]: programId }
@@ -345,9 +376,40 @@ export default function BuildProgramClient({
       if (res.data.name) setProgramName(res.data.name);
       if (res.data.starts_on) setStartsOn(res.data.starts_on);
       if (res.data.duration_weeks) setDurationWeeks(res.data.duration_weeks);
+      // If the linked program is published, default to plan view (read-only with
+      // weight/notes inputs). Coach can still click "Edit" to drop into builder.
+      if (res.data.is_published) setViewMode((v) => (v === "builder" ? "plan" : v));
     })();
     return () => { cancelled = true; };
   }, [clientId, selectedApptId, appts]);
+
+  // When entering plan view, ensure every visible exercise has a PlanLog entry
+  // sized to its current set count (so weight inputs render correctly).
+  useEffect(() => {
+    if (viewMode === "builder") return;
+    setPlanLog((pl) => {
+      const next = { ...pl };
+      let changed = false;
+      for (const d of days) {
+        for (const it of d.items) {
+          const count = it.same_format ? it.sets : Math.max(it.sets, it.set_rows.length);
+          const cur = next[it.uid];
+          if (!cur) {
+            next[it.uid] = { weights: Array<string>(count).fill(""), actual_reps: Array<string>(count).fill(""), notes: "" };
+            changed = true;
+          } else if (cur.weights.length < count) {
+            next[it.uid] = {
+              ...cur,
+              weights: [...cur.weights, ...Array<string>(count - cur.weights.length).fill("")],
+              actual_reps: [...(cur.actual_reps ?? []), ...Array<string>(count - (cur.actual_reps ?? []).length).fill("")],
+            };
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : pl;
+    });
+  }, [viewMode, days]);
 
   // library controls
   const [searchTerm, setSearchTerm] = useState("");
@@ -1123,18 +1185,50 @@ export default function BuildProgramClient({
     <div>
       {viewMode !== "builder" && (
         <SessionPlanView
+          clientId={clientId}
           days={days}
           programKind={programKind}
           clientName={selectedClient?.full_name ?? ""}
           sessionTitle={programKind === "in_gym" ? (days[0]?.title ?? "Session") : programName}
           planLog={planLog}
           completed={viewMode === "completed"}
+          completedDays={completedDays}
+          onToggleDayCompleted={toggleDayCompleted}
           summaryOpen={summaryOpen}
           onSummaryToggle={() => setSummaryOpen((o) => !o)}
           onSetWeight={setPlanWeight}
+          onSetActualReps={setPlanActualReps}
           onSetNotes={setPlanNotes}
+          onSetExerciseCompleted={setPlanExerciseCompleted}
           onEdit={() => setViewMode("builder")}
           onComplete={() => setViewMode("completed")}
+          feedbackId={programKind === "in_gym" ? selectedApptId : (savedProgramId ? `program-${savedProgramId}` : "")}
+          feedbackTick={feedbackTick}
+          onSavePre={(a) => {
+            const fid = programKind === "in_gym" ? selectedApptId : (savedProgramId ? `program-${savedProgramId}` : "");
+            if (!fid) return;
+            savePre(fid, a);
+            bumpFeedback();
+          }}
+          onSavePost={(a) => {
+            const fid = programKind === "in_gym" ? selectedApptId : (savedProgramId ? `program-${savedProgramId}` : "");
+            if (!fid) return;
+            savePost(fid, a);
+            bumpFeedback();
+            // For in_gym sessions, queue a follow-up for the client (due next day).
+            if (programKind === "in_gym" && selectedApptId && clientId) {
+              const appt = appts.find((x) => x.id === selectedApptId);
+              const startsAt = appt?.starts_at ?? new Date().toISOString();
+              const label = new Date(startsAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+              queueFollowup({ client_id: clientId, appt_id: selectedApptId, session_label: label, session_starts_at: startsAt });
+            }
+          }}
+          onSavePerDay={(dayUid, a) => {
+            const fid = programKind === "in_gym" ? selectedApptId : (savedProgramId ? `program-${savedProgramId}` : "");
+            if (!fid) return;
+            savePerDay(fid, dayUid, a);
+            bumpFeedback();
+          }}
         />
       )}
       {viewMode === "builder" && <>
@@ -1812,11 +1906,8 @@ export default function BuildProgramClient({
                           type="button"
                           className="btn btn-ghost no-print"
                           style={{ fontSize: "0.62rem", padding: "0.1rem 0.32rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", marginTop: "0.18rem" }}
-                          onClick={() => {
-                            const ssId = initSuperset(day.uid, it.uid);
-                            addMovementToSuperset(day.uid, { id: `ph-${Date.now()}`, name: "Exercise", category: "push" }, ssId);
-                          }}
-                          title="Add another exercise to form a superset"
+                          onClick={() => initSuperset(day.uid, it.uid)}
+                          title="Group this exercise into a superset — drag more exercises into the box"
                         >⊞ + Superset</button>
                       }
                     />
@@ -1885,12 +1976,16 @@ export default function BuildProgramClient({
                         />
                       ))}
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-ghost no-print"
-                      style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
-                      onClick={() => addMovementToSuperset(day.uid, { id: `ph-${Date.now()}`, name: "Exercise", category: "push" }, supersetId)}
-                    >⊞ + Add exercise to Super Set</button>
+                    <div
+                      className="no-print"
+                      style={{
+                        width: "100%", fontSize: "0.62rem", padding: "0.3rem 0.5rem",
+                        borderTop: "1px dashed rgba(217,119,6,0.3)",
+                        color: "var(--amber)", textAlign: "center",
+                        fontStyle: "italic", letterSpacing: "0.04em",
+                        background: drag ? "rgba(217,119,6,0.06)" : "transparent",
+                      }}
+                    >⤓ Drag exercises here</div>
                   </div>
                 );
               })}
@@ -2006,11 +2101,8 @@ export default function BuildProgramClient({
                                 type="button"
                                 className="btn btn-ghost no-print"
                                 style={{ fontSize: "0.62rem", padding: "0.1rem 0.32rem", color: "var(--amber)", borderColor: "rgba(217,119,6,0.4)", marginTop: "0.18rem" }}
-                                onClick={() => {
-                                  const ssId = initSuperset(day.uid, it.uid);
-                                  setSupersetPickerState({ dayUid: day.uid, supersetId: ssId });
-                                }}
-                                title="Add another exercise to form a superset"
+                                onClick={() => initSuperset(day.uid, it.uid)}
+                                title="Group this exercise into a superset — drag more exercises into the box"
                               >⊞ + Superset</button>
                             }
                           />
@@ -2080,12 +2172,16 @@ export default function BuildProgramClient({
                               />
                             ))}
                           </div>
-                          <button
-                            type="button"
-                            className="btn btn-ghost no-print"
-                            style={{ width: "100%", fontSize: "0.62rem", padding: "0.2rem 0.5rem", borderRadius: 0, borderTop: "1px solid rgba(217,119,6,0.2)", color: "var(--amber)" }}
-                            onClick={() => addMovementToSuperset(day.uid, { id: `ph-${Date.now()}`, name: "Exercise", category: "push" }, supersetId)}
-                          >⊞ + Add exercise to Super Set</button>
+                          <div
+                            className="no-print"
+                            style={{
+                              width: "100%", fontSize: "0.62rem", padding: "0.3rem 0.5rem",
+                              borderTop: "1px dashed rgba(217,119,6,0.3)",
+                              color: "var(--amber)", textAlign: "center",
+                              fontStyle: "italic", letterSpacing: "0.04em",
+                              background: drag ? "rgba(217,119,6,0.06)" : "transparent",
+                            }}
+                          >⤓ Drag exercises here</div>
                         </div>
                       );
                     })}
@@ -2135,35 +2231,512 @@ export default function BuildProgramClient({
 }
 
 // ─── Session plan view (published / completed) ────────────────────────────────
+
+function computeExerciseSummary(entry: PlanLogEntry | undefined): { heaviest: number | null; volume: number | null } {
+  if (!entry) return { heaviest: null, volume: null };
+  let heaviest: number | null = null;
+  let volume: number | null = null;
+  const reps = entry.actual_reps ?? [];
+  let allFilled = true;
+  let total = 0;
+  for (let i = 0; i < entry.weights.length; i++) {
+    const w = parseFloat(entry.weights[i] ?? "");
+    if (!Number.isNaN(w) && w > 0) {
+      heaviest = heaviest === null ? w : Math.max(heaviest, w);
+      const r = parseFloat(reps[i] ?? "");
+      if (!Number.isNaN(r) && r > 0) total += w * r;
+      else allFilled = false;
+    } else {
+      allFilled = false;
+    }
+  }
+  if (entry.weights.length > 0 && allFilled && total > 0) volume = total;
+  return { heaviest, volume };
+}
+
+// ─── Exercise log history modal (timeline of past completions) ──────────────
+function ExerciseLogModal({ clientId, movement, onClose }: {
+  clientId: string;
+  movement: Movement;
+  onClose: () => void;
+}) {
+  const entries = historyFor(clientId, movement.id, movement.name);
+  const heaviestOverall = priorHeaviest(clientId, movement.id, movement.name);
+  // Render entries newest-first
+  const ordered = [...entries].reverse();
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div className="card" style={{ width: "min(560px, 94vw)", maxHeight: "84vh", padding: "1rem 1.2rem", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.35rem" }}>
+          <div>
+            <h3 style={{ margin: 0 }}>{movement.name}</h3>
+            <div className="meta" style={{ fontSize: "0.74rem", marginTop: "0.2rem" }}>
+              {entries.length} session{entries.length !== 1 ? "s" : ""} logged
+              {heaviestOverall > 0 ? ` · heaviest ${heaviestOverall} lbs` : ""}
+            </div>
+          </div>
+          <button className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.2rem 0.4rem" }} onClick={onClose}>✕</button>
+        </div>
+        <hr className="divider" />
+        {entries.length === 0 ? (
+          <p className="meta" style={{ fontSize: "0.84rem" }}>No history yet for this exercise.</p>
+        ) : (
+          <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {ordered.map((e, i) => {
+              const heaviestThisSession = Math.max(0, ...e.sets.map((s) => s.weight_lb));
+              const totalVolume = e.sets.reduce((acc, s) => acc + (s.weight_lb * (parseFloat(s.reps) || 0)), 0);
+              // Was this the heaviest at the time? PR star if no later session had a higher max.
+              const laterEntries = entries.slice(entries.length - 1 - (ordered.length - 1 - i) + 1);
+              const wasPRAtTime = (() => {
+                // Compute prior heaviest at the moment of this entry (exclusive)
+                const priorList = entries.slice(0, entries.length - 1 - (ordered.length - 1 - i));
+                if (priorList.length === 0) return false; // first ever → not flagged as PR
+                const priorMax = Math.max(0, ...priorList.flatMap((p) => p.sets.map((s) => s.weight_lb)));
+                return heaviestThisSession > priorMax;
+              })();
+              return (
+                <div key={e.recorded_at + "-" + i} style={{ borderLeft: "3px solid var(--line)", paddingLeft: "0.75rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.84rem" }}>
+                      {new Date(e.recorded_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                      {wasPRAtTime && (
+                        <span title="Personal record at the time" style={{ marginLeft: "0.4rem", color: "var(--amber)" }}>★</span>
+                      )}
+                    </div>
+                    <span className="meta" style={{ fontSize: "0.72rem" }}>
+                      heaviest {heaviestThisSession || "—"} lbs
+                      {totalVolume > 0 ? ` · vol ${totalVolume}` : ""}
+                    </span>
+                  </div>
+                  <div className="meta" style={{ fontSize: "0.7rem", marginTop: "0.1rem" }}>{e.prescription}</div>
+                  <div style={{ marginTop: "0.35rem", display: "grid", gridTemplateColumns: "auto auto auto", gap: "0.15rem 0.85rem", fontSize: "0.78rem" }}>
+                    {e.sets.map((s, si) => (
+                      <div key={si} style={{ display: "contents" }}>
+                        <span className="meta">Set {si + 1}</span>
+                        <span>{s.weight_lb > 0 ? `${s.weight_lb} lbs` : "—"}</span>
+                        <span>{s.reps ? `× ${s.reps}` : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExerciseInfoPopup({ movement, onClose }: { movement: Movement; onClose: () => void }) {
+  const cues = movement.cues ?? "—";
+  const equipment = (movement.equipment_list && movement.equipment_list.length > 0)
+    ? movement.equipment_list.join(", ")
+    : (movement.equipment ?? "—");
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
+      <div className="card" style={{ width: "min(440px, 92vw)", padding: "1.1rem 1.2rem" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <h3 style={{ margin: 0 }}>{movement.name}</h3>
+          <button className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.2rem 0.4rem" }} onClick={onClose}>✕</button>
+        </div>
+        <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          {CATEGORY_LABELS[movement.category]}
+        </div>
+        <hr className="divider" />
+        <div style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.4rem 0.85rem", fontSize: "0.85rem" }}>
+          <span className="meta">Cues</span>
+          <span>{cues}</span>
+          <span className="meta">Equipment</span>
+          <span>{equipment}{movement.equipment_specifics ? ` · ${movement.equipment_specifics}` : ""}</span>
+          {movement.muscles && movement.muscles.length > 0 && (<>
+            <span className="meta">Muscles</span>
+            <span>{movement.muscles.join(", ")}</span>
+          </>)}
+          {movement.demo_url && (<>
+            <span className="meta">Demo</span>
+            <a href={movement.demo_url} target="_blank" rel="noreferrer" style={{ color: "var(--rust)" }}>Open demo →</a>
+          </>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanExerciseBlock({
+  clientId, it, entry, completed, isCompletedView,
+  onSetWeight, onSetActualReps, onSetNotes, onSetExerciseCompleted,
+}: {
+  clientId: string;
+  it: ProgramItem;
+  entry: PlanLogEntry;
+  completed: boolean;            // per-exercise complete flag
+  isCompletedView: boolean;      // entire program is completed
+  onSetWeight: (itemUid: string, idx: number, val: string) => void;
+  onSetActualReps: (itemUid: string, idx: number, val: string) => void;
+  onSetNotes: (itemUid: string, val: string) => void;
+  onSetExerciseCompleted: (itemUid: string, val: boolean) => void;
+}) {
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const setCount = it.same_format ? it.sets : Math.max(it.sets, it.set_rows.length);
+  const { heaviest, volume } = computeExerciseSummary(entry);
+
+  // Snapshot prior history at component mount / when completion toggles. These
+  // are captured BEFORE the current completion gets logged, so PR detection
+  // compares against true prior heaviest only.
+  const priorSnapshot = useMemo(() => {
+    if (!clientId) return { lastEntry: null as ExerciseLogEntry | null, priorMax: 0, hasPrior: false };
+    return {
+      lastEntry: lastEntry(clientId, it.movement.id, it.movement.name),
+      priorMax: priorHeaviest(clientId, it.movement.id, it.movement.name),
+      hasPrior: hasHistory(clientId, it.movement.id, it.movement.name),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, it.movement.id, it.movement.name, completed]);
+
+  // Track whether the just-logged completion was a PR
+  const [pendingPR, setPendingPR] = useState(false);
+
+  // "New" badge — only when client has never done this exercise before
+  const isNew = !priorSnapshot.hasPrior && !completed;
+  // ★ PR star — only when there was a prior history AND this completion beat it
+  const wasPR = completed && pendingPR && priorSnapshot.hasPrior;
+
+  function onCompleteClick() {
+    // Build per-set log of what was actually logged
+    const loggedSets: { weight_lb: number; reps: string }[] = [];
+    for (let i = 0; i < entry.weights.length; i++) {
+      const w = parseFloat(entry.weights[i] ?? "");
+      const r = (entry.actual_reps ?? [])[i] ?? "";
+      if (!Number.isNaN(w) && w > 0) loggedSets.push({ weight_lb: w, reps: String(r || "") });
+    }
+    // Determine PR — must have prior history AND beat prior heaviest
+    const beatsPrior = priorSnapshot.hasPrior && heaviest !== null && heaviest > priorSnapshot.priorMax;
+    setPendingPR(!!beatsPrior);
+    // Append a log entry for the timeline (full per-set record)
+    if (loggedSets.length > 0) {
+      const prescription = it.same_format
+        ? `${it.sets} × ${it.reps}`
+        : it.set_rows.map((r, i) => `Set ${i + 1}: ${r.reps}`).join(" / ");
+      appendLog(clientId, {
+        movement_id: it.movement.id,
+        name: it.movement.name,
+        prescription,
+        sets: loggedSets,
+      });
+    }
+    // Record heaviest weight into the learned list when collapsing
+    if (heaviest !== null && heaviest > 0) {
+      let bestIdx = -1;
+      for (let i = 0; i < entry.weights.length; i++) {
+        const w = parseFloat(entry.weights[i] ?? "");
+        if (!Number.isNaN(w) && w === heaviest) { bestIdx = i; break; }
+      }
+      const repsAt = bestIdx >= 0
+        ? (entry.actual_reps?.[bestIdx] || (it.same_format ? it.reps : (it.set_rows[bestIdx]?.reps ?? it.reps)))
+        : (it.same_format ? it.reps : it.reps);
+      recordLearned(clientId, {
+        movement_id: it.movement.id,
+        name: it.movement.name,
+        category: it.movement.category,
+        weight_lb: heaviest,
+        reps: String(repsAt),
+      });
+    } else {
+      markPerformed(clientId, { movement_id: it.movement.id, name: it.movement.name, category: it.movement.category });
+    }
+    onSetExerciseCompleted(it.uid, true);
+  }
+
+  // ── Collapsed summary view ─────────────────────────────────────────────
+  if (completed) {
+    return (
+      <div style={{ borderLeft: `3px solid ${wasPR ? "var(--amber)" : "var(--sage)"}`, paddingLeft: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap" }}>
+        {logOpen && <ExerciseLogModal clientId={clientId} movement={it.movement} onClose={() => setLogOpen(false)} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontWeight: 700, fontSize: "0.92rem" }}>
+            {wasPR && <span title="Personal record" style={{ color: "var(--amber)", marginRight: "0.3rem" }}>★</span>}
+            {it.movement.name}
+          </span>
+          <span className="badge badge-sage" style={{ marginLeft: "0.5rem", fontSize: "0.58rem" }}>✓ done</span>
+          {wasPR && <span className="badge badge-amber" style={{ marginLeft: "0.3rem", fontSize: "0.58rem" }}>PR</span>}
+          <div className="meta" style={{ fontSize: "0.76rem", marginTop: "0.2rem", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            <span>
+              {heaviest !== null ? `Heaviest weight logged: ${heaviest} lbs` : "No weight logged"}
+              {volume !== null ? ` · Volume: ${volume} lbs` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setLogOpen(true)}
+              className="no-print"
+              style={{ background: "none", border: "none", color: "var(--rust)", cursor: "pointer", fontSize: "0.72rem", padding: 0, textDecoration: "underline" }}
+            >View log →</button>
+          </div>
+        </div>
+        {!isCompletedView && (
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem" }}
+            onClick={() => onSetExerciseCompleted(it.uid, false)}
+          >Reopen</button>
+        )}
+      </div>
+    );
+  }
+
+  // ── Full editable view ─────────────────────────────────────────────────
+  return (
+    <div style={{ borderLeft: "3px solid var(--line)", paddingLeft: "0.75rem" }}>
+      {infoOpen && <ExerciseInfoPopup movement={it.movement} onClose={() => setInfoOpen(false)} />}
+      {logOpen && <ExerciseLogModal clientId={clientId} movement={it.movement} onClose={() => setLogOpen(false)} />}
+      {/* Header: name + info button + new badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.45rem", flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>{it.movement.name}</span>
+        <button
+          type="button"
+          onClick={() => setInfoOpen(true)}
+          title="Movement details"
+          className="no-print"
+          style={{
+            background: "transparent", border: "1px solid var(--line)", borderRadius: 999,
+            width: 20, height: 20, lineHeight: 1, color: "var(--rust)", cursor: "pointer",
+            fontSize: "0.75rem", fontWeight: 700,
+          }}
+        >i</button>
+        {priorSnapshot.hasPrior && (
+          <button
+            type="button"
+            onClick={() => setLogOpen(true)}
+            className="no-print"
+            style={{
+              background: "none", border: "none", color: "var(--rust)",
+              cursor: "pointer", fontSize: "0.72rem", padding: 0, textDecoration: "underline",
+            }}
+          >View log →</button>
+        )}
+        {isNew && (
+          <span style={{
+            background: "var(--clay)", color: "#fff", fontSize: "0.58rem", fontWeight: 700,
+            padding: "0.05rem 0.4rem", borderRadius: 3, letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}>New</span>
+        )}
+        {it.is_warmup && <span className="badge" style={{ fontSize: "0.6rem" }}>Warmup</span>}
+      </div>
+
+      {/* Sets */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.5rem" }}>
+        {Array.from({ length: setCount }).map((_, si) => {
+          const prescribedReps = it.same_format ? it.reps : (it.set_rows[si]?.reps ?? it.reps);
+          const w = entry.weights[si] ?? "";
+          const ar = (entry.actual_reps ?? [])[si] ?? "";
+          // Previous set reference — same set index from the most recent prior log
+          const prevSet = priorSnapshot.lastEntry?.sets[si] ?? null;
+          return (
+            <div key={si} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "0.78rem", color: "var(--muted)", minWidth: 40 }}>Set {si + 1}</span>
+              <span style={{ fontSize: "0.82rem", minWidth: 64 }}>{prescribedReps} reps</span>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                placeholder="actual"
+                value={ar}
+                onChange={(e) => onSetActualReps(it.uid, si, e.target.value)}
+                style={{ width: 56, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
+                title="Actual reps performed"
+              />
+              <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>reps</span>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                placeholder="lbs"
+                value={w}
+                onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
+                style={{ width: 64, fontSize: "0.78rem", padding: "0.16rem 0.3rem" }}
+              />
+              <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>lbs</span>
+              {prevSet && prevSet.weight_lb > 0 && (
+                <span style={{ fontSize: "0.7rem", color: "#a89e90", fontStyle: "italic" }} title="Last time this set">
+                  prev: {prevSet.weight_lb} lbs{prevSet.reps ? ` × ${prevSet.reps}` : ""}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <textarea
+        className="textarea"
+        rows={2}
+        placeholder="Notes…"
+        value={entry.notes}
+        onChange={(e) => onSetNotes(it.uid, e.target.value)}
+        style={{ fontSize: "0.8rem", padding: "0.25rem 0.4rem", resize: "vertical", width: "100%" }}
+      />
+
+      {!isCompletedView && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.4rem" }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: "0.72rem", padding: "0.2rem 0.55rem", color: "var(--sage)", borderColor: "var(--sage)" }}
+            onClick={onCompleteClick}
+          >✓ Complete</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanDayBlock({
+  clientId, day, planLog, completed, isCompletedView, dayCompleted, onToggleDayCompleted,
+  onSetWeight, onSetActualReps, onSetNotes, onSetExerciseCompleted,
+  showCompleteDayButton,
+}: {
+  clientId: string;
+  day: ProgramDay;
+  planLog: PlanLog;
+  completed: boolean;
+  isCompletedView: boolean;
+  dayCompleted: boolean;
+  onToggleDayCompleted: (uid: string) => void;
+  onSetWeight: (itemUid: string, idx: number, val: string) => void;
+  onSetActualReps: (itemUid: string, idx: number, val: string) => void;
+  onSetNotes: (itemUid: string, val: string) => void;
+  onSetExerciseCompleted: (itemUid: string, val: boolean) => void;
+  showCompleteDayButton: boolean;
+}) {
+  return (
+    <div className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <h3 style={{ margin: 0 }}>{day.title}</h3>
+        {dayCompleted && <span className="badge badge-sage" style={{ fontSize: "0.62rem" }}>✓ Day complete</span>}
+      </div>
+
+      {dayCompleted ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+          {day.items.map((it) => {
+            const { heaviest, volume } = computeExerciseSummary(planLog[it.uid]);
+            return (
+              <div key={it.uid} className="meta" style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", fontSize: "0.76rem", paddingLeft: "0.4rem", borderLeft: "2px solid var(--sage)" }}>
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>{it.movement.name}</span>
+                <span>
+                  {heaviest !== null ? `${heaviest} lbs` : "—"}
+                  {volume !== null ? ` · vol ${volume}` : ""}
+                </span>
+              </div>
+            );
+          })}
+          {!isCompletedView && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.4rem" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: "0.72rem", padding: "0.2rem 0.55rem" }}
+                onClick={() => onToggleDayCompleted(day.uid)}
+              >Reopen day</button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {day.items.map((it) => (
+              <PlanExerciseBlock
+                key={it.uid}
+                clientId={clientId}
+                it={it}
+                entry={planLog[it.uid] ?? { weights: [], actual_reps: [], notes: "" }}
+                completed={!!planLog[it.uid]?.completed}
+                isCompletedView={isCompletedView}
+                onSetWeight={onSetWeight}
+                onSetActualReps={onSetActualReps}
+                onSetNotes={onSetNotes}
+                onSetExerciseCompleted={onSetExerciseCompleted}
+              />
+            ))}
+          </div>
+          {showCompleteDayButton && !isCompletedView && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.85rem" }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ fontSize: "0.78rem" }}
+                onClick={() => onToggleDayCompleted(day.uid)}
+              >✓ Complete Day</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function SessionPlanView({
+  clientId,
   days,
   programKind,
   clientName,
   sessionTitle,
   planLog,
   completed,
+  completedDays,
+  onToggleDayCompleted,
   summaryOpen,
   onSummaryToggle,
   onSetWeight,
+  onSetActualReps,
   onSetNotes,
+  onSetExerciseCompleted,
   onEdit,
   onComplete,
+  feedbackId,
+  feedbackTick,
+  onSavePre,
+  onSavePost,
+  onSavePerDay,
 }: {
+  clientId: string;
   days: ProgramDay[];
   programKind: ProgramKind;
   clientName: string;
   sessionTitle: string;
   planLog: PlanLog;
   completed: boolean;
+  completedDays: Set<string>;
+  onToggleDayCompleted: (uid: string) => void;
   summaryOpen: boolean;
   onSummaryToggle: () => void;
   onSetWeight: (itemUid: string, idx: number, val: string) => void;
+  onSetActualReps: (itemUid: string, idx: number, val: string) => void;
   onSetNotes: (itemUid: string, val: string) => void;
+  onSetExerciseCompleted: (itemUid: string, val: boolean) => void;
   onEdit: () => void;
   onComplete: () => void;
+  feedbackId: string;
+  feedbackTick: number;
+  onSavePre: (a: { feel: string; sore: string }) => void;
+  onSavePost: (a: PostAnswersDraft) => void;
+  onSavePerDay: (dayUid: string, a: PostAnswersDraft) => void;
 }) {
+  const showCompleteDayButton = days.length > 1;
+  // Re-read feedback whenever the tick bumps or the id changes.
+  const feedback: SessionFeedback = useMemo(() => readFeedback(feedbackId), [feedbackId, feedbackTick]);
+  // When the user just hit Complete Program/Day, show a feedback form before
+  // collapsing to the summary view. After submit, the read-only display takes over.
+  const [showProgramFeedbackForm, setShowProgramFeedbackForm] = useState(false);
+  const [pendingDayFeedback, setPendingDayFeedback] = useState<string | null>(null);
+
+  // Auto-open program feedback form the first time we hit completed view.
+  useEffect(() => {
+    if (completed && !feedback.post) setShowProgramFeedbackForm(true);
+  }, [completed, feedback.post]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className="plan-print" style={{ display: "flex", flexDirection: "column", gap: "1rem", paddingTop: "1rem" }}>
       {/* ─── Header ─── */}
       <div className="card" style={{ borderLeft: "4px solid var(--rust)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -2172,14 +2745,28 @@ function SessionPlanView({
             <h2 style={{ margin: "0.35rem 0 0.15rem" }}>{sessionTitle}</h2>
             <div className="meta" style={{ fontSize: "0.82rem" }}>{clientName}</div>
           </div>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ fontSize: "0.78rem" }}
-            onClick={onEdit}
-          >{programKind === "in_gym" ? "✎ Edit Session" : "✎ Edit Program"}</button>
+          <div style={{ display: "flex", gap: "0.4rem" }} className="no-print">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.78rem" }}
+              onClick={() => window.print()}
+              title="Print this plan for the floor"
+            >🖨 Print</button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.78rem" }}
+              onClick={onEdit}
+            >{programKind === "in_gym" ? "✎ Edit Session" : "✎ Edit Program"}</button>
+          </div>
         </div>
       </div>
+
+      {/* ─── Pre-session check-in (in_gym only) ─── */}
+      {programKind === "in_gym" && feedbackId && (
+        <PreSessionForm initial={feedback.pre} onSubmit={onSavePre} />
+      )}
 
       {/* ─── Post Session Summary (completed only) ─── */}
       {completed && (
@@ -2202,82 +2789,75 @@ function SessionPlanView({
 
       {/* ─── Days ─── */}
       {days.map((day) => (
-        <div key={day.uid} className="card">
-          <h3 style={{ marginBottom: "0.75rem" }}>{day.title}</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {day.items.map((it) => {
-              const entry = planLog[it.uid] ?? { weights: [], notes: "" };
-              const setCount = it.same_format ? it.sets : Math.max(it.sets, it.set_rows.length);
-              return (
-                <div key={it.uid} style={{ borderLeft: "3px solid var(--line)", paddingLeft: "0.75rem" }}>
-                  {/* Exercise name */}
-                  <div style={{ fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.45rem" }}>
-                    {it.movement.name}
-                    {it.is_warmup && <span className="badge" style={{ marginLeft: "0.5rem", fontSize: "0.6rem" }}>Warmup</span>}
-                  </div>
-                  {/* Sets */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.5rem" }}>
-                    {Array.from({ length: setCount }).map((_, si) => {
-                      const reps = it.same_format ? it.reps : (it.set_rows[si]?.reps ?? it.reps);
-                      const w = entry.weights[si] ?? "";
-                      return (
-                        <div key={si} style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: "0.78rem", color: "var(--muted)", minWidth: 40 }}>Set {si + 1}</span>
-                          <span style={{ fontSize: "0.82rem" }}>{reps} reps</span>
-                          {completed ? (
-                            <span style={{ fontSize: "0.82rem", color: w ? "var(--ink)" : "var(--muted)" }}>
-                              {w ? `${w} lbs` : "—"}
-                            </span>
-                          ) : (
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                              <input
-                                className="input"
-                                type="number"
-                                min={0}
-                                placeholder="lbs"
-                                value={w}
-                                onChange={(e) => onSetWeight(it.uid, si, e.target.value)}
-                                style={{ width: 70, fontSize: "0.8rem", padding: "0.18rem 0.35rem" }}
-                              />
-                              <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>lbs</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {/* Notes */}
-                  {completed ? (
-                    entry.notes ? (
-                      <div style={{ fontSize: "0.8rem", color: "var(--muted)", fontStyle: "italic", marginTop: "0.25rem" }}>{entry.notes}</div>
-                    ) : null
-                  ) : (
-                    <textarea
-                      className="textarea"
-                      rows={2}
-                      placeholder="Notes…"
-                      value={entry.notes}
-                      onChange={(e) => onSetNotes(it.uid, e.target.value)}
-                      style={{ fontSize: "0.8rem", padding: "0.25rem 0.4rem", resize: "vertical", width: "100%" }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        <div key={day.uid}>
+          <PlanDayBlock
+            clientId={clientId}
+            day={day}
+            planLog={planLog}
+            completed={completed}
+            isCompletedView={completed}
+            dayCompleted={completedDays.has(day.uid)}
+            onToggleDayCompleted={(uid) => {
+              const wasCompleted = completedDays.has(uid);
+              onToggleDayCompleted(uid);
+              // If we just marked it complete, prompt for feedback (only if not already submitted)
+              if (!wasCompleted && !feedback.per_day?.[uid]) {
+                setPendingDayFeedback(uid);
+              }
+            }}
+            onSetWeight={onSetWeight}
+            onSetActualReps={onSetActualReps}
+            onSetNotes={onSetNotes}
+            onSetExerciseCompleted={onSetExerciseCompleted}
+            showCompleteDayButton={showCompleteDayButton}
+          />
+          {/* Per-day feedback form / answers display */}
+          {showCompleteDayButton && completedDays.has(day.uid) && (
+            pendingDayFeedback === day.uid && !feedback.per_day?.[day.uid] ? (
+              <div style={{ marginTop: "0.6rem" }}>
+                <PostFeedbackForm
+                  title="Day Feedback"
+                  onSubmit={(a) => { onSavePerDay(day.uid, a); setPendingDayFeedback(null); }}
+                  onCancel={() => setPendingDayFeedback(null)}
+                />
+              </div>
+            ) : feedback.per_day?.[day.uid] ? (
+              <div style={{ marginTop: "0.6rem" }}>
+                <PostAnswersDisplay answers={feedback.per_day[day.uid]} title="Day Feedback" />
+              </div>
+            ) : null
+          )}
         </div>
       ))}
 
       {/* ─── Bottom action ─── */}
       {!completed && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
-          <button className="btn btn-primary" onClick={onComplete}>Complete Program</button>
+          <button className="btn btn-primary" onClick={onComplete}>
+            {programKind === "in_gym" && days.length === 1 ? "Complete Session" : "Complete Program"}
+          </button>
         </div>
       )}
       {completed && (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
           <span style={{ alignSelf: "center", fontSize: "0.82rem", color: "var(--sage)", fontWeight: 600 }}>✓ Completed</span>
         </div>
+      )}
+
+      {/* ─── Program/Session feedback ─── */}
+      {completed && (
+        showProgramFeedbackForm && !feedback.post ? (
+          <PostFeedbackForm
+            title={programKind === "in_gym" && days.length === 1 ? "Session Feedback" : "Program Feedback"}
+            onSubmit={(a) => { onSavePost(a); setShowProgramFeedbackForm(false); }}
+            onCancel={() => setShowProgramFeedbackForm(false)}
+          />
+        ) : feedback.post ? (
+          <PostAnswersDisplay
+            answers={feedback.post}
+            title={programKind === "in_gym" && days.length === 1 ? "Session Feedback" : "Program Feedback"}
+          />
+        ) : null
       )}
     </div>
   );

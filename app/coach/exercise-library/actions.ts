@@ -47,7 +47,7 @@ export async function addMovement(
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/exercise-library");
-  revalidatePath("/coach/build-program");
+  revalidatePath("/coach/programming/build");
   return { ok: true, id: data.id };
 }
 
@@ -81,7 +81,7 @@ export async function updateMovement(
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/exercise-library");
-  revalidatePath("/coach/build-program");
+  revalidatePath("/coach/programming/build");
   return { ok: true };
 }
 
@@ -104,6 +104,6 @@ export async function archiveMovement(
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/exercise-library");
-  revalidatePath("/coach/build-program");
+  revalidatePath("/coach/programming/build");
   return { ok: true };
 }

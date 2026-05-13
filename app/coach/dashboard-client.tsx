@@ -514,7 +514,7 @@ export default function DashboardClient({
                                 </div>
                               )}
                               <Link
-                                href={`/coach/build-program?tab=session&client=${a.client_id}&appt=${a.id}`}
+                                href={`/coach/programming/build?tab=session&client=${a.client_id}&appt=${a.id}`}
                                 style={{
                                   fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
                                   borderRadius: 3,

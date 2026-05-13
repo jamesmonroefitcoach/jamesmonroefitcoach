@@ -7,6 +7,7 @@ import { pastProgramsForClient } from "@/lib/programs";
 import { fmtMoney, fmtDate, fmtSessionAgo, fmtSessionAway } from "@/lib/format";
 import { addProspect, deleteProspect, updateProspect, quickUpdateClient, type ProspectInput } from "./actions";
 import type { NextSessionStatus } from "./page";
+import TierBoardModal from "./tier-board-modal";
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -263,7 +264,7 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
         <NextSessionCell iso={c.next_session_at} />
         {c.next_session_at && (
           <Link
-            href={`/coach/build-program?tab=session&client=${c.id}${nextStatus ? `&appt=${nextStatus.apptId}` : ""}`}
+            href={`/coach/programming/build?tab=session&client=${c.id}${nextStatus ? `&appt=${nextStatus.apptId}` : ""}`}
             style={{
               display: "inline-block", marginTop: "0.3rem",
               fontSize: "0.7rem", fontWeight: 600,
@@ -292,7 +293,7 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
           ) : <span style={{ color: "var(--muted)" }}>No program</span>}
         </div>
         <Link
-          href={`/coach/build-program?tab=program&client=${c.id}`}
+          href={`/coach/programming/build?tab=program&client=${c.id}`}
           style={{
             fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
             borderRadius: 3, border: "1px solid var(--sage)", color: "var(--sage)",
@@ -621,6 +622,7 @@ function RosterSection({ title, count, defaultOpen, extra, children }: {
 
 export default function ClientsClient({ clients, prospects, nextSessionStatus }: { clients: ClientRow[]; prospects: Prospect[]; nextSessionStatus: NextSessionStatus }) {
   const [showModal, setShowModal] = useState(false);
+  const [tierBoardOpen, setTierBoardOpen] = useState(false);
   const [, startDel] = useTransition();
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -665,6 +667,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
   return (
     <main className="shell">
       {showModal && <ProspectModal onClose={() => setShowModal(false)} />}
+      {tierBoardOpen && <TierBoardModal clients={active} onClose={() => setTierBoardOpen(false)} />}
 
       <header className="page-hdr">
         <div>
@@ -704,17 +707,28 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
         count={active.length}
         defaultOpen={true}
         extra={
-          <Link
-            href="/signup"
-            className="btn btn-ghost"
-            style={{ fontSize: "0.72rem", padding: "0.15rem 0.5rem", marginLeft: "0.25rem" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            + Add
-          </Link>
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.72rem", padding: "0.15rem 0.5rem", marginLeft: "0.25rem" }}
+              onClick={(e) => { e.stopPropagation(); setTierBoardOpen(true); }}
+              title="Drag clients between tiers"
+            >
+              ⇆ Edit Tiering
+            </button>
+            <Link
+              href="/signup"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.72rem", padding: "0.15rem 0.5rem", marginLeft: "0.25rem" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              + Add
+            </Link>
+          </>
         }
       >
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
+        <div className="card" style={{ padding: 0, overflowX: "auto", overflowY: "visible" }}>
           <table className="table table-sticky-head">
             <thead>
               <tr>
@@ -753,7 +767,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
             <p className="meta">No past clients.</p>
           </div>
         ) : (
-          <div className="card" style={{ padding: 0, overflow: "auto" }}>
+          <div className="card" style={{ padding: 0, overflowX: "auto", overflowY: "visible" }}>
             <table className="table table-sticky-head">
               <thead>
                 <tr>
@@ -794,7 +808,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
             <p className="meta">No potential new clients yet.</p>
           </div>
         ) : (
-          <div className="card" style={{ padding: 0, overflow: "auto" }}>
+          <div className="card" style={{ padding: 0, overflowX: "auto", overflowY: "visible" }}>
             <table className="table table-sticky-head">
               <thead>
                 <tr>

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import CheckInForm from "./check-in-form";
+import SessionFollowups from "./session-followups";
 
 export default async function ClientCheckInsPage() {
   const user = await getSessionUser();
@@ -15,6 +16,7 @@ export default async function ClientCheckInsPage() {
         <p className="meta">This replaces the Google Form survey. James reviews these on your check-in cadence.</p>
       </header>
       <hr className="divider" />
+      <SessionFollowups clientId={user.id} />
       <CheckInForm />
     </main>
   );
