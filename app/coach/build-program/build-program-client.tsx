@@ -2778,9 +2778,9 @@ function ExerciseCard({
         const INP: React.CSSProperties = { fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center" };
         const activeFields: OptionalField[] = it.optional_fields ?? [];
         const optColStr = activeFields.map((f) => OPTIONAL_FIELD_CONFIG[f].width).join(" ");
-        // Tightened column widths so the grid fits (or barely scrolls) on a 360px phone
-        const SF_COLS = `32px 76px 62px 60px 1fr 68px 26px${optColStr ? ` ${optColStr}` : ""}`;
-        const PS_COLS = `24px 76px 62px 60px 1fr 68px 26px${optColStr ? ` ${optColStr}` : ""}`;
+        // Column order: Sets | Reps | Spec | Equip | Exertion | [opt cols] | + | Notes(1fr)
+        const SF_COLS = `32px 76px 62px 60px 68px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        const PS_COLS = `24px 76px 62px 60px 68px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
 
         function removeOptField(f: OptionalField) {
           onPatch({ optional_fields: activeFields.filter((x) => x !== f) });
@@ -2804,7 +2804,7 @@ function ExerciseCard({
             {it.same_format ? (
               /* ── Same-format grid: header row + single input row ── */
               <div style={{ display: "grid", gridTemplateColumns: SF_COLS, gap: "0.35rem", alignItems: "center", minWidth: "min-content" }}>
-                {/* Core headers */}
+                {/* Headers: Sets | Reps | Spec | Equip | Exertion | [opt] | + | Notes */}
                 <span style={HDR}>Sets</span>
                 <span style={HDR}>Reps</span>
                 <span style={HDR}>
@@ -2815,9 +2815,7 @@ function ExerciseCard({
                   <span className="hdr-full">Equipment</span>
                   <span className="hdr-short">Equip</span>
                 </span>
-                <span style={HDR}>Notes</span>
                 <span style={HDR}>Exertion</span>
-                {/* Optional field headers (each has a × to remove) */}
                 {activeFields.map((f) => (
                   <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                     <button
@@ -2829,9 +2827,9 @@ function ExerciseCard({
                     {OPTIONAL_FIELD_CONFIG[f].shortLabel}
                   </span>
                 ))}
-                {/* placeholder to keep column count consistent with data row */}
-                <span />
-                {/* Core inputs */}
+                <span />{/* + placeholder */}
+                <span style={{ ...HDR, textAlign: "left" }}>Notes</span>
+                {/* Data row */}
                 <input className="input" style={INP} type="number" min={1} max={20}
                   value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 0 })} />
                 <RepsInput
@@ -2844,13 +2842,10 @@ function ExerciseCard({
                   onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
                   compact
                 />
-                <input className="input" style={{ fontSize: "0.72rem", padding: "0.16rem 0.2rem", width: "100%", boxSizing: "border-box" }}
-                  placeholder="Notes…" value={it.notes ?? ""} onChange={(e) => onPatch({ notes: e.target.value })} />
                 <select className="select" style={INP}
                   value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
                   {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-                {/* Optional field inputs */}
                 {activeFields.map((f) => (
                   <OptionalFieldInput
                     key={`inp-${f}`}
@@ -2863,6 +2858,8 @@ function ExerciseCard({
                 <span style={{ alignSelf: "center", textAlign: "center" }}>
                   <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
                 </span>
+                <input className="input" style={{ fontSize: "0.72rem", padding: "0.16rem 0.2rem", width: "100%", boxSizing: "border-box" }}
+                  placeholder="Notes…" value={it.notes ?? ""} onChange={(e) => onPatch({ notes: e.target.value })} />
               </div>
             ) : (
               /* ── Per-set: sets count + grid with header row + one row per set ── */
@@ -2873,8 +2870,8 @@ function ExerciseCard({
                     value={it.sets} onChange={(e) => onPatch({ sets: Number(e.target.value) || 1 })} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: PS_COLS, gap: "0.3rem", alignItems: "center", minWidth: "min-content" }}>
-                  {/* Headers — single row above all set rows */}
-                  <span style={HDR}></span>{/* blank over S1/S2 labels */}
+                  {/* Headers: blank | Reps | Spec | Equip | Exertion | [opt] | + | Notes */}
+                  <span style={HDR}></span>
                   <span style={HDR}>Reps</span>
                   <span style={HDR}>
                     <span className="hdr-full">Specification</span>
@@ -2884,9 +2881,7 @@ function ExerciseCard({
                     <span className="hdr-full">Equipment</span>
                     <span className="hdr-short">Equip</span>
                   </span>
-                  <span style={HDR}>Notes</span>
                   <span style={HDR}>Exertion</span>
-                  {/* Optional field headers */}
                   {activeFields.map((f) => (
                     <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                       <button
@@ -2898,8 +2893,8 @@ function ExerciseCard({
                       {OPTIONAL_FIELD_CONFIG[f].shortLabel}
                     </span>
                   ))}
-                  {/* placeholder to keep column count consistent with set rows */}
-                  <span />
+                  <span />{/* + placeholder */}
+                  <span style={{ ...HDR, textAlign: "left" }}>Notes</span>
                   {/* Set rows */}
                   {it.set_rows.map((row, si) => (
                     <>
@@ -2919,13 +2914,10 @@ function ExerciseCard({
                         onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
                         compact
                       />
-                      <input key={`notes-${si}`} className="input" style={{ fontSize: "0.71rem", padding: "0.16rem 0.2rem", width: "100%", boxSizing: "border-box" }}
-                        placeholder="Notes…" value={row.notes ?? ""} onChange={(e) => onPatchSetRow(si, { notes: e.target.value })} />
                       <select key={`exr-${si}`} className="select" style={INP}
                         value={row.exertion_score} onChange={(e) => onPatchSetRow(si, { exertion_score: Number(e.target.value) })}>
                         {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
-                      {/* Optional field inputs per set */}
                       {activeFields.map((f) => (
                         <OptionalFieldInput
                           key={`opt-${f}-${si}`}
@@ -2938,6 +2930,8 @@ function ExerciseCard({
                       <span key={`plus-sp-${si}`} style={{ alignSelf: "center", textAlign: "center" }}>
                         <AddOptionalFieldButton activeFields={activeFields} onAdd={addOptField} />
                       </span>
+                      <input key={`notes-${si}`} className="input" style={{ fontSize: "0.71rem", padding: "0.16rem 0.2rem", width: "100%", boxSizing: "border-box" }}
+                        placeholder="Notes…" value={row.notes ?? ""} onChange={(e) => onPatchSetRow(si, { notes: e.target.value })} />
                     </>
                   ))}
                 </div>
