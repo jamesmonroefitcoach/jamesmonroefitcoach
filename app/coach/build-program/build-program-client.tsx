@@ -2378,73 +2378,23 @@ function useClickOutsideTwo(
   }, [active, onClose, refA, refB]);
 }
 
-// ─── Variation dropdown (fixed-position, viewport-clamped) ───────────────────
+// ─── Variation select — native, matches Exertion visually ───────────────────
 function VariationDropdown({ value, onChange, style }: {
   value: Variation[];
   onChange: (v: Variation[]) => void;
   style?: React.CSSProperties;
 }) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const selected = value[0] ?? null;
-  const PANEL_W = 128;
-
-  useClickOutsideTwo(btnRef, panelRef, open, () => setOpen(false));
-
-  function toggle() {
-    if (open) { setOpen(false); return; }
-    const rect = btnRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPos({
-      top: rect.bottom + 2,
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - PANEL_W - 8)),
-    });
-    setOpen(true);
-  }
-
-  const triggerStyle: React.CSSProperties = {
-    fontSize: "0.72rem", padding: "0.14rem 0.22rem 0.14rem 0.1rem", width: "100%", minWidth: 0,
-    cursor: "pointer", fontFamily: "inherit",
-    background: "#fff", color: selected ? "var(--ink)" : "var(--muted)",
-    border: "1px solid var(--line)", borderRadius: 3,
-    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2,
-    ...style,
-  };
-
+  const selected = value[0] ?? "";
   return (
-    <div style={{ position: "relative", minWidth: 0 }}>
-      <button ref={btnRef} type="button" onClick={toggle} style={triggerStyle}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-          {selected ? VARIATION_LABELS[selected] : "—"}
-        </span>
-        <span style={{ fontSize: "0.55rem", color: "var(--muted)", flexShrink: 0, lineHeight: 1 }}>▾</span>
-      </button>
-      {open && (
-        <div ref={panelRef} style={{
-          position: "fixed", top: pos.top, left: pos.left, zIndex: 1000,
-          background: "var(--paper)", border: "1px solid var(--line)",
-          borderRadius: 3, boxShadow: "0 4px 12px rgba(0,0,0,0.14)",
-          minWidth: PANEL_W,
-        }}>
-          {([null, ...VARIATIONS] as (Variation | null)[]).map((v) => (
-            <button key={v ?? "__none"} type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(v ? [v] : []); setOpen(false); }}
-              style={{
-                display: "block", width: "100%", textAlign: "left", border: "none",
-                padding: "0.3rem 0.65rem", fontSize: "0.8rem", cursor: "pointer",
-                fontFamily: "inherit",
-                background: selected === v ? "rgba(0,0,0,0.07)" : "transparent",
-                fontWeight: selected === v ? 600 : undefined,
-                color: v ? "var(--ink)" : "var(--muted)",
-              }}
-            >{v ? VARIATION_LABELS[v] : "—"}</button>
-          ))}
-        </div>
-      )}
-    </div>
+    <select
+      className="select"
+      value={selected}
+      onChange={(e) => onChange(e.target.value ? [e.target.value as Variation] : [])}
+      style={{ fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center", width: "100%", minWidth: 0, ...style }}
+    >
+      <option value="">—</option>
+      {VARIATIONS.map((v) => <option key={v} value={v}>{VARIATION_LABELS[v]}</option>)}
+    </select>
   );
 }
 
@@ -3243,21 +3193,18 @@ function EquipmentMultiSelect({
     : value.length === 1 ? (EQUIPMENT_OPTIONS.find((o) => o.value === value[0])?.label ?? value[0])
     : `${value.length} equip.`;
 
-  const triggerStyle: React.CSSProperties = {
-    fontSize: "0.72rem", padding: "0.14rem 0.22rem 0.14rem 0.1rem", width: "100%", minWidth: 0,
-    cursor: "pointer", fontFamily: "inherit",
-    background: "#fff", color: value.length ? "var(--ink)" : "var(--muted)",
-    border: "1px solid var(--line)", borderRadius: 3,
-    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2,
-  };
-
   return (
     <div style={{ position: "relative", minWidth: 0 }}>
-      <button ref={btnRef} type="button" onClick={toggleOpen} style={triggerStyle}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-          {label}
-        </span>
-        <span style={{ fontSize: "0.55rem", color: "var(--muted)", flexShrink: 0, lineHeight: 1 }}>▾</span>
+      <button
+        ref={btnRef} type="button" onClick={toggleOpen}
+        className="select"
+        style={{
+          fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center",
+          width: "100%", minWidth: 0, display: "block", boxSizing: "border-box",
+          cursor: "pointer", color: value.length ? "var(--ink)" : "var(--muted)",
+        }}
+      >
+        {label}
       </button>
       {open && (
         <div ref={panelRef} style={{
