@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { MovementRow } from "@/lib/data";
 import {
   EQUIPMENT_OPTIONS, LIBRARY_HIERARCHY, MOVEMENT_LIBRARY,
+  groupLabelForSubcategory,
   type Category, type LibraryNode, type LibraryGroup,
 } from "@/lib/programs";
 import { addMovement, updateMovement, archiveMovement, type MovementInput } from "./actions";
@@ -408,23 +409,6 @@ function fieldOr<T extends string | null | undefined>(v: T): React.ReactNode {
 function listFieldOr(list: string[] | null | undefined, map?: (v: string) => string): React.ReactNode {
   if (!list || list.length === 0) return NO_DATA;
   return list.map((v) => (map ? map(v) : v)).join(", ");
-}
-
-// Look up which top-level group (Upper / Middle / Lower / Conditioning /
-// Mobility / etc.) contains a node whose label matches the given
-// subcategory. Returns the group label or null if no match.
-function groupLabelForSubcategory(sub: string | null | undefined): string | null {
-  if (!sub) return null;
-  const target = sub.trim().toLowerCase();
-  for (const g of LIBRARY_HIERARCHY) {
-    for (const n of g.nodes) {
-      if (n.label.trim().toLowerCase() === target) return g.label;
-      for (const c of n.children ?? []) {
-        if (c.label.trim().toLowerCase() === target) return g.label;
-      }
-    }
-  }
-  return null;
 }
 
 function ExerciseDropdown({ m, onEdit, onArchive }: {

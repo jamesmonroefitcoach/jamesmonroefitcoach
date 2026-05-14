@@ -14,6 +14,7 @@ import {
   hierarchyLeaves,
   leafToMovement,
   REST_MOVEMENT,
+  groupLabelForSubcategory,
   type Category,
   type Movement,
   type Equipment,
@@ -4240,9 +4241,23 @@ export function ExerciseCard({
             <span>{it.movement.name}</span>
             {it.is_warmup ? <span style={{ fontSize: "0.6rem", color: "var(--rust)", fontWeight: 400 }}>warm-up</span> : null}
           </div>
-          <div className="meta" style={{ fontSize: "0.69rem" }}>
-            {CATEGORY_LABELS[it.movement.category]}{it.movement.cues ? ` · ${it.movement.cues}` : ""}
-          </div>
+          {(() => {
+            // Subtitle reads "Upper · Vertical Pull" — the top-level group
+            // label and the movement's subcategory. Falls back to whatever
+            // pieces are available so older library rows still display
+            // something useful.
+            const group = groupLabelForSubcategory(it.movement.subcategory);
+            const sub = it.movement.subcategory ?? null;
+            const bits: string[] = [];
+            if (group) bits.push(group);
+            if (sub) bits.push(sub);
+            if (bits.length === 0) bits.push(CATEGORY_LABELS[it.movement.category]);
+            return (
+              <div className="meta" style={{ fontSize: "0.69rem" }}>
+                {bits.join(" · ")}{it.movement.cues ? ` · ${it.movement.cues}` : ""}
+              </div>
+            );
+          })()}
           {it.last_log ? (
             <div className="meta" style={{ fontSize: "0.67rem" }}>last: {it.last_log.reps} × {it.last_log.weight_lb} lb</div>
           ) : null}

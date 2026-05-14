@@ -491,3 +491,20 @@ export function isExpiringSoon(p: PastProgramSummary): boolean {
   const tenDays = 10 * 24 * 60 * 60 * 1000;
   return end - now < tenDays && end - now > -24 * 60 * 60 * 1000;
 }
+
+/** Look up which top-level LIBRARY_HIERARCHY group (Upper / Middle / Lower /
+ *  Conditioning / Mobility / …) contains a node whose label matches the
+ *  given subcategory. Returns the group label or null if no match. */
+export function groupLabelForSubcategory(sub: string | null | undefined): string | null {
+  if (!sub) return null;
+  const target = sub.trim().toLowerCase();
+  for (const g of LIBRARY_HIERARCHY) {
+    for (const n of g.nodes) {
+      if (n.label.trim().toLowerCase() === target) return g.label;
+      for (const c of n.children ?? []) {
+        if (c.label.trim().toLowerCase() === target) return g.label;
+      }
+    }
+  }
+  return null;
+}
