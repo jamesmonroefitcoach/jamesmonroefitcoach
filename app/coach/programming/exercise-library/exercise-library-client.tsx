@@ -912,17 +912,29 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
           const activeGroup = fullHierarchy.find((g) => g.id === activeGroupId) ?? fullHierarchy[0];
           if (!activeGroup) return null;
           return (
-            <div style={{ paddingLeft: "0.5rem" }}>
-              {activeGroup.nodes.map((node) => (
-                <NodeSection
-                  key={node.id}
-                  node={node}
-                  movements={filtered}
-                  searchActive={false}
-                />
-              ))}
+            <div>
+              {/* Subcategories laid out as side-by-side columns. Each column
+                  is its own NodeSection — exercises stack vertically inside
+                  the column. Auto-fit keeps the columns sized sensibly as
+                  the viewport changes. */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: "0.85rem 1rem",
+                alignItems: "start",
+              }}>
+                {activeGroup.nodes.map((node) => (
+                  <div key={node.id} style={{ minWidth: 0 }}>
+                    <NodeSection
+                      node={node}
+                      movements={filtered}
+                      searchActive={false}
+                    />
+                  </div>
+                ))}
+              </div>
               {/* Subtle + for adding a new subcategory under this tab. */}
-              <div style={{ marginTop: "0.65rem", paddingTop: "0.5rem", borderTop: "1px dashed var(--line)", display: "flex" }}>
+              <div style={{ marginTop: "0.85rem", paddingTop: "0.5rem", borderTop: "1px dashed var(--line)", display: "flex" }}>
                 <AddInlineButton
                   title="Add a new subcategory under this tab (saved in this browser only)"
                   placeholder="Subcategory name…"
