@@ -1774,16 +1774,30 @@ function SwapModal({ groups, libraryMovements, currentLeafId, onClose, onPick }:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Printout modal — designed for "print blank, fill in pen, then photograph"
+// Printout modal — fully blank handwriting template. Coach prints it on a
+// Kindle-friendly letter-landscape PDF, writes set-by-set in the gym, and
+// later photographs it so an AI pass can parse it back into a session.
+//
+// One row per set. Headers: Exercise / Target Sets or Times / Target Reps /
+// Target Intensity / Cues / Actual Reps / Weight / Equipment / Tempo / Rest /
+// Notes. Every cell is empty so the coach handwrites everything. Name + Date
+// are pre-filled at the top from session context.
 // ─────────────────────────────────────────────────────────────────────────────
-const CATEGORY_KEY: Record<Category, string> = {
-  push: "P", pull: "Pl", hinge: "H", squat: "Sq", core: "C",
-  leg_accessory: "L", arm_accessory: "A", shoulder: "S", cardio: "Cd", mobility: "M",
-};
-const EQUIPMENT_KEY: Record<string, string> = {
-  machine: "M", bands: "B", dumbbells: "D", barbell: "Bb", bodyweight: "Bw",
-  kettlebell: "K", cable: "Cb", other: "O",
-};
+
+const PRINTOUT_BLANK_ROW_COUNT = 26;
+const PRINTOUT_COLUMNS: { label: string; width?: string }[] = [
+  { label: "Exercise" },
+  { label: "Target Sets or Times", width: "82px" },
+  { label: "Target Reps", width: "62px" },
+  { label: "Target Intensity", width: "82px" },
+  { label: "Cues", width: "150px" },
+  { label: "Actual Reps", width: "62px" },
+  { label: "Weight", width: "58px" },
+  { label: "Equipment", width: "110px" },
+  { label: "Tempo", width: "52px" },
+  { label: "Rest", width: "48px" },
+  { label: "Notes" },
+];
 
 function PrintoutModal({ slots, clientName, sessionTitle, startsAt, onClose }: {
   slots: Slot[];
@@ -1792,108 +1806,91 @@ function PrintoutModal({ slots, clientName, sessionTitle, startsAt, onClose }: {
   startsAt: string;
   onClose: () => void;
 }) {
-  const exerciseSlots = slots.filter((s): s is ExerciseSlot => s.type === "exercise");
   const date = startsAt ? new Date(startsAt) : new Date();
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.6)", zIndex: 1100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "1.5rem 1rem", overflowY: "auto" }}
       onClick={onClose}
     >
-      <div className="card" style={{ width: "min(900px, 98vw)", padding: 0, maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+      <div className="card" style={{ width: "min(1100px, 98vw)", padding: 0, maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
         <div className="no-print" style={{ padding: "0.6rem 0.85rem", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>Printout draft</h3>
+          <h3 style={{ margin: 0 }}>Printout (handwriting template)</h3>
           <div style={{ display: "flex", gap: "0.4rem" }}>
-            <button className="btn btn-primary" onClick={() => window.print()}>Print</button>
+            <button className="btn btn-primary" onClick={() => window.print()}>Print / Save PDF</button>
             <button className="btn btn-ghost" onClick={onClose}>✕</button>
           </div>
         </div>
         <div style={{ overflowY: "auto" }}>
           <div className="rework-printout" style={{
-            padding: "0.4in", fontFamily: "Georgia, serif",
-            color: "#222", background: "#fff",
-            fontSize: "0.78rem", lineHeight: 1.35,
+            padding: "0.35in", fontFamily: "Georgia, serif",
+            color: "#000", background: "#fff",
+            fontSize: "0.74rem", lineHeight: 1.3,
           }}>
-            {/* Header — small inputs in top-left */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.55rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.15rem 0.5rem", fontSize: "0.7rem", minWidth: 230 }}>
-                <span>Client:</span>
-                <span style={{ borderBottom: "1px solid #000", padding: "0 0.2rem" }}>{clientName || "____________________"}</span>
-                <span>Date:</span>
-                <span style={{ borderBottom: "1px solid #000", padding: "0 0.2rem" }}>{date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-                <span>Start:</span>
-                <span style={{ borderBottom: "1px solid #000", padding: "0 0.2rem" }}>{date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
-              </div>
-              <div style={{ textAlign: "right", fontSize: "0.66rem" }}>
-                <strong>Key:</strong> Cat — U=Upper Pl=Pull P=Push H=Hinge Sq=Squat C=Core A=Arm S=Shldr Cd=Cardio M=Mob<br />
-                Eq — M=Mach B=Bands D=DB Bb=Barbell Bw=BW K=KB Cb=Cable O=Other (specify)
+            {/* Header — Name + Date in the top-left */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "0.5rem", gap: "1rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "auto minmax(220px, 1fr) auto minmax(160px, 1fr)", gap: "0.35rem 0.5rem", fontSize: "0.78rem", alignItems: "center", flex: 1 }}>
+                <span style={{ fontWeight: 700 }}>Name:</span>
+                <span style={{ borderBottom: "1px solid #000", padding: "0 0.25rem", minHeight: "1.1rem" }}>{clientName || ""}</span>
+                <span style={{ fontWeight: 700 }}>Date:</span>
+                <span style={{ borderBottom: "1px solid #000", padding: "0 0.25rem", minHeight: "1.1rem" }}>
+                  {date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </span>
               </div>
             </div>
 
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.7rem" }}>
+              <colgroup>
+                {PRINTOUT_COLUMNS.map((c, i) => (
+                  <col key={i} style={{ width: c.width }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr style={{ background: "#eee", textAlign: "left" }}>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem", width: 22 }}>#</th>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem", width: 28 }}>Cat</th>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem" }}>Exercise</th>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem", width: 100 }}>Equip · specify</th>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem", width: 60 }}>Sets×Reps</th>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem", width: 38 }}>RPE</th>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem" }}>Set log (wt / reps)</th>
-                  <th style={{ border: "1px solid #000", padding: "0.18rem 0.3rem", width: 28, textAlign: "center" }}>✓</th>
+                  {PRINTOUT_COLUMNS.map((c) => (
+                    <th key={c.label} style={{ border: "1px solid #000", padding: "0.22rem 0.32rem", fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {c.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {exerciseSlots.map((s, i) => {
-                  const cat = CATEGORY_KEY[s.movement.category] ?? "—";
-                  const eq = s.equipment_list.map((e) => EQUIPMENT_KEY[e] ?? e).join(",");
-                  const specs = s.equipment_specifics ? ` ${s.equipment_specifics}` : "";
-                  return (
-                    <tr key={s.uid}>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem", fontWeight: 700 }}>{i + 1}</td>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem" }}>{cat}</td>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem" }}>
-                        <div style={{ fontWeight: 700 }}>{s.movement.name}</div>
-                        {s.notes && <div style={{ fontSize: "0.62rem", color: "#444" }}>{s.notes}</div>}
+                {/* Blank rows — one set per row. Coach can write a ditto mark
+                    (〃) in a cell that matches the row above. To mark a
+                    between-exercise rest, write "Rest" in the Exercise column
+                    and the duration in the Rest column. */}
+                {Array.from({ length: PRINTOUT_BLANK_ROW_COUNT }, (_, i) => (
+                  <tr key={i}>
+                    {PRINTOUT_COLUMNS.map((c, ci) => (
+                      <td
+                        key={ci}
+                        style={{
+                          border: "1px solid #000",
+                          padding: "0.32rem 0.32rem",
+                          minHeight: "1.3rem",
+                          height: "1.3rem",
+                        }}
+                      >
+                        &nbsp;
                       </td>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem" }}>{eq}{specs}</td>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem", textAlign: "center" }}>{s.sets}×{s.reps}</td>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem", textAlign: "center" }}>{s.exertion_score}</td>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem" }}>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.18rem" }}>
-                          {Array.from({ length: s.sets }, (_, si) => (
-                            <span key={si} style={{ display: "inline-flex", gap: "0.18rem", alignItems: "center" }}>
-                              <span style={{ display: "inline-block", borderBottom: "1px solid #000", width: 30, height: "0.85rem" }} />/
-                              <span style={{ display: "inline-block", borderBottom: "1px solid #000", width: 24, height: "0.85rem" }} />
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td style={{ border: "1px solid #000", padding: "0.22rem 0.3rem", textAlign: "center" }}>☐</td>
-                    </tr>
-                  );
-                })}
-                {exerciseSlots.length === 0 && (
-                  <tr><td colSpan={8} style={{ padding: "0.5rem", textAlign: "center", border: "1px solid #000", fontStyle: "italic" }}>No exercises yet — pick from Select Exercises.</td></tr>
-                )}
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
 
-            {/* Session-level notes */}
-            <div style={{ marginTop: "0.45rem", border: "1px solid #000", padding: "0.3rem 0.4rem", minHeight: 64 }}>
-              <strong style={{ fontSize: "0.68rem" }}>Session notes:</strong>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginTop: "0.25rem" }}>
-                {[0, 1, 2].map((i) => <span key={i} style={{ borderBottom: "1px solid #000", height: "0.95rem" }} />)}
-              </div>
+            {/* Tiny session footer for any notes that don't fit the table */}
+            <div style={{ marginTop: "0.4rem", display: "flex", justifyContent: "space-between", fontSize: "0.62rem", color: "#444" }}>
+              <span>Tip: write 〃 (ditto) when a cell repeats the row above. For a rest between exercises, write &ldquo;Rest&rdquo; in the Exercise column.</span>
             </div>
           </div>
         </div>
 
         <style jsx global>{`
           @media print {
-            @page { size: letter landscape; margin: 0.4in; }
+            @page { size: letter landscape; margin: 0.35in; }
             body * { visibility: hidden !important; }
             .rework-printout, .rework-printout * { visibility: visible !important; }
-            .rework-printout { position: absolute; left: 0; top: 0; width: 100%; }
+            .rework-printout { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; }
           }
         `}</style>
       </div>
