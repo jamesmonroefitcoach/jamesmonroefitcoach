@@ -613,9 +613,10 @@ export default function ReworkClient({
 // ─────────────────────────────────────────────────────────────────────────────
 function TabsHeader() {
   const TABS: { id: string; label: string; href: string }[] = [
-    { id: "rework",  label: "Sessions Rework WIP", href: "/coach/programming/build/rework" },
-    { id: "session", label: "Sessions",            href: "/coach/programming/build?tab=session" },
-    { id: "program", label: "Program",             href: "/coach/programming/build?tab=program" },
+    { id: "rework",   label: "Sessions Rework WIP", href: "/coach/programming/build/rework" },
+    { id: "programs", label: "Programs WIP",        href: "/coach/programming/build/programs-rework" },
+    { id: "session",  label: "Sessions",            href: "/coach/programming/build?tab=session" },
+    { id: "program",  label: "Program",             href: "/coach/programming/build?tab=program" },
   ];
   return (
     <div className="no-print" style={{ borderBottom: "2px solid var(--line)", marginBottom: "1.5rem", display: "flex", alignItems: "flex-end" }}>

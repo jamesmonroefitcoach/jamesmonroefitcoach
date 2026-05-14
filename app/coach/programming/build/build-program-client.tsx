@@ -1365,6 +1365,20 @@ export default function BuildProgramClient({
               textDecoration: "none",
             }}
           >Sessions Rework WIP</Link>
+          <Link
+            href="/coach/programming/build/programs-rework"
+            style={{
+              padding: "0.55rem 1.4rem",
+              background: "transparent",
+              borderBottom: "2px solid transparent",
+              marginBottom: "-2px",
+              fontSize: "0.95rem",
+              fontWeight: 400,
+              color: "var(--muted)",
+              cursor: "pointer",
+              textDecoration: "none",
+            }}
+          >Programs WIP</Link>
           {(["in_gym", "at_home"] as const).map((k) => (
             <button
               key={k}
