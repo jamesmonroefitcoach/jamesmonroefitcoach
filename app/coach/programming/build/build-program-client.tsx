@@ -44,7 +44,7 @@ export type WeekSession = {
   is_programmed: boolean;
 };
 
-type SetRow = {
+export type SetRow = {
   reps: string;
   reps_type?: "reps" | "time";
   reps_unit?: "s" | "min";
@@ -61,7 +61,7 @@ type SetRow = {
   position?: string;       // e.g. "standing" | "seated" | "lying" | "incline:45"
 };
 
-type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
+export type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
 const VARIATIONS: Variation[] = ["stretch", "plyometric", "isometric", "single_sided", "bilateral", "dropset"];
 const VARIATION_LABELS: Record<Variation, string> = {
   stretch: "Stretch", plyometric: "Plyo", isometric: "Iso",
@@ -89,7 +89,7 @@ const OPTIONAL_FIELD_CONFIG: Record<OptionalField, { label: string; shortLabel: 
   position:   { label: "Position",  shortLabel: "Pos",   width: "88px" },
 };
 
-type ProgramItem = {
+export type ProgramItem = {
   uid: string;
   movement: Movement;
   is_warmup: boolean;
@@ -183,7 +183,7 @@ const ALL_CATEGORIES: Category[] = [
   "leg_accessory", "arm_accessory", "shoulder", "cardio", "mobility"
 ];
 
-type DragPayload =
+export type DragPayload =
   | { kind: "lib"; movement: Movement }
   | { kind: "item"; dayUid: string; itemUid: string }
   | { kind: "superset"; dayUid: string; supersetId: string };
@@ -191,7 +191,7 @@ type DragPayload =
 // Library movements (saved Exercise Library rows) flow down to ExerciseCard via
 // context so we don't have to thread an extra prop through every render
 // branch. Used to populate the preset dropdown with library entries.
-const LibraryMovementsContext = createContext<MovementRow[]>([]);
+export const LibraryMovementsContext = createContext<MovementRow[]>([]);
 
 export default function BuildProgramClient({
   clients,
@@ -3985,7 +3985,7 @@ function OptionalFieldInput({
   );
 }
 
-function ExerciseCard({
+export function ExerciseCard({
   it, dayUid, itemIdx, inSuperset, drag,
   onDragStart, onDragEnd, onDrop,
   onRemove, onMoveUp, onMoveDown,

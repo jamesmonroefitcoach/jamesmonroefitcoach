@@ -27,34 +27,26 @@ import {
 import type { ApptOption } from "../actions";
 import ImportPickerModal, { type ImportScope, type ImportResult } from "../import-picker";
 import { addMovement } from "../../exercise-library/actions";
-
-type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
+import {
+  ExerciseCard, LibraryMovementsContext,
+  type ProgramItem, type SetRow,
+} from "../build-program-client";
 
 // ── Slot model ───────────────────────────────────────────────────────────────
-// Each item in the Program section is either an Exercise slot or a Rest slot.
-// Order # is the slot's position among Exercise slots only (1-indexed).
+// ExerciseSlot is a ProgramItem (so it can be fed to the shared ExerciseCard
+// in plan mode) with three rework-specific extras: a discriminant `type`,
+// the `leafId` that ties it back to the library tree, and a live-session
+// `mode` + `perform` state used by the perform / complete renderings.
 
-type ExerciseSlot = {
+type ExerciseSlot = ProgramItem & {
   type: "exercise";
-  uid: string;            // stable client-side uid
-  leafId: string;         // links back to the library tree (selection checkbox)
-  movement: Movement;     // movement metadata used by the block UI
-  // prescription
-  sets: number;
-  reps: string;
-  exertion_score: number;
-  same_format: boolean;
-  variations: Variation[];
-  equipment_list: Equipment[];
-  equipment_specifics?: string;
-  notes?: string;
-  // live performance state
+  leafId: string;
   mode: "plan" | "perform" | "complete";
   perform: {
-    weights: string[];       // per set
-    actualReps: string[];    // per set
-    setNotes: string[];      // per set
-    sessionNote: string;     // overall notes
+    weights: string[];
+    actualReps: string[];
+    setNotes: string[];
+    sessionNote: string;
   };
 };
 
@@ -152,10 +144,12 @@ function newExerciseSlot(leafId: string, movement: Movement): ExerciseSlot {
     uid: `ex-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     leafId,
     movement,
+    is_warmup: false,
     sets: 3,
     reps: "8-10",
     exertion_score: 5,
     same_format: true,
+    set_rows: [] as SetRow[],
     variations: [],
     equipment_list: (movement.equipment_list ?? []) as Equipment[],
     equipment_specifics: movement.equipment_specifics,
@@ -432,7 +426,7 @@ export default function ReworkClient({
 
   // ─── BUILDER STEP ───────────────────────────────────────────────────────
   return (
-    <>
+    <LibraryMovementsContext.Provider value={libraryMovements}>
       <TabsHeader />
 
       {/* Top action bar */}
@@ -644,7 +638,7 @@ export default function ReworkClient({
           </div>
         </SmallModal>
       )}
-    </>
+    </LibraryMovementsContext.Provider>
   );
 }
 
@@ -1465,91 +1459,66 @@ function ExerciseSlotCard({
     );
   }
 
-  // Plan mode (default) — full builder card
+  // Plan mode (default) — re-use the existing build-page ExerciseCard so the
+  // layout matches exactly (All-same checkbox, preset dropdown, SETS / REPS /
+  // EXERTION / SPECIFICATION / EQUIPMENT / +optional fields / NOTES /
+  // ↑↓ / +SUPERSET / +NAME). Add ▶ Perform and 🔁 Swap into the bottomSlot.
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: 4, padding: "0.5rem 0.6rem", background: "var(--paper)" }}>
-      <RowHeader
-        left={
-          <>
-            <button type="button" className="btn btn-ghost" style={{ padding: "0.1rem 0.32rem", fontSize: "0.7rem" }} onClick={onMoveUp}>↑</button>
-            <button type="button" className="btn btn-ghost" style={{ padding: "0.1rem 0.32rem", fontSize: "0.7rem" }} onClick={onMoveDown}>↓</button>
-            <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>#{orderNum} {slot.movement.name}</span>
-          </>
+    <ExerciseCard
+      it={slot}
+      dayUid={`rework-${slot.uid}`}
+      itemIdx={orderNum - 1}
+      inSuperset={false}
+      drag={null}
+      onDragStart={() => { /* cross-day drag not supported in rework */ }}
+      onDragEnd={() => { /* noop */ }}
+      onDrop={() => { /* noop */ }}
+      onRemove={onDelete}
+      onMoveUp={onMoveUp}
+      onMoveDown={onMoveDown}
+      onPatch={(patch) => onPatch(patch as Partial<ExerciseSlot>)}
+      onToggleSameFormat={() => {
+        if (slot.same_format) {
+          // turning per-set on — seed rows from current single config
+          const rows: SetRow[] = Array.from({ length: slot.sets }, () => ({
+            reps: slot.reps,
+            reps_type: slot.reps_type,
+            reps_unit: slot.reps_unit,
+            exertion_score: slot.exertion_score,
+            variations: slot.variations,
+            notes: undefined,
+            equipment_list: slot.equipment_list,
+            equipment_specifics: slot.equipment_specifics,
+          }));
+          onPatch({ same_format: false, set_rows: rows });
+        } else {
+          onPatch({ same_format: true, set_rows: [] });
         }
-        right={
-          <>
-            <button type="button" className="btn btn-primary" style={{ fontSize: "0.7rem", padding: "0.12rem 0.55rem" }} onClick={() => onSetMode("perform")} title="Start logging this exercise">▶ Perform</button>
-            <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.1rem 0.42rem" }} onClick={onSwap}>🔁 Swap</button>
-            <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.1rem 0.42rem", color: "var(--red)" }} onClick={onDelete}>✕</button>
-          </>
-        }
-      />
-      <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 90px", gap: "0.4rem", marginTop: "0.4rem", alignItems: "center" }}>
-        <label className="meta" style={{ fontSize: "0.66rem" }}>Sets</label>
-        <input
-          type="number" min={1} className="input"
-          value={slot.sets}
-          onChange={(e) => onPatch({ sets: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-          style={{ gridColumn: "2 / span 2", fontSize: "0.82rem", padding: "0.2rem 0.32rem", maxWidth: 80 }}
-        />
-        <label className="meta" style={{ fontSize: "0.66rem" }}>Reps</label>
-        <input
-          className="input"
-          value={slot.reps}
-          onChange={(e) => onPatch({ reps: e.target.value })}
-          style={{ gridColumn: "2 / span 2", fontSize: "0.82rem", padding: "0.2rem 0.32rem" }}
-          placeholder="8-10 or 30s"
-        />
-        <label className="meta" style={{ fontSize: "0.66rem" }}>RPE</label>
-        <select
-          className="select"
-          value={slot.exertion_score}
-          onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}
-          style={{ gridColumn: "2 / span 2", fontSize: "0.82rem", padding: "0.2rem 0.32rem", maxWidth: 160 }}
-        >
-          {Object.entries(EXERTION_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
-        <label className="meta" style={{ fontSize: "0.66rem" }}>Equipment</label>
-        <div style={{ gridColumn: "2 / span 2", display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-          {EQUIPMENT_OPTIONS.map((opt) => (
-            <label key={opt.value} style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.72rem" }}>
-              <input
-                type="checkbox"
-                checked={slot.equipment_list.includes(opt.value)}
-                onChange={() => {
-                  const has = slot.equipment_list.includes(opt.value);
-                  const next = has ? slot.equipment_list.filter((x) => x !== opt.value) : [...slot.equipment_list, opt.value];
-                  onPatch({ equipment_list: next });
-                }}
-              />
-              {opt.label}
-            </label>
-          ))}
+      }}
+      onPatchSetRow={(si, patch) => {
+        const rows = [...(slot.set_rows ?? [])];
+        rows[si] = { ...rows[si], ...patch };
+        onPatch({ set_rows: rows });
+      }}
+      bottomSlot={
+        <div style={{ display: "inline-flex", gap: "0.3rem", marginLeft: "0.4rem" }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ fontSize: "0.7rem", padding: "0.14rem 0.6rem" }}
+            onClick={() => onSetMode("perform")}
+            title="Start logging this exercise"
+          >▶ Perform</button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: "0.7rem", padding: "0.14rem 0.55rem" }}
+            onClick={onSwap}
+            title="Swap exercise"
+          >🔁 Swap</button>
         </div>
-        {(slot.equipment_list.includes("machine") || slot.equipment_list.includes("other")) && (
-          <>
-            <label className="meta" style={{ fontSize: "0.66rem" }}>Specify</label>
-            <input
-              className="input"
-              value={slot.equipment_specifics ?? ""}
-              onChange={(e) => onPatch({ equipment_specifics: e.target.value })}
-              style={{ gridColumn: "2 / span 2", fontSize: "0.82rem", padding: "0.2rem 0.32rem" }}
-              placeholder="Preacher curl, resistance band, …"
-            />
-          </>
-        )}
-        <label className="meta" style={{ fontSize: "0.66rem" }}>Notes</label>
-        <textarea
-          className="textarea"
-          rows={2}
-          value={slot.notes ?? ""}
-          onChange={(e) => onPatch({ notes: e.target.value })}
-          style={{ gridColumn: "2 / span 2", fontSize: "0.82rem", padding: "0.2rem 0.32rem", resize: "vertical" }}
-        />
-      </div>
-    </div>
+      }
+    />
   );
 }
 
