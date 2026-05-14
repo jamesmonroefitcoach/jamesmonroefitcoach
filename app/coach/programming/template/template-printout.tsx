@@ -6,21 +6,18 @@
 // into a session. NOTHING here is pre-filled — Name, Date, and every cell in
 // the table are blank lines for handwriting.
 
-// Exercise / Cues / Equipment / Notes are left without an explicit width so
-// they share the remaining horizontal space — those are the cells coaches
-// actually write paragraphs in. Numeric columns stay tight.
-const PRINTOUT_BLANK_ROW_COUNT = 18;
+const PRINTOUT_BLANK_ROW_COUNT = 26;
 const PRINTOUT_COLUMNS: { label: string; width?: string }[] = [
   { label: "Exercise" },
-  { label: "Set Number",             width: "52px" },
-  { label: "Target Reps / Time (s)", width: "82px" },
-  { label: "Target Intensity",       width: "72px" },
-  { label: "Set Rest",               width: "52px" },
-  { label: "Cues" },
-  { label: "Actual Reps",            width: "56px" },
-  { label: "Weight",                 width: "54px" },
-  { label: "Equipment" },
-  { label: "Tempo",                  width: "48px" },
+  { label: "Set Number",            width: "56px" },
+  { label: "Target Reps / Time (s)", width: "90px" },
+  { label: "Target Intensity",      width: "82px" },
+  { label: "Set Rest",              width: "54px" },
+  { label: "Cues",                  width: "150px" },
+  { label: "Actual Reps",           width: "62px" },
+  { label: "Weight",                width: "58px" },
+  { label: "Equipment",             width: "110px" },
+  { label: "Tempo",                 width: "52px" },
   { label: "Notes" },
 ];
 
@@ -81,9 +78,9 @@ export default function TemplatePrintout() {
                     key={ci}
                     style={{
                       border: "1px solid #000",
-                      padding: "0.4rem 0.32rem",
-                      minHeight: "1.85rem",
-                      height: "1.85rem",
+                      padding: "0.32rem 0.32rem",
+                      minHeight: "1.3rem",
+                      height: "1.3rem",
                     }}
                   >
                     &nbsp;
