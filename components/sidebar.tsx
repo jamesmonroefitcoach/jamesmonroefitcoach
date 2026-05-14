@@ -17,6 +17,7 @@ const COACH_NAV: NavLink[] = [
 const CLIENT_NAV: NavLink[] = [
   { href: "/client", label: "My Schedule" },
   { href: "/client/profile", label: "Profile" },
+  { href: "/client/programming", label: "Programming" },   // View / Build / Library / Materials live as subtabs
   { href: "/client/check-ins", label: "Check-ins" },
   { href: "/client/messages", label: "Messages" }
 ];
