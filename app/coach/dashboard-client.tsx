@@ -512,30 +512,35 @@ export default function DashboardClient({
                         </td>
                         <td>
                           {isSession ? (
-                            <>
-                              {prog?.endsOn && (
-                                <div className="meta" style={{ fontSize: "0.7rem", marginBottom: "0.25rem", whiteSpace: "nowrap" }}>
-                                  {new Date(prog.endsOn).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                  {" · "}
-                                  <span style={{ color: prog.daysLeft !== null && prog.daysLeft <= 7 ? "var(--amber)" : undefined }}>
-                                    {prog.daysLeft !== null ? (prog.daysLeft <= 0 ? "expired" : `${prog.daysLeft}d left`) : "no end"}
-                                  </span>
-                                </div>
-                              )}
-                              <Link
-                                href={`/coach/programming/build?tab=session&client=${a.client_id}&appt=${a.id}`}
-                                style={{
-                                  fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
-                                  borderRadius: 3,
-                                  border: `1px ${isDraft ? "dashed" : "solid"} ${isProgrammed ? "var(--sage)" : "var(--amber)"}`,
-                                  color: isProgrammed ? "var(--sage)" : "var(--amber)",
-                                  background: isProgrammed ? "rgba(90,107,74,0.07)" : "rgba(217,119,6,0.07)",
-                                  textDecoration: "none", whiteSpace: "nowrap", display: "inline-block",
-                                }}
-                              >
-                                {isProgrammed ? "Published →" : isDraft ? "Draft →" : "Not Programmed →"}
-                              </Link>
-                            </>
+                            (a.status === "completed" && !isProgrammed && !isDraft) ? (
+                              // Backfilled past session — no real program data on file.
+                              <span className="badge" style={{ fontSize: "0.66rem", color: "var(--muted)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Historical</span>
+                            ) : (
+                              <>
+                                {prog?.endsOn && (
+                                  <div className="meta" style={{ fontSize: "0.7rem", marginBottom: "0.25rem", whiteSpace: "nowrap" }}>
+                                    {new Date(prog.endsOn).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                    {" · "}
+                                    <span style={{ color: prog.daysLeft !== null && prog.daysLeft <= 7 ? "var(--amber)" : undefined }}>
+                                      {prog.daysLeft !== null ? (prog.daysLeft <= 0 ? "expired" : `${prog.daysLeft}d left`) : "no end"}
+                                    </span>
+                                  </div>
+                                )}
+                                <Link
+                                  href={`/coach/programming/build?tab=session&client=${a.client_id}&appt=${a.id}`}
+                                  style={{
+                                    fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
+                                    borderRadius: 3,
+                                    border: `1px ${isDraft ? "dashed" : "solid"} ${isProgrammed ? "var(--sage)" : "var(--amber)"}`,
+                                    color: isProgrammed ? "var(--sage)" : "var(--amber)",
+                                    background: isProgrammed ? "rgba(90,107,74,0.07)" : "rgba(217,119,6,0.07)",
+                                    textDecoration: "none", whiteSpace: "nowrap", display: "inline-block",
+                                  }}
+                                >
+                                  {isProgrammed ? "Published →" : isDraft ? "Draft →" : "Not Programmed →"}
+                                </Link>
+                              </>
+                            )
                           ) : <span className="meta">—</span>}
                         </td>
                       </tr>

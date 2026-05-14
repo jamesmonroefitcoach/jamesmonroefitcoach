@@ -19,7 +19,8 @@ function StatusBadge({ status }: { status: "programmed" | "draft" | "needs_progr
   if (status === "programmed") return <span className="badge badge-sage" style={{ fontSize: "0.58rem" }}>published</span>;
   if (status === "draft") return <span className="badge badge-amber" style={{ fontSize: "0.58rem" }}>draft</span>;
   if (status === "needs_programming") return <span className="badge" style={{ fontSize: "0.58rem", color: "var(--muted)" }}>—</span>;
-  return null;
+  // n/a — used for historical past sessions backfilled with no program data.
+  return <span className="badge" style={{ fontSize: "0.58rem", color: "var(--muted)" }}>historical</span>;
 }
 
 function MonthGroup({ clientId, month, sessions }: {
