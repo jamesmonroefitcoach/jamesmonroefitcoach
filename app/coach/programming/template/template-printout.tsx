@@ -13,10 +13,9 @@ const PRINTOUT_COLUMNS: { label: string; width?: string }[] = [
   { label: "Target Reps / Time (s)", width: "90px" },
   { label: "Target Intensity",      width: "82px" },
   { label: "Set Rest",              width: "54px" },
-  { label: "Cues",                  width: "150px" },
   { label: "Actual Reps",           width: "62px" },
   { label: "Weight",                width: "58px" },
-  { label: "Equipment",             width: "110px" },
+  { label: "Equipment",             width: "92px" },
   { label: "Tempo",                 width: "52px" },
   { label: "Notes" },
 ];
