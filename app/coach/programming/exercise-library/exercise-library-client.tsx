@@ -212,10 +212,12 @@ function ExerciseForm({
 
   function setPositionTokens(next: Set<string>, angle: string) {
     const out: string[] = [];
-    if (next.has("standing")) out.push("standing");
-    if (next.has("seated"))   out.push("seated");
-    if (next.has("incline"))  out.push(angle ? `incline:${angle}` : "incline");
-    if (next.has("lying"))    out.push("lying");
+    if (next.has("standing"))  out.push("standing");
+    if (next.has("seated"))    out.push("seated");
+    if (next.has("bent_over")) out.push("bent_over");
+    if (next.has("kneeling"))  out.push("kneeling");
+    if (next.has("incline"))   out.push(angle ? `incline:${angle}` : "incline");
+    if (next.has("lying"))     out.push("lying");
     set("position", out.join(","));
   }
   function togglePosition(v: string) {
@@ -304,25 +306,31 @@ function ExerciseForm({
         <div style={{ gridColumn: "1/-1" }}>
           <span className="meta" style={{ fontSize: "0.74rem" }}>Position</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem 0.55rem", marginTop: "0.3rem", alignItems: "center" }}>
-            {(["standing", "seated", "incline", "lying"] as const).map((p) => {
-              const checked = positionsSelected.has(p);
+            {([
+              { value: "standing",  label: "Standing"  },
+              { value: "seated",    label: "Seated"    },
+              { value: "bent_over", label: "Bent over" },
+              { value: "kneeling",  label: "Kneeling"  },
+              { value: "incline",   label: "Incline"   },
+              { value: "lying",     label: "Lying"     },
+            ] as const).map((p) => {
+              const checked = positionsSelected.has(p.value);
               return (
-                <label key={p} style={{
+                <label key={p.value} style={{
                   display: "inline-flex", alignItems: "center", gap: "0.3rem",
                   padding: "0.2rem 0.5rem", borderRadius: 999,
                   border: `1px solid ${checked ? "var(--rust)" : "var(--line)"}`,
                   background: checked ? "rgba(168,61,43,0.06)" : "transparent",
                   cursor: "pointer", fontSize: "0.78rem",
                   fontWeight: checked ? 600 : 500,
-                  textTransform: "capitalize",
                 }}>
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => togglePosition(p)}
+                    onChange={() => togglePosition(p.value)}
                     style={{ accentColor: "var(--rust)" }}
                   />
-                  {p}
+                  {p.label}
                 </label>
               );
             })}

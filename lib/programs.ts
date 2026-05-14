@@ -57,7 +57,7 @@ export const MOVEMENT_LIBRARY: Movement[] = [
 // ─── Past programs (demo) ────────────────────────────────────────────
 export type ProgramKind = "in_gym" | "at_home";
 
-export type Equipment = "machine" | "bands" | "dumbbells" | "barbell" | "bodyweight" | "kettlebell" | "cable" | "other";
+export type Equipment = "machine" | "bands" | "dumbbells" | "barbell" | "bodyweight" | "kettlebell" | "cable" | "box" | "trx" | "medball" | "other";
 
 export const EQUIPMENT_OPTIONS: { value: Equipment; label: string; allowsSpecifics?: boolean }[] = [
   { value: "machine", label: "Machine", allowsSpecifics: true },
@@ -67,6 +67,9 @@ export const EQUIPMENT_OPTIONS: { value: Equipment; label: string; allowsSpecifi
   { value: "bodyweight", label: "Bodyweight" },
   { value: "kettlebell", label: "Kettlebell" },
   { value: "cable", label: "Cable" },
+  { value: "box", label: "Box" },
+  { value: "trx", label: "TRX" },
+  { value: "medball", label: "Medball" },
   { value: "other", label: "Other", allowsSpecifics: true }
 ];
 
