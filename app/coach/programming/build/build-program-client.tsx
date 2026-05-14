@@ -3992,6 +3992,7 @@ export function ExerciseCard({
   onPatch, onToggleSameFormat, onPatchSetRow,
   bottomSlot,
   inlineEquipment = true,
+  hidePreset = false,
 }: {
   it: ProgramItem;
   dayUid: string;
@@ -4014,6 +4015,10 @@ export function ExerciseCard({
    *  Sessions Rework view; default true preserves the existing build page
    *  layout. */
   inlineEquipment?: boolean;
+  /** When true, the "— apply saved —" Preset dropdown row is hidden. The
+   *  + Name save action still works; this just keeps the apply UI off the
+   *  card for views that don't need it. */
+  hidePreset?: boolean;
 }) {
   // ─── Preset state ─────────────────────────────────────────────────
   const [localPresets, setLocalPresets] = useState<ExercisePreset[]>(() => loadPresets(it.movement.id));
@@ -4243,7 +4248,7 @@ export function ExerciseCard({
       </div>
 
       {/* Saved presets dropdown */}
-      {presets.length > 0 && (
+      {!hidePreset && presets.length > 0 && (
         <div style={{ marginTop: "0.22rem", display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <span style={{ fontSize: "0.58rem", color: "var(--muted)", flexShrink: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>Preset</span>
           <select

@@ -1470,6 +1470,7 @@ function ExerciseSlotCard({
       itemIdx={orderNum - 1}
       inSuperset={false}
       inlineEquipment={false}
+      hidePreset
       drag={null}
       onDragStart={() => { /* cross-day drag not supported in rework */ }}
       onDragEnd={() => { /* noop */ }}
