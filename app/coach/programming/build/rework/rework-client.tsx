@@ -26,6 +26,7 @@ import {
 } from "@/lib/programs";
 import type { ApptOption } from "../actions";
 import ImportPickerModal, { type ImportScope, type ImportResult } from "../import-picker";
+import { addMovement } from "../../exercise-library/actions";
 
 type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
 
@@ -222,27 +223,32 @@ export default function ReworkClient({
     saveDraft(dKey, { slots, sessionTitle, selectExercisesOpen: selectOpen });
   }, [slots, sessionTitle, selectOpen, dKey, step, hydrated]);
 
-  // ── Derived: which leaves are currently in the program ────────────────────
-  const selectedLeafIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const s of slots) if (s.type === "exercise") ids.add(s.leafId);
-    return ids;
+  // ── Derived: how many slots reference each leaf (supports adding twice) ──
+  const leafCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of slots) {
+      if (s.type === "exercise") m.set(s.leafId, (m.get(s.leafId) ?? 0) + 1);
+    }
+    return m;
   }, [slots]);
 
   // ── Exercise count + ordered exercise slots ───────────────────────────────
   const exerciseSlots = useMemo(() => slots.filter((s): s is ExerciseSlot => s.type === "exercise"), [slots]);
 
   // ── Selection mutations ──────────────────────────────────────────────────
+  // Checkbox toggle: if any slots reference this leaf, remove ALL of them.
+  // Otherwise add one new instance.
   function toggleLeaf(leafId: string, movement: Movement) {
     setSlots((cur) => {
-      const existingIndex = cur.findIndex((s) => s.type === "exercise" && s.leafId === leafId);
-      if (existingIndex >= 0) {
-        // unchecking — drop the slot
-        return cur.filter((_, i) => i !== existingIndex);
-      }
-      // checking — append at end (becomes next available order #)
+      const anyMatch = cur.some((s) => s.type === "exercise" && s.leafId === leafId);
+      if (anyMatch) return cur.filter((s) => !(s.type === "exercise" && s.leafId === leafId));
       return [...cur, newExerciseSlot(leafId, movement)];
     });
+  }
+  // Light + button: always appends another instance of this leaf, even if
+  // one already exists. Counter next to the name reflects the running total.
+  function addLeafAgain(leafId: string, movement: Movement) {
+    setSlots((cur) => [...cur, newExerciseSlot(leafId, movement)]);
   }
 
   function setOrderNumForLeaf(leafId: string, targetOrderNum: number) {
@@ -456,9 +462,10 @@ export default function ReworkClient({
         groups={GROUPS}
         libraryMovements={libraryMovements}
         slots={slots}
-        selectedLeafIds={selectedLeafIds}
+        leafCounts={leafCounts}
         exerciseSlots={exerciseSlots}
         onToggleLeaf={toggleLeaf}
+        onAddLeafAgain={addLeafAgain}
         onSetOrderNum={setOrderNumForLeaf}
       />
 
@@ -723,23 +730,47 @@ function PickerView({
 // Select Exercises panel — three-tier tree with checkboxes + order #
 // ─────────────────────────────────────────────────────────────────────────────
 function SelectExercisesPanel({
-  open, onToggle, groups, libraryMovements, slots, selectedLeafIds, exerciseSlots,
-  onToggleLeaf, onSetOrderNum,
+  open, onToggle, groups, libraryMovements, slots, leafCounts, exerciseSlots,
+  onToggleLeaf, onAddLeafAgain, onSetOrderNum,
 }: {
   open: boolean;
   onToggle: () => void;
   groups: LibraryGroup[];
   libraryMovements: MovementRow[];
   slots: Slot[];
-  selectedLeafIds: Set<string>;
+  leafCounts: Map<string, number>;
   exerciseSlots: ExerciseSlot[];
   onToggleLeaf: (leafId: string, movement: Movement) => void;
+  onAddLeafAgain: (leafId: string, movement: Movement) => void;
   onSetOrderNum: (leafId: string, n: number) => void;
 }) {
   // Local checkbox state for category + subcategory rows. These don't add
   // exercises to the program; they only reveal deeper tiers in the UI.
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const router = useRouter();
+
+  // Flat searchable index of every leaf across every category/subcategory.
+  // The type-search at the bottom of the panel filters this list.
+  const allLeaves = useMemo(() => {
+    const out: { leafId: string; label: string; movement: Movement; group: string; sub: string }[] = [];
+    for (const g of groups) {
+      for (const n of g.nodes) {
+        const leaves = leafExercisesFor(n, libraryMovements);
+        for (const l of leaves) out.push({ leafId: l.id, label: l.label, movement: l.movement, group: g.label, sub: n.label });
+      }
+    }
+    return out;
+  }, [groups, libraryMovements]);
+
+  const searchHits = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return allLeaves
+      .filter((l) => l.label.toLowerCase().includes(q) || l.sub.toLowerCase().includes(q) || l.group.toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [search, allLeaves]);
 
   function toggleSet(set: Set<string>, key: string, setter: (s: Set<string>) => void) {
     const next = new Set(set);
@@ -804,12 +835,15 @@ function SelectExercisesPanel({
                               <SubcategoryColumn
                                 key={n.id}
                                 node={n}
+                                groupCategory={g.nodes.find((x) => x.id === n.id)?.category}
                                 libraryMovements={libraryMovements}
-                                selectedLeafIds={selectedLeafIds}
+                                leafCounts={leafCounts}
                                 exerciseSlots={exerciseSlots}
                                 onToggleSub={() => toggleSet(openSubs, n.id, setOpenSubs)}
                                 onToggleLeaf={onToggleLeaf}
+                                onAddLeafAgain={onAddLeafAgain}
                                 onSetOrderNum={onSetOrderNum}
+                                onLibraryAdded={() => router.refresh()}
                               />
                             ) : (
                               <SubChip
@@ -828,6 +862,77 @@ function SelectExercisesPanel({
               </div>
             );
           })()}
+
+          {/* Type-search — at the bottom of the panel for quick lookups. */}
+          <div style={{ marginTop: "0.85rem", paddingTop: "0.65rem", borderTop: "1px dashed var(--line)" }}>
+            <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: "0.25rem" }}>
+              Search exercises
+            </label>
+            <input
+              className="input"
+              placeholder="Type to find — e.g. lat pulldown, vertical pull, hinge…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ width: "100%", maxWidth: 420, fontSize: "0.84rem", padding: "0.3rem 0.5rem" }}
+            />
+            {search.trim() && (
+              <div style={{
+                marginTop: "0.4rem", border: "1px solid var(--line)", borderRadius: 3,
+                maxHeight: 280, overflowY: "auto", background: "var(--paper)",
+                maxWidth: 520,
+              }}>
+                {searchHits.length === 0 ? (
+                  <p className="meta" style={{ padding: "0.5rem 0.7rem", fontSize: "0.78rem", margin: 0 }}>No matches.</p>
+                ) : searchHits.map((hit) => {
+                  const cnt = leafCounts.get(hit.leafId) ?? 0;
+                  return (
+                    <div
+                      key={hit.leafId}
+                      style={{
+                        display: "flex", alignItems: "center", gap: "0.4rem",
+                        padding: "0.28rem 0.5rem", borderBottom: "1px solid var(--line)",
+                        background: cnt > 0 ? "rgba(168,61,43,0.05)" : "transparent",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onToggleLeaf(hit.leafId, hit.movement)}
+                        title={cnt > 0 ? "Remove all" : "Add to program"}
+                        style={{
+                          background: "transparent", border: "1px solid var(--line)",
+                          borderRadius: 3, width: 18, height: 18, cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: "0.78rem", color: cnt > 0 ? "var(--sage)" : "transparent",
+                          flexShrink: 0,
+                        }}
+                      >{cnt > 0 ? "✓" : ""}</button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "0.82rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hit.label}</div>
+                        <div className="meta" style={{ fontSize: "0.66rem" }}>{hit.group} · {hit.sub}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onAddLeafAgain(hit.leafId, hit.movement)}
+                        title="Add another instance"
+                        style={{
+                          background: "rgba(168,61,43,0.08)", border: "1px solid rgba(168,61,43,0.3)",
+                          color: "var(--rust)", borderRadius: 3,
+                          width: 22, height: 22, cursor: "pointer",
+                          fontWeight: 700, fontSize: "0.78rem", flexShrink: 0,
+                        }}
+                      >+</button>
+                      {cnt > 0 && (
+                        <span style={{
+                          fontSize: "0.7rem", fontWeight: 700, color: "var(--rust)",
+                          minWidth: 18, textAlign: "center",
+                        }}>×{cnt}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </section>
@@ -837,18 +942,22 @@ function SelectExercisesPanel({
 // Subcategory rendered IN-COLUMN — its checkbox row at the top, with the
 // leaf exercises nested directly underneath, indented slightly. Each
 // checked exercise gets an inline order-# number input right next to the
-// exercise name on the same line.
+// exercise name on the same line. The light + button next to each leaf
+// always adds another instance (counter shows how many).
 function SubcategoryColumn({
-  node, libraryMovements, selectedLeafIds, exerciseSlots,
-  onToggleSub, onToggleLeaf, onSetOrderNum,
+  node, groupCategory, libraryMovements, leafCounts, exerciseSlots,
+  onToggleSub, onToggleLeaf, onAddLeafAgain, onSetOrderNum, onLibraryAdded,
 }: {
   node: LibraryNode;
+  groupCategory?: Category;
   libraryMovements: MovementRow[];
-  selectedLeafIds: Set<string>;
+  leafCounts: Map<string, number>;
   exerciseSlots: ExerciseSlot[];
   onToggleSub: () => void;
   onToggleLeaf: (leafId: string, movement: Movement) => void;
+  onAddLeafAgain: (leafId: string, movement: Movement) => void;
   onSetOrderNum: (leafId: string, n: number) => void;
+  onLibraryAdded: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const leaves = useMemo(() => leafExercisesFor(node, libraryMovements), [node, libraryMovements]);
@@ -873,17 +982,18 @@ function SubcategoryColumn({
       {expanded && (
         <div style={{ marginTop: "0.3rem", paddingLeft: "0.85rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
           {leaves.map((leaf) => {
-            const checked = selectedLeafIds.has(leaf.id);
+            const count = leafCounts.get(leaf.id) ?? 0;
+            const checked = count > 0;
             const exSlot = exerciseSlots.find((s) => s.leafId === leaf.id);
             const orderNum = exSlot ? exerciseSlots.findIndex((s) => s.uid === exSlot.uid) + 1 : null;
             return (
-              <label
+              <div
                 key={leaf.id}
                 style={{
-                  display: "flex", alignItems: "center", gap: "0.3rem",
+                  display: "flex", alignItems: "center", gap: "0.25rem",
                   padding: "0.16rem 0.25rem", borderRadius: 3,
                   background: checked ? "rgba(168,61,43,0.07)" : "transparent",
-                  cursor: "pointer", fontSize: "0.74rem",
+                  fontSize: "0.74rem",
                   minWidth: 0,
                 }}
               >
@@ -891,12 +1001,31 @@ function SubcategoryColumn({
                   type="checkbox"
                   checked={checked}
                   onChange={() => onToggleLeaf(leaf.id, leaf.movement)}
-                  style={{ accentColor: "var(--rust)", flexShrink: 0 }}
+                  title={checked ? "Remove all instances" : "Add to program"}
+                  style={{ accentColor: "var(--rust)", flexShrink: 0, cursor: "pointer" }}
                 />
                 <span style={{ fontWeight: checked ? 600 : 400, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={leaf.label}>
                   {leaf.label}
                 </span>
-                {checked && (
+                <button
+                  type="button"
+                  onClick={() => onAddLeafAgain(leaf.id, leaf.movement)}
+                  title="Add another instance"
+                  style={{
+                    background: "rgba(168,61,43,0.08)", border: "1px solid rgba(168,61,43,0.3)",
+                    color: "var(--rust)", borderRadius: 3,
+                    width: 20, height: 20, cursor: "pointer", lineHeight: 1,
+                    fontWeight: 700, fontSize: "0.78rem", flexShrink: 0, padding: 0,
+                    fontFamily: "inherit",
+                  }}
+                >+</button>
+                {count > 1 && (
+                  <span style={{
+                    fontSize: "0.66rem", fontWeight: 700, color: "var(--rust)",
+                    minWidth: 18, textAlign: "center",
+                  }}>×{count}</span>
+                )}
+                {count === 1 && (
                   <input
                     type="number"
                     min={1}
@@ -905,21 +1034,129 @@ function SubcategoryColumn({
                       const n = parseInt(e.target.value, 10);
                       if (!isNaN(n) && n >= 1) onSetOrderNum(leaf.id, n);
                     }}
-                    onClick={(e) => e.preventDefault()}
                     title="Order in the program"
                     style={{
-                      width: 36, fontSize: "0.72rem", padding: "0.08rem 0.18rem",
+                      width: 32, fontSize: "0.7rem", padding: "0.06rem 0.14rem",
                       border: "1px solid var(--rust)", borderRadius: 3,
                       flexShrink: 0, textAlign: "center",
                       background: "var(--paper)",
                     }}
                   />
                 )}
-              </label>
+              </div>
             );
           })}
+          {/* + Add new exercise — opens an inline name input, calls the
+              Exercise Library addMovement action, and adds the new slot.
+              The new exercise persists in the database under this
+              subcategory. Removal is done via the Exercise Library tab. */}
+          <AddNewExerciseInline
+            category={node.category}
+            subcategory={node.label}
+            onAdded={(movement, leafId) => {
+              onAddLeafAgain(leafId, movement);
+              onLibraryAdded();
+            }}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+// Inline footer on each subcategory's leaf list. Click to open a small input
+// for the exercise name, hit Save to persist via the addMovement server
+// action and immediately drop a slot in the program for it.
+function AddNewExerciseInline({
+  category, subcategory, onAdded,
+}: {
+  category: Category;
+  subcategory: string;
+  onAdded: (movement: Movement, leafId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    if (!name.trim()) { setErr("Name required."); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await addMovement({
+        name: name.trim(),
+        category,
+        subcategory,
+        equipment_list: [],
+        muscles: [],
+      });
+      if (!res.ok || !res.id) { setErr(res.error ?? "Save failed."); setBusy(false); return; }
+      const movement: Movement = {
+        id: res.id,
+        name: name.trim(),
+        category,
+        subcategory,
+        equipment_list: [],
+      };
+      onAdded(movement, `mv-${res.id}`);
+      setName("");
+      setOpen(false);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={{
+          marginTop: "0.25rem",
+          background: "transparent",
+          border: "1px dashed rgba(168,61,43,0.4)",
+          color: "var(--rust)", borderRadius: 3,
+          padding: "0.18rem 0.45rem", fontSize: "0.72rem",
+          cursor: "pointer", fontFamily: "inherit",
+          textAlign: "left",
+        }}
+      >+ Add new exercise</button>
+    );
+  }
+  return (
+    <div style={{ marginTop: "0.3rem", padding: "0.25rem 0.3rem", border: "1px solid var(--rust)", borderRadius: 3, background: "var(--paper)" }}>
+      <input
+        autoFocus
+        className="input"
+        placeholder="Exercise name…"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") { setOpen(false); setName(""); setErr(null); }
+        }}
+        style={{ fontSize: "0.78rem", padding: "0.18rem 0.32rem", width: "100%" }}
+      />
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.25rem", marginTop: "0.25rem" }}>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setName(""); setErr(null); }}
+          disabled={busy}
+          className="btn btn-ghost"
+          style={{ fontSize: "0.68rem", padding: "0.12rem 0.4rem" }}
+        >Cancel</button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy || !name.trim()}
+          className="btn btn-primary"
+          style={{ fontSize: "0.68rem", padding: "0.12rem 0.45rem" }}
+        >{busy ? "…" : "Save"}</button>
+      </div>
+      {err && <p style={{ color: "var(--red)", fontSize: "0.7rem", margin: "0.25rem 0 0" }}>{err}</p>}
     </div>
   );
 }
@@ -958,93 +1195,6 @@ function SubChip({ label, checked, onToggle }: { label: string; checked: boolean
       <input type="checkbox" checked={checked} onChange={onToggle} style={{ accentColor: "var(--rust)", flexShrink: 0 }} />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
     </label>
-  );
-}
-
-function SubcategorySection({
-  node, groupLabel, libraryMovements, selectedLeafIds, exerciseSlots,
-  onToggleSub, onToggleLeaf, onSetOrderNum,
-}: {
-  node: LibraryNode;
-  groupLabel?: string;
-  libraryMovements: MovementRow[];
-  selectedLeafIds: Set<string>;
-  exerciseSlots: ExerciseSlot[];
-  onToggleSub: () => void;
-  onToggleLeaf: (leafId: string, movement: Movement) => void;
-  onSetOrderNum: (leafId: string, n: number) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const leaves = useMemo(() => leafExercisesFor(node, libraryMovements), [node, libraryMovements]);
-
-  return (
-    <div style={{
-      border: "1px solid var(--rust)",
-      borderRadius: 4,
-      background: "rgba(168,61,43,0.03)",
-      padding: "0.4rem 0.55rem",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", cursor: "pointer" }}>
-          <input type="checkbox" checked onChange={onToggleSub} style={{ accentColor: "var(--rust)" }} />
-          <strong style={{ fontSize: "0.86rem", color: "var(--rust)" }}>{node.label}</strong>
-        </label>
-        {groupLabel && (
-          <span className="meta" style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>· {groupLabel}</span>
-        )}
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: "0.72rem" }}
-        >{expanded ? "▾" : "▸"}</button>
-        <span className="meta" style={{ fontSize: "0.68rem" }}>{leaves.length} option{leaves.length === 1 ? "" : "s"}</span>
-      </div>
-
-      {expanded && (
-        <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.22rem" }}>
-          {leaves.map((leaf) => {
-            const checked = selectedLeafIds.has(leaf.id);
-            const exSlot = exerciseSlots.find((s) => s.leafId === leaf.id);
-            const orderNum = exSlot ? exerciseSlots.findIndex((s) => s.uid === exSlot.uid) + 1 : null;
-            return (
-              <div key={leaf.id} style={{
-                display: "flex", alignItems: "center", gap: "0.45rem",
-                padding: "0.22rem 0.35rem", borderRadius: 3,
-                background: checked ? "rgba(168,61,43,0.06)" : "transparent",
-              }}>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", flex: 1, minWidth: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => onToggleLeaf(leaf.id, leaf.movement)}
-                    style={{ accentColor: "var(--rust)" }}
-                  />
-                  <span style={{ fontSize: "0.82rem", fontWeight: checked ? 600 : 400 }}>{leaf.label}</span>
-                </label>
-                {checked && (
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.7rem", color: "var(--muted)" }}>
-                    Order
-                    <input
-                      type="number"
-                      min={1}
-                      value={orderNum ?? ""}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        if (!isNaN(n) && n >= 1) onSetOrderNum(leaf.id, n);
-                      }}
-                      style={{
-                        width: 48, fontSize: "0.76rem", padding: "0.12rem 0.25rem",
-                        border: "1px solid var(--line)", borderRadius: 3,
-                      }}
-                    />
-                  </label>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
   );
 }
 
