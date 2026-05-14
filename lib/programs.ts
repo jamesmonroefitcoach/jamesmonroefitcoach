@@ -134,17 +134,16 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
         description: "chest, table decline, decline db press, dip" },
       { id: "lat-pushdown",       label: "Lat Pushdown",       category: "pull" },
       { id: "scapular-training",  label: "Scapular Training",  category: "shoulder" },
-      { id: "upper-accessory",    label: "Accessory",          category: "arm_accessory" },
-    ],
-  },
-  {
-    id: "accessory", label: "Accessory",
-    nodes: [
-      { id: "bicep-curl",     label: "Bicep curl",    category: "arm_accessory" },
-      { id: "tricep-ext",     label: "Tricep ext.",   category: "arm_accessory" },
-      { id: "lateral-raise",  label: "Lateral raise", category: "shoulder" },
-      { id: "rear-delt",      label: "Rear delt",     category: "shoulder" },
-      { id: "front-raise",    label: "Front Raise",   category: "shoulder" },
+      {
+        id: "upper-accessory", label: "Accessory", category: "arm_accessory",
+        children: [
+          { id: "bicep-curl",    label: "Bicep curl",    category: "arm_accessory" },
+          { id: "tricep-ext",    label: "Tricep ext.",   category: "arm_accessory" },
+          { id: "lateral-raise", label: "Lateral raise", category: "shoulder" },
+          { id: "rear-delt",     label: "Rear delt",     category: "shoulder" },
+          { id: "front-raise",   label: "Front Raise",   category: "shoulder" },
+        ],
+      },
     ],
   },
   {
