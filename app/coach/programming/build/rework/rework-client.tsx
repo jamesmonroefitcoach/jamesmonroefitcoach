@@ -300,6 +300,27 @@ export default function ReworkClient({
     });
   }
 
+  // Reorder a single exercise slot to land at a new index among the
+  // exercise-only list (rest slots keep their position in the overall
+  // slots array). Used by the Workout Order panel for both the ↑↓ arrows
+  // and HTML5 drag-drop.
+  function moveExerciseToIndex(uid: string, dstExIdx: number) {
+    setSlots((cur) => {
+      const ex = cur.filter((s): s is ExerciseSlot => s.type === "exercise");
+      const srcIdx = ex.findIndex((s) => s.uid === uid);
+      if (srcIdx < 0) return cur;
+      const clamped = Math.max(0, Math.min(dstExIdx, ex.length - 1));
+      if (clamped === srcIdx) return cur;
+      const reordered = [...ex];
+      const [moved] = reordered.splice(srcIdx, 1);
+      reordered.splice(clamped, 0, moved);
+      // Rebuild: walk the original slots, drop in the reordered exercise
+      // slots in sequence at each exercise position; rests stay put.
+      let exi = 0;
+      return cur.map((s) => s.type === "exercise" ? reordered[exi++] : s);
+    });
+  }
+
   function insertRestAfter(uid: string) {
     setSlots((cur) => {
       const i = cur.findIndex((s) => s.uid === uid);
@@ -466,7 +487,8 @@ export default function ReworkClient({
         exerciseSlots={exerciseSlots}
         onToggleLeaf={toggleLeaf}
         onAddLeafAgain={addLeafAgain}
-        onSetOrderNum={setOrderNumForLeaf}
+        onMoveExerciseToIndex={moveExerciseToIndex}
+        onDeleteSlot={deleteSlot}
       />
 
       {/* ─── Program section ─── */}
@@ -731,7 +753,7 @@ function PickerView({
 // ─────────────────────────────────────────────────────────────────────────────
 function SelectExercisesPanel({
   open, onToggle, groups, libraryMovements, slots, leafCounts, exerciseSlots,
-  onToggleLeaf, onAddLeafAgain, onSetOrderNum,
+  onToggleLeaf, onAddLeafAgain, onMoveExerciseToIndex, onDeleteSlot,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -742,7 +764,8 @@ function SelectExercisesPanel({
   exerciseSlots: ExerciseSlot[];
   onToggleLeaf: (leafId: string, movement: Movement) => void;
   onAddLeafAgain: (leafId: string, movement: Movement) => void;
-  onSetOrderNum: (leafId: string, n: number) => void;
+  onMoveExerciseToIndex: (uid: string, dstExIdx: number) => void;
+  onDeleteSlot: (uid: string) => void;
 }) {
   // Local checkbox state for category + subcategory rows. These don't add
   // exercises to the program; they only reveal deeper tiers in the UI.
@@ -802,66 +825,70 @@ function SelectExercisesPanel({
 
       {open && (
         <div style={{ padding: "0.65rem 0.85rem 0.85rem", borderTop: "1px solid var(--line)" }}>
-          {/* Categories laid out as evenly-spaced columns. Checked categories
-              come first, then unchecked. Each column stacks the category chip
-              at top, then UNCHECKED subcategories beneath it as chips.
-              When a subcategory IS checked, its exercise list nests directly
-              below it inside the same column (indented). */}
-          {(() => {
-            const checkedGroups = groups.filter((g) => openCats.has(g.id));
-            const uncheckedGroups = groups.filter((g) => !openCats.has(g.id));
-            const ordered = [...checkedGroups, ...uncheckedGroups];
-            return (
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${ordered.length}, minmax(0, 1fr))`,
-                gap: "0.6rem 0.55rem",
-                alignItems: "start",
-              }}>
-                {ordered.map((g) => {
-                  const isChecked = openCats.has(g.id);
-                  return (
-                    <div key={g.id} style={{ display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 0 }}>
-                      <CategoryChip
-                        label={g.label}
-                        checked={isChecked}
-                        onToggle={() => toggleSet(openCats, g.id, setOpenCats)}
-                      />
-                      {isChecked && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", paddingLeft: "0.15rem" }}>
-                          {g.nodes.map((n) => {
-                            const subChecked = openSubs.has(n.id);
-                            return subChecked ? (
-                              <SubcategoryColumn
-                                key={n.id}
-                                node={n}
-                                groupCategory={g.nodes.find((x) => x.id === n.id)?.category}
-                                libraryMovements={libraryMovements}
-                                leafCounts={leafCounts}
-                                exerciseSlots={exerciseSlots}
-                                onToggleSub={() => toggleSet(openSubs, n.id, setOpenSubs)}
-                                onToggleLeaf={onToggleLeaf}
-                                onAddLeafAgain={onAddLeafAgain}
-                                onSetOrderNum={onSetOrderNum}
-                                onLibraryAdded={() => router.refresh()}
-                              />
-                            ) : (
-                              <SubChip
-                                key={n.id}
-                                label={n.label}
-                                checked={false}
-                                onToggle={() => toggleSet(openSubs, n.id, setOpenSubs)}
-                              />
-                            );
-                          })}
+          {/* Two-column body — categories + search on the left, Workout
+              Order panel pinned on the right. */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 280px", gap: "1rem", alignItems: "start" }}>
+            <div>
+              {/* Categories laid out as columns. Checked categories come
+                  first and share the available width; unchecked ones shrink
+                  to their content (just the chip) so they don't eat space. */}
+              {(() => {
+                const checkedGroups = groups.filter((g) => openCats.has(g.id));
+                const uncheckedGroups = groups.filter((g) => !openCats.has(g.id));
+                const ordered = [...checkedGroups, ...uncheckedGroups];
+                const colTemplate = ordered
+                  .map((g) => (openCats.has(g.id) ? "minmax(0, 1fr)" : "auto"))
+                  .join(" ");
+                return (
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: colTemplate,
+                    gap: "0.6rem 0.55rem",
+                    alignItems: "start",
+                  }}>
+                    {ordered.map((g) => {
+                      const isChecked = openCats.has(g.id);
+                      return (
+                        <div key={g.id} style={{ display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 0 }}>
+                          <CategoryChip
+                            label={g.label}
+                            checked={isChecked}
+                            onToggle={() => toggleSet(openCats, g.id, setOpenCats)}
+                          />
+                          {isChecked && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", paddingLeft: "0.15rem" }}>
+                              {g.nodes.map((n) => {
+                                const subChecked = openSubs.has(n.id);
+                                return subChecked ? (
+                                  <SubcategoryColumn
+                                    key={n.id}
+                                    node={n}
+                                    groupCategory={g.nodes.find((x) => x.id === n.id)?.category}
+                                    libraryMovements={libraryMovements}
+                                    leafCounts={leafCounts}
+                                    exerciseSlots={exerciseSlots}
+                                    onToggleSub={() => toggleSet(openSubs, n.id, setOpenSubs)}
+                                    onToggleLeaf={onToggleLeaf}
+                                    onAddLeafAgain={onAddLeafAgain}
+                                    onLibraryAdded={() => router.refresh()}
+                                  />
+                                ) : (
+                                  <SubChip
+                                    key={n.id}
+                                    label={n.label}
+                                    checked={false}
+                                    onToggle={() => toggleSet(openSubs, n.id, setOpenSubs)}
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
           {/* Type-search — at the bottom of the panel for quick lookups. */}
           <div style={{ marginTop: "0.85rem", paddingTop: "0.65rem", borderTop: "1px dashed var(--line)" }}>
@@ -933,9 +960,135 @@ function SelectExercisesPanel({
               </div>
             )}
           </div>
+            </div>
+            {/* Right column — Workout Order */}
+            <WorkoutOrderBlock
+              exerciseSlots={exerciseSlots}
+              onMoveToIndex={onMoveExerciseToIndex}
+              onDelete={onDeleteSlot}
+            />
+          </div>
         </div>
       )}
     </section>
+  );
+}
+
+// ── Workout Order block ─────────────────────────────────────────────────
+// Compact pinned list of every checked exercise (in current program order)
+// with ↑/↓ arrows + HTML5 drag-and-drop reordering. Removes too.
+function WorkoutOrderBlock({
+  exerciseSlots, onMoveToIndex, onDelete,
+}: {
+  exerciseSlots: ExerciseSlot[];
+  onMoveToIndex: (uid: string, dstExIdx: number) => void;
+  onDelete: (uid: string) => void;
+}) {
+  const [dragUid, setDragUid] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  function move(uid: string, dir: -1 | 1) {
+    const idx = exerciseSlots.findIndex((s) => s.uid === uid);
+    if (idx < 0) return;
+    onMoveToIndex(uid, idx + dir);
+  }
+
+  return (
+    <aside style={{
+      position: "sticky", top: "1rem", alignSelf: "start",
+      border: "1px solid var(--line)", borderRadius: 4,
+      background: "rgba(0,0,0,0.02)", padding: "0.5rem 0.6rem",
+      minWidth: 0,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+        <strong style={{ fontSize: "0.86rem" }}>Workout Order</strong>
+        <span className="meta" style={{ fontSize: "0.66rem" }}>{exerciseSlots.length} ex.</span>
+      </div>
+      {exerciseSlots.length === 0 ? (
+        <p className="meta" style={{ fontSize: "0.74rem", fontStyle: "italic", margin: "0.3rem 0" }}>
+          Check exercises on the left to start building.
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.18rem" }}>
+          {exerciseSlots.map((s, i) => {
+            const isDragOver = dragOver === i && dragUid !== null && dragUid !== s.uid;
+            return (
+              <div
+                key={s.uid}
+                draggable
+                onDragStart={(e) => {
+                  setDragUid(s.uid);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  if (dragUid && dragUid !== s.uid) {
+                    e.preventDefault();
+                    setDragOver(i);
+                  }
+                }}
+                onDragLeave={() => { if (dragOver === i) setDragOver(null); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragUid && dragUid !== s.uid) onMoveToIndex(dragUid, i);
+                  setDragUid(null);
+                  setDragOver(null);
+                }}
+                onDragEnd={() => { setDragUid(null); setDragOver(null); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.25rem",
+                  padding: "0.22rem 0.32rem", borderRadius: 3,
+                  background: isDragOver ? "rgba(168,61,43,0.15)" : "var(--paper)",
+                  border: `1px solid ${isDragOver ? "var(--rust)" : "var(--line)"}`,
+                  cursor: "grab", fontSize: "0.76rem",
+                  opacity: dragUid === s.uid ? 0.5 : 1,
+                }}
+                title="Drag to reorder"
+              >
+                <span style={{
+                  fontWeight: 700, color: "var(--rust)",
+                  minWidth: 18, fontSize: "0.74rem", textAlign: "right",
+                }}>{i + 1}.</span>
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.movement.name}>
+                  {s.movement.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => move(s.uid, -1)}
+                  disabled={i === 0}
+                  title="Move up"
+                  style={{
+                    background: "transparent", border: "none", cursor: i === 0 ? "default" : "pointer",
+                    color: i === 0 ? "var(--line)" : "var(--muted)",
+                    fontSize: "0.78rem", padding: "0 0.18rem", lineHeight: 1, fontFamily: "inherit",
+                  }}
+                >↑</button>
+                <button
+                  type="button"
+                  onClick={() => move(s.uid, 1)}
+                  disabled={i === exerciseSlots.length - 1}
+                  title="Move down"
+                  style={{
+                    background: "transparent", border: "none",
+                    cursor: i === exerciseSlots.length - 1 ? "default" : "pointer",
+                    color: i === exerciseSlots.length - 1 ? "var(--line)" : "var(--muted)",
+                    fontSize: "0.78rem", padding: "0 0.18rem", lineHeight: 1, fontFamily: "inherit",
+                  }}
+                >↓</button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(s.uid)}
+                  title="Remove from program"
+                  style={{
+                    background: "transparent", border: "none", cursor: "pointer",
+                    color: "var(--muted)", fontSize: "0.72rem", padding: "0 0.16rem", lineHeight: 1, fontFamily: "inherit",
+                  }}
+                >✕</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -946,7 +1099,7 @@ function SelectExercisesPanel({
 // always adds another instance (counter shows how many).
 function SubcategoryColumn({
   node, groupCategory, libraryMovements, leafCounts, exerciseSlots,
-  onToggleSub, onToggleLeaf, onAddLeafAgain, onSetOrderNum, onLibraryAdded,
+  onToggleSub, onToggleLeaf, onAddLeafAgain, onLibraryAdded,
 }: {
   node: LibraryNode;
   groupCategory?: Category;
@@ -956,7 +1109,6 @@ function SubcategoryColumn({
   onToggleSub: () => void;
   onToggleLeaf: (leafId: string, movement: Movement) => void;
   onAddLeafAgain: (leafId: string, movement: Movement) => void;
-  onSetOrderNum: (leafId: string, n: number) => void;
   onLibraryAdded: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -984,8 +1136,6 @@ function SubcategoryColumn({
           {leaves.map((leaf) => {
             const count = leafCounts.get(leaf.id) ?? 0;
             const checked = count > 0;
-            const exSlot = exerciseSlots.find((s) => s.leafId === leaf.id);
-            const orderNum = exSlot ? exerciseSlots.findIndex((s) => s.uid === exSlot.uid) + 1 : null;
             return (
               <div
                 key={leaf.id}
@@ -1019,29 +1169,11 @@ function SubcategoryColumn({
                     fontFamily: "inherit",
                   }}
                 >+</button>
-                {count > 1 && (
+                {count > 0 && (
                   <span style={{
                     fontSize: "0.66rem", fontWeight: 700, color: "var(--rust)",
                     minWidth: 18, textAlign: "center",
                   }}>×{count}</span>
-                )}
-                {count === 1 && (
-                  <input
-                    type="number"
-                    min={1}
-                    value={orderNum ?? ""}
-                    onChange={(e) => {
-                      const n = parseInt(e.target.value, 10);
-                      if (!isNaN(n) && n >= 1) onSetOrderNum(leaf.id, n);
-                    }}
-                    title="Order in the program"
-                    style={{
-                      width: 32, fontSize: "0.7rem", padding: "0.06rem 0.14rem",
-                      border: "1px solid var(--rust)", borderRadius: 3,
-                      flexShrink: 0, textAlign: "center",
-                      background: "var(--paper)",
-                    }}
-                  />
                 )}
               </div>
             );
