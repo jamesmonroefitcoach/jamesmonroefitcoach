@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { MovementRow } from "@/lib/data";
 import {
   EQUIPMENT_OPTIONS, LIBRARY_HIERARCHY, MOVEMENT_LIBRARY,
-  type Category, type LibraryNode, type LibraryGroup,
+  type Category, type LibraryNode,
 } from "@/lib/programs";
 import { addMovement, updateMovement, archiveMovement, type MovementInput } from "./actions";
 import { decodeSpecs, encodeSpecs } from "@/lib/equipment-specs";
@@ -400,48 +400,123 @@ function ExerciseForm({
   );
 }
 
-// ── Exercise row ──────────────────────────────────────────────────────────────
+// ── Exercise dropdown row ───────────────────────────────────────────────────
+// Collapsed: single-line list row with name + ▸ chevron + edit/archive.
+// Expanded: a labeled field grid showing every column on the movements row,
+// with "No Data" rendered for anything blank.
 
-function ExerciseRow({ m, onEdit, onArchive }: {
+const NO_DATA = <span style={{ color: "var(--muted)", fontStyle: "italic", fontWeight: 400 }}>No Data</span>;
+
+function fieldOr<T extends string | null | undefined>(v: T): React.ReactNode {
+  if (v === null || v === undefined) return NO_DATA;
+  const s = String(v).trim();
+  return s.length === 0 ? NO_DATA : s;
+}
+function listFieldOr(list: string[] | null | undefined, map?: (v: string) => string): React.ReactNode {
+  if (!list || list.length === 0) return NO_DATA;
+  return list.map((v) => (map ? map(v) : v)).join(", ");
+}
+
+function ExerciseDropdown({ m, onEdit, onArchive }: {
   m: MovementRow;
   onEdit: () => void;
   onArchive: (id: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+
+  // Decode machine/other specifics back out for display when present
+  const decoded = decodeSpecs(m.equipment_list ?? [], m.equipment_specifics);
   const equipLabel = (m.equipment_list ?? [])
     .map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e)
     .join(", ");
 
   return (
     <div style={{
-      display: "flex", alignItems: "flex-start", gap: "0.5rem",
-      padding: "0.45rem 0.75rem", borderRadius: 3,
-      background: "rgba(0,0,0,0.015)",
-      border: "1px solid var(--line)",
-      marginBottom: "0.3rem",
+      border: "1px solid var(--line)", borderRadius: 3,
+      background: open ? "var(--paper)" : "rgba(0,0,0,0.015)",
+      marginBottom: "0.25rem",
+      overflow: "hidden",
     }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-          <strong style={{ fontSize: "0.88rem" }}>{m.name}</strong>
+      {/* Collapsed row — clicking the body toggles the dropdown */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.65rem" }}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            background: "transparent", border: "none", cursor: "pointer", padding: 0,
+            display: "flex", alignItems: "center", gap: "0.45rem", flex: 1, minWidth: 0,
+            fontFamily: "inherit", textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: "0.7rem", color: "var(--muted)", width: 10, flexShrink: 0 }}>{open ? "▾" : "▸"}</span>
+          <strong style={{ fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</strong>
+        </button>
+        <div style={{ display: "flex", gap: "0.2rem", flexShrink: 0 }}>
+          {m.demo_url && (
+            <a href={m.demo_url} target="_blank" rel="noopener" className="btn btn-ghost"
+              style={{ fontSize: "0.7rem", padding: "0.12rem 0.35rem" }}
+              onClick={(e) => e.stopPropagation()}
+              title="Open demo">▶</a>
+          )}
+          <button className="btn btn-ghost" onClick={onEdit}
+            style={{ fontSize: "0.75rem", padding: "0.12rem 0.35rem" }}
+            title="Edit">✎</button>
+          <button className="btn btn-ghost" onClick={() => onArchive(m.id)}
+            style={{ fontSize: "0.75rem", padding: "0.12rem 0.35rem", color: "var(--muted)" }}
+            title="Archive">✕</button>
         </div>
-        {(equipLabel || m.position || (m.muscles ?? []).length > 0 || m.cues) && (
-          <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.12rem", flexWrap: "wrap" }}>
-            {equipLabel && <span className="meta" style={{ fontSize: "0.73rem" }}>{equipLabel}{m.equipment_specifics ? ` (${m.equipment_specifics})` : ""}</span>}
-            {m.position && <span className="meta" style={{ fontSize: "0.73rem" }}>{m.position}</span>}
-            {(m.muscles ?? []).length > 0 && <span className="meta" style={{ fontSize: "0.73rem" }}>{m.muscles.join(", ")}</span>}
-            {m.cues && <span className="meta" style={{ fontSize: "0.73rem", fontStyle: "italic" }}>{m.cues}</span>}
-          </div>
-        )}
       </div>
-      <div style={{ display: "flex", gap: "0.2rem", flexShrink: 0, marginTop: "0.1rem" }}>
-        {m.demo_url && (
-          <a href={m.demo_url} target="_blank" rel="noopener" className="btn btn-ghost"
-            style={{ fontSize: "0.7rem", padding: "0.12rem 0.35rem" }}>▶</a>
-        )}
-        <button className="btn btn-ghost" onClick={onEdit}
-          style={{ fontSize: "0.75rem", padding: "0.12rem 0.35rem" }}>✎</button>
-        <button className="btn btn-ghost" onClick={() => onArchive(m.id)}
-          style={{ fontSize: "0.75rem", padding: "0.12rem 0.35rem", color: "var(--muted)" }}>✕</button>
-      </div>
+
+      {/* Expanded body — all fields with No Data for blanks */}
+      {open && (
+        <div style={{ padding: "0.5rem 0.85rem 0.7rem", borderTop: "1px solid var(--line)" }}>
+          <dl style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "0.35rem 1rem", margin: 0, fontSize: "0.82rem" }}>
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Name</dt>
+            <dd style={{ margin: 0, fontWeight: 600 }}>{fieldOr(m.name)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Category</dt>
+            <dd style={{ margin: 0 }}>{fieldOr(m.category)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Subcategory</dt>
+            <dd style={{ margin: 0 }}>{fieldOr(m.subcategory)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Equipment</dt>
+            <dd style={{ margin: 0 }}>{equipLabel || NO_DATA}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Machine spec</dt>
+            <dd style={{ margin: 0 }}>{fieldOr(decoded.machineSpec)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Other spec</dt>
+            <dd style={{ margin: 0 }}>{fieldOr(decoded.otherSpec)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Position</dt>
+            <dd style={{ margin: 0 }}>{fieldOr(m.position)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Muscles</dt>
+            <dd style={{ margin: 0 }}>{listFieldOr(m.muscles)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Cues</dt>
+            <dd style={{ margin: 0, fontStyle: m.cues ? "italic" : undefined }}>{fieldOr(m.cues)}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Demo URL</dt>
+            <dd style={{ margin: 0, wordBreak: "break-all" }}>{
+              m.demo_url
+                ? <a href={m.demo_url} target="_blank" rel="noopener" style={{ color: "var(--rust)" }}>{m.demo_url}</a>
+                : NO_DATA
+            }</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Core movement</dt>
+            <dd style={{ margin: 0 }}>{m.is_core ? "Yes" : "No"}</dd>
+
+            <dt style={{ color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Added</dt>
+            <dd style={{ margin: 0 }}>{
+              m.created_at
+                ? new Date(m.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                : NO_DATA
+            }</dd>
+          </dl>
+        </div>
+      )}
     </div>
   );
 }
@@ -509,7 +584,7 @@ function NodeSection({
                 ? <ExerciseForm key={m.id} initial={movementToInput(m)}
                     onSave={(input) => handleUpdate(m.id, input)}
                     onCancel={() => setEditingId(null)} />
-                : <ExerciseRow key={m.id} m={m}
+                : <ExerciseDropdown key={m.id} m={m}
                     onEdit={() => { setEditingId(m.id); setAdding(false); }}
                     onArchive={handleArchive} />
             ))}
@@ -566,7 +641,7 @@ function NodeSection({
                   mode="full"
                   onSave={(input) => handleUpdate(m.id, input)}
                   onCancel={() => setEditingId(null)} />
-              : <ExerciseRow key={m.id} m={m}
+              : <ExerciseDropdown key={m.id} m={m}
                   onEdit={() => { setEditingId(m.id); setAdding(false); }}
                   onArchive={handleArchive} />
           ))}
@@ -584,75 +659,14 @@ function NodeSection({
   );
 }
 
-// ── Group section ─────────────────────────────────────────────────────────────
-
-function GroupSection({
-  group, movements, searchActive,
-}: {
-  group: LibraryGroup;
-  movements: MovementRow[];
-  searchActive: boolean;
-}) {
-  const [open, setOpen] = useState(true);
-
-  // Total exercises in this group
-  const total = useMemo(() => {
-    const allNodeLabels = group.nodes.flatMap((n) =>
-      [n.label, ...(n.children?.map((c) => c.label) ?? [])]
-    );
-    return movements.filter((m) =>
-      allNodeLabels.some((label) => (m.subcategory ?? "").toLowerCase() === label.toLowerCase())
-    ).length;
-  }, [movements, group]);
-
-  const isOpen = open || searchActive;
-
-  return (
-    <section style={{ marginBottom: "1rem" }}>
-      {/* Group header */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: "0.6rem",
-        borderBottom: "2px solid var(--line)",
-        paddingBottom: "0.45rem", marginBottom: isOpen ? "0.6rem" : 0,
-      }}>
-        <button
-          onClick={() => setOpen((o) => !o)}
-          style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0" }}
-        >
-          <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{isOpen ? "▾" : "▸"}</span>
-          <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>{group.label}</span>
-          {total > 0 && (
-            <span style={{
-              background: "var(--ink)", color: "var(--paper)",
-              borderRadius: 999, fontSize: "0.65rem", fontWeight: 700,
-              padding: "0.08rem 0.45rem", lineHeight: 1.5,
-            }}>{total}</span>
-          )}
-        </button>
-      </div>
-
-      {isOpen && (
-        <div style={{ paddingLeft: "0.5rem" }}>
-          {group.nodes.map((node) => (
-            <NodeSection
-              key={node.id}
-              node={node}
-              movements={movements}
-              searchActive={searchActive}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ExerciseLibraryClient({ movements }: { movements: MovementRow[] }) {
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
   const router = useRouter();
+  // Active file tab — each LIBRARY_HIERARCHY group is one tab.
+  const [activeGroupId, setActiveGroupId] = useState<string>(LIBRARY_HIERARCHY[0]?.id ?? "");
 
   // Count of presets sitting in localStorage but not yet in the database. Drives
   // the "Import N saved presets" button so coaches know there's work to do.
@@ -779,20 +793,93 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
         />
       </div>
 
-      {/* Hierarchy groups */}
-      {LIBRARY_HIERARCHY.map((group) => (
-        <GroupSection
-          key={group.id}
-          group={group}
-          movements={filtered}
-          searchActive={searchActive}
-        />
-      ))}
+      {/* File tabs — one per group, side by side. Active tab gets a rust
+          bottom border; inactive ones sit flush so the active tab "files"
+          into the body below. */}
+      <div
+        className="no-print"
+        style={{
+          display: "flex", gap: 0, borderBottom: "2px solid var(--rust)",
+          marginBottom: "1.1rem", flexWrap: "wrap",
+        }}
+      >
+        {LIBRARY_HIERARCHY.map((g) => {
+          const allLabels = g.nodes.flatMap((n) => [n.label, ...(n.children?.map((c) => c.label) ?? [])]);
+          const total = filtered.filter((m) => allLabels.some((l) => (m.subcategory ?? "").toLowerCase() === l.toLowerCase())).length;
+          const isActive = activeGroupId === g.id;
+          return (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => setActiveGroupId(g.id)}
+              style={{
+                padding: "0.5rem 1.1rem",
+                fontSize: "0.92rem",
+                fontFamily: "inherit", cursor: "pointer",
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? "var(--rust)" : "var(--muted)",
+                background: isActive ? "var(--paper)" : "transparent",
+                border: isActive ? "1px solid var(--rust)" : "1px solid transparent",
+                borderBottom: isActive ? "1px solid var(--paper)" : "1px solid var(--rust)",
+                marginBottom: -2,
+                borderTopLeftRadius: 4, borderTopRightRadius: 4,
+                display: "flex", alignItems: "center", gap: "0.45rem",
+              }}
+            >
+              {g.label}
+              {total > 0 && (
+                <span style={{
+                  background: isActive ? "var(--rust)" : "rgba(0,0,0,0.08)",
+                  color: isActive ? "var(--paper)" : "var(--muted)",
+                  borderRadius: 999, fontSize: "0.62rem", fontWeight: 700,
+                  padding: "0.06rem 0.4rem", lineHeight: 1.5,
+                }}>{total}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {searchActive && filtered.length === 0 && (
-        <p className="meta" style={{ textAlign: "center", padding: "2rem 0" }}>
-          No exercises match &quot;{search}&quot;.
-        </p>
+      {/* When a search is active, show a flat list of all matches across
+          every group. Otherwise just render the active tab's group. */}
+      {searchActive ? (
+        filtered.length === 0 ? (
+          <p className="meta" style={{ textAlign: "center", padding: "2rem 0" }}>
+            No exercises match &quot;{search}&quot;.
+          </p>
+        ) : (
+          <div>
+            {filtered.map((m) => (
+              <ExerciseDropdown
+                key={m.id}
+                m={m}
+                onEdit={() => {/* search-view edit not wired — clear search to edit */}}
+                onArchive={async (id) => {
+                  if (!confirm("Archive this exercise?")) return;
+                  await archiveMovement(id);
+                  router.refresh();
+                }}
+              />
+            ))}
+          </div>
+        )
+      ) : (
+        (() => {
+          const activeGroup = LIBRARY_HIERARCHY.find((g) => g.id === activeGroupId) ?? LIBRARY_HIERARCHY[0];
+          if (!activeGroup) return null;
+          return (
+            <div style={{ paddingLeft: "0.5rem" }}>
+              {activeGroup.nodes.map((node) => (
+                <NodeSection
+                  key={node.id}
+                  node={node}
+                  movements={filtered}
+                  searchActive={false}
+                />
+              ))}
+            </div>
+          );
+        })()
       )}
     </main>
   );
