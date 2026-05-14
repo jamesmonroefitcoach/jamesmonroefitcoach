@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { fmtDate } from "@/lib/format";
 import type { PastProgramFull } from "@/lib/programs";
+import { sendProgramFeedback } from "./program-feedback-actions";
 
 export type PastSessionItem = {
   id: string;
@@ -158,11 +159,13 @@ export default function PastPrograms({
                 title="Coach Assigned"
                 clientId={clientId}
                 items={programs.filter((p) => !p.created_by_client)}
+                allowFeedback={false}
               />
               <ProgramGroupCollapsible
                 title="Client Created"
                 clientId={clientId}
                 items={programs.filter((p) => p.created_by_client)}
+                allowFeedback={true}
               />
             </div>
           </div>
@@ -173,15 +176,16 @@ export default function PastPrograms({
 }
 
 function ProgramGroupCollapsible({
-  title, clientId, items,
+  title, clientId, items, allowFeedback,
 }: {
   title: string;
   clientId: string;
   items: PastProgramFull[];
+  allowFeedback?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: 3, overflow: "hidden" }}>
+    <div style={{ border: "1px solid var(--line)", borderRadius: 3, overflow: "hidden" }} id="programs">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -196,34 +200,110 @@ function ProgramGroupCollapsible({
         <span className="meta" style={{ fontSize: "0.68rem" }}>{items.length}</span>
       </button>
       {open && (
-        <div style={{ padding: "0.3rem 0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+        <div style={{ padding: "0.3rem 0.4rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
           {items.length === 0 ? (
             <p className="meta" style={{ fontSize: "0.72rem", fontStyle: "italic", margin: "0.2rem 0.1rem" }}>
               None yet.
             </p>
           ) : items.map((p) => (
-            <Link
+            <ProgramListRow
               key={p.id}
-              href={`/coach/programming/build?tab=program&client=${clientId}`}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
-                padding: "0.3rem 0.45rem", borderRadius: 3,
-                background: "var(--paper)",
-                border: "1px solid var(--line)",
-                textDecoration: "none", color: "var(--ink)",
-              }}
-            >
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: "0.78rem" }}>{p.name}</div>
-                <div className="meta" style={{ fontSize: "0.66rem" }}>
-                  {fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}
-                </div>
-              </div>
-              <span style={{ color: "var(--rust)", fontSize: "0.76rem", flexShrink: 0 }}>→</span>
-            </Link>
+              program={p}
+              clientId={clientId}
+              allowFeedback={allowFeedback ?? false}
+            />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function ProgramListRow({ program, clientId, allowFeedback }: {
+  program: PastProgramFull;
+  clientId: string;
+  allowFeedback: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{
+      background: "var(--paper)",
+      border: "1px solid var(--line)",
+      borderRadius: 3,
+      overflow: "hidden",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.45rem" }}>
+        <Link
+          href={`/coach/programming/build?tab=program&client=${clientId}`}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
+            textDecoration: "none", color: "var(--ink)", flex: 1, minWidth: 0,
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: "0.78rem" }}>{program.name}</div>
+            <div className="meta" style={{ fontSize: "0.66rem" }}>
+              {fmtDate(program.starts_on)} → {fmtDate(program.ends_on)}
+            </div>
+          </div>
+          <span style={{ color: "var(--rust)", fontSize: "0.76rem", flexShrink: 0 }}>→</span>
+        </Link>
+        {allowFeedback && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="btn btn-ghost"
+            style={{ fontSize: "0.66rem", padding: "0.12rem 0.4rem", whiteSpace: "nowrap" }}
+            title="Send feedback to this client about this program"
+          >{open ? "▾ Feedback" : "▸ Feedback"}</button>
+        )}
+      </div>
+      {allowFeedback && open && <FeedbackForm programId={program.id} />}
+    </div>
+  );
+}
+
+function FeedbackForm({ programId }: { programId: string }) {
+  const [body, setBody] = useState("");
+  const [sending, startSend] = useTransition();
+  const [status, setStatus] = useState<{ kind: "idle" } | { kind: "ok" } | { kind: "err"; msg: string }>({ kind: "idle" });
+
+  function submit() {
+    if (!body.trim()) { setStatus({ kind: "err", msg: "Write a message first." }); return; }
+    setStatus({ kind: "idle" });
+    startSend(async () => {
+      const res = await sendProgramFeedback({ programId, body });
+      if (res.ok) {
+        setStatus({ kind: "ok" });
+        setBody("");
+      } else {
+        setStatus({ kind: "err", msg: res.error ?? "Send failed." });
+      }
+    });
+  }
+
+  return (
+    <div style={{ borderTop: "1px solid var(--line)", padding: "0.4rem 0.5rem", background: "rgba(168,61,43,0.03)" }}>
+      <textarea
+        className="textarea"
+        rows={3}
+        placeholder="Write feedback for the client — what's working, what to adjust, anything to watch."
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        style={{ fontSize: "0.78rem", padding: "0.28rem 0.4rem", resize: "vertical", width: "100%" }}
+      />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.35rem", gap: "0.5rem" }}>
+        <div style={{ fontSize: "0.72rem" }}>
+          {status.kind === "ok" && <span style={{ color: "var(--sage)" }}>✓ Sent — they&apos;ll see it in Messages.</span>}
+          {status.kind === "err" && <span style={{ color: "var(--red)" }}>{status.msg}</span>}
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={submit}
+          disabled={sending || !body.trim()}
+          style={{ fontSize: "0.74rem", padding: "0.2rem 0.65rem" }}
+        >{sending ? "Sending…" : "Submit feedback"}</button>
+      </div>
     </div>
   );
 }

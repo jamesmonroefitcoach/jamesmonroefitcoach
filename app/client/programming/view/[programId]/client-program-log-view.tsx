@@ -7,10 +7,11 @@
 // Logs persist to localStorage today. When the client log tables ship in
 // Supabase this hook is the spot to swap.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import type { ClientProgramRow } from "@/lib/data";
 import { fmtDate } from "@/lib/format";
+import { sendProgramFeedback } from "@/app/coach/clients/[id]/program-feedback-actions";
 
 // ── Minimal builder_state shape we care about ────────────────────────────
 type StateExercise = {
@@ -175,6 +176,7 @@ export default function ClientProgramLogView({
             {program.starts_on ? ` · ${fmtDate(program.starts_on)}${program.ends_on ? ` → ${fmtDate(program.ends_on)}` : ""}` : ""}
           </p>
         </div>
+        <RequestFeedbackBox programId={program.id} />
       </header>
       <hr className="divider" />
 
@@ -207,6 +209,73 @@ export default function ClientProgramLogView({
         />
       )}
     </main>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Request feedback box — sends a message to James about this program
+// ──────────────────────────────────────────────────────────────────────────
+function RequestFeedbackBox({ programId }: { programId: string }) {
+  const [open, setOpen] = useState(false);
+  const [body, setBody] = useState("");
+  const [sending, startSend] = useTransition();
+  const [status, setStatus] = useState<{ kind: "idle" } | { kind: "ok" } | { kind: "err"; msg: string }>({ kind: "idle" });
+
+  function submit() {
+    if (!body.trim()) { setStatus({ kind: "err", msg: "Add a note first." }); return; }
+    setStatus({ kind: "idle" });
+    startSend(async () => {
+      const res = await sendProgramFeedback({ programId, body });
+      if (res.ok) {
+        setStatus({ kind: "ok" });
+        setBody("");
+      } else {
+        setStatus({ kind: "err", msg: res.error ?? "Send failed." });
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={() => setOpen(true)}
+        style={{ fontSize: "0.78rem", padding: "0.3rem 0.7rem" }}
+      >💬 Request feedback</button>
+    );
+  }
+
+  return (
+    <div className="card" style={{ width: "min(360px, 100%)", padding: "0.55rem 0.7rem", borderLeft: "4px solid var(--rust)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <strong style={{ fontSize: "0.88rem" }}>Request feedback</strong>
+        <button className="btn btn-ghost" onClick={() => { setOpen(false); setStatus({ kind: "idle" }); }} style={{ fontSize: "0.72rem" }}>✕</button>
+      </div>
+      <p className="meta" style={{ fontSize: "0.72rem", margin: "0.2rem 0 0.4rem" }}>
+        Send James a note about this program. A link to it gets included automatically.
+      </p>
+      <textarea
+        className="textarea"
+        rows={3}
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="What would you like feedback on?"
+        style={{ fontSize: "0.82rem", padding: "0.3rem 0.42rem", resize: "vertical", width: "100%" }}
+      />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.4rem", gap: "0.5rem" }}>
+        <div style={{ fontSize: "0.72rem" }}>
+          {status.kind === "ok" && <span style={{ color: "var(--sage)" }}>✓ Sent — check Messages.</span>}
+          {status.kind === "err" && <span style={{ color: "var(--red)" }}>{status.msg}</span>}
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={submit}
+          disabled={sending || !body.trim()}
+          style={{ fontSize: "0.78rem", padding: "0.25rem 0.7rem" }}
+        >{sending ? "Sending…" : "Submit"}</button>
+      </div>
+    </div>
   );
 }
 
