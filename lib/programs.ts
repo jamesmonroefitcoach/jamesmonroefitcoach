@@ -126,14 +126,35 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
   {
     id: "upper", label: "Upper",
     nodes: [
-      { id: "vertical-pull",      label: "Vertical Pull",      category: "pull",         is_core: true },
-      { id: "horizontal-pull",    label: "Horizontal Pull",    category: "pull",         is_core: true },
-      { id: "vertical-push",      label: "Vertical Push",      category: "push",         is_core: true },
-      { id: "horizontal-push",    label: "Horizontal Push",    category: "push",         is_core: true },
-      { id: "downward-push",      label: "Downward Push",      category: "push",
-        description: "chest, table decline, decline db press, dip" },
-      { id: "lat-pushdown",       label: "Lat Pushdown",       category: "pull" },
-      { id: "scapular-training",  label: "Scapular Training",  category: "shoulder" },
+      {
+        id: "vertical-pull", label: "Vertical Pull", category: "pull", is_core: true,
+        children: [{ id: "vertical-pull-default", label: "Vertical Pull", category: "pull" }],
+      },
+      {
+        id: "horizontal-pull", label: "Horizontal Pull", category: "pull", is_core: true,
+        children: [{ id: "horizontal-pull-default", label: "Horizontal Pull", category: "pull" }],
+      },
+      {
+        id: "vertical-push", label: "Vertical Push", category: "push", is_core: true,
+        children: [{ id: "vertical-push-default", label: "Vertical Push", category: "push" }],
+      },
+      {
+        id: "horizontal-push", label: "Horizontal Push", category: "push", is_core: true,
+        children: [{ id: "horizontal-push-default", label: "Horizontal Push", category: "push" }],
+      },
+      {
+        id: "downward-push", label: "Downward Push", category: "push",
+        description: "chest, table decline, decline db press, dip",
+        children: [{ id: "downward-push-default", label: "Downward Push", category: "push" }],
+      },
+      {
+        id: "lat-pushdown", label: "Lat Pushdown", category: "pull",
+        children: [{ id: "lat-pushdown-default", label: "Lat Pushdown", category: "pull" }],
+      },
+      {
+        id: "scapular-training", label: "Scapular Training", category: "shoulder",
+        children: [{ id: "scapular-training-default", label: "Scapular Training", category: "shoulder" }],
+      },
       {
         id: "upper-accessory", label: "Accessory", category: "arm_accessory",
         children: [
@@ -149,7 +170,10 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
   {
     id: "middle", label: "Middle",
     nodes: [
-      { id: "back-extension", label: "Back extension", category: "hinge" },
+      {
+        id: "back-extension", label: "Back extension", category: "hinge",
+        children: [{ id: "back-extension-default", label: "Back extension", category: "hinge" }],
+      },
       {
         id: "ab", label: "Ab", category: "core", is_core: true,
         children: [
@@ -174,9 +198,18 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
   {
     id: "lower", label: "Lower",
     nodes: [
-      { id: "hinge", label: "Hinge", category: "hinge", is_core: true },
-      { id: "squat", label: "Squat", category: "squat", is_core: true },
-      { id: "lower-accessory", label: "Accessory", category: "leg_accessory" },
+      {
+        id: "hinge", label: "Hinge", category: "hinge", is_core: true,
+        children: [{ id: "hinge-default", label: "Hinge", category: "hinge" }],
+      },
+      {
+        id: "squat", label: "Squat", category: "squat", is_core: true,
+        children: [{ id: "squat-default", label: "Squat", category: "squat" }],
+      },
+      {
+        id: "lower-accessory", label: "Accessory", category: "leg_accessory",
+        children: [{ id: "lower-accessory-default", label: "Accessory", category: "leg_accessory" }],
+      },
     ],
   },
   {
