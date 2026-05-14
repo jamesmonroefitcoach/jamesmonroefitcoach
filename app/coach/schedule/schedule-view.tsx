@@ -1028,13 +1028,14 @@ export default function ScheduleView({
                           </span>
                           {e.session_type === "session" ? (
                             <span style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.04em",
-                              color: e.program_status === "draft" ? "var(--amber)"
-                                : e.status === "completed" && e.program_status !== "programmed" ? "var(--muted)"
+                              color: e.program_status === "programmed" ? "var(--sage)"
+                                : e.program_status === "draft" ? "var(--amber)"
+                                : e.status === "completed" ? "var(--sage)"
                                 : undefined,
                             }}>
                               {e.program_status === "programmed" ? "✓ prog"
                                 : e.program_status === "draft" ? "● draft"
-                                : e.status === "completed" ? "○ historical"
+                                : e.status === "completed" ? "✓ hist · no file"
                                 : "● need"}
                             </span>
                           ) : null}

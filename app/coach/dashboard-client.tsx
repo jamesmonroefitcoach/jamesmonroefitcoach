@@ -513,8 +513,20 @@ export default function DashboardClient({
                         <td>
                           {isSession ? (
                             (a.status === "completed" && !isProgrammed && !isDraft) ? (
-                              // Backfilled past session — no real program data on file.
-                              <span className="badge" style={{ fontSize: "0.66rem", color: "var(--muted)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Historical</span>
+                              // Backfilled past session — rendered alongside Published but
+                              // tagged "historical · no file" since nothing's on file.
+                              <span
+                                style={{
+                                  fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
+                                  borderRadius: 3,
+                                  border: "1px solid var(--sage)",
+                                  color: "var(--sage)",
+                                  background: "rgba(90,107,74,0.07)",
+                                  whiteSpace: "nowrap", display: "inline-block",
+                                  cursor: "default",
+                                }}
+                                title="Historical session — no program file exists on this record."
+                              >Published · historical · no file</span>
                             ) : (
                               <>
                                 {prog?.endsOn && (

@@ -19,8 +19,15 @@ function StatusBadge({ status }: { status: "programmed" | "draft" | "needs_progr
   if (status === "programmed") return <span className="badge badge-sage" style={{ fontSize: "0.58rem" }}>published</span>;
   if (status === "draft") return <span className="badge badge-amber" style={{ fontSize: "0.58rem" }}>draft</span>;
   if (status === "needs_programming") return <span className="badge" style={{ fontSize: "0.58rem", color: "var(--muted)" }}>—</span>;
-  // n/a — used for historical past sessions backfilled with no program data.
-  return <span className="badge" style={{ fontSize: "0.58rem", color: "var(--muted)" }}>historical</span>;
+  // n/a — backfilled past sessions. Render under "published" so they sit in
+  // the same bucket as programmed work, with a "no file" flag so it's clear
+  // there's no actual program record behind the row.
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+      <span className="badge badge-sage" style={{ fontSize: "0.58rem" }}>published</span>
+      <span className="badge" style={{ fontSize: "0.54rem", color: "var(--muted)" }} title="Historical — no program file on record">hist · no file</span>
+    </span>
+  );
 }
 
 function MonthGroup({ clientId, month, sessions }: {
