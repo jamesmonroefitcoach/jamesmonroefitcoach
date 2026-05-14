@@ -807,3 +807,53 @@ export async function listMovements(): Promise<MovementRow[]> {
   if (error || !data) return [];
   return data as MovementRow[];
 }
+
+// ─── Client-side: programs assigned / created for me ────────────────────────
+// Reads the programs table for a single client. Each entry carries enough
+// metadata for the client portal to list it and surface the builder_state
+// JSON (when present) so we can render days + exercises in the log view.
+
+export type ClientProgramRow = {
+  id: string;
+  name: string;
+  program_kind: "in_gym" | "at_home";
+  starts_on: string | null;
+  ends_on: string | null;
+  duration_weeks: number | null;
+  at_home_cadence: string | null;
+  is_current: boolean;
+  is_published: boolean;
+  created_by_client: boolean;
+  builder_state: any | null;     // raw JSON; renderer normalizes
+  created_at: string;
+};
+
+export async function listProgramsForClient(clientId: string): Promise<ClientProgramRow[]> {
+  if (!hasSupabaseEnv()) return [];
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("programs")
+    .select("id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, is_current, is_published, created_by_client, builder_state, created_at")
+    .eq("client_id", clientId)
+    .order("starts_on", { ascending: false, nullsFirst: false });
+  if (error || !data) return [];
+  return data as ClientProgramRow[];
+}
+
+// Load a single program by id — only returns it when the requested client
+// actually owns it. Used by the client portal's per-program log view.
+export async function getProgramForClient(
+  programId: string,
+  clientId: string,
+): Promise<ClientProgramRow | null> {
+  if (!hasSupabaseEnv()) return null;
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("programs")
+    .select("id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, is_current, is_published, created_by_client, builder_state, created_at")
+    .eq("id", programId)
+    .eq("client_id", clientId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as ClientProgramRow;
+}
