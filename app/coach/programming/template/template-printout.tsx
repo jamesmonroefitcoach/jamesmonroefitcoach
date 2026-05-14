@@ -9,15 +9,15 @@
 const PRINTOUT_BLANK_ROW_COUNT = 26;
 const PRINTOUT_COLUMNS: { label: string; width?: string }[] = [
   { label: "Exercise" },
-  { label: "Target Sets or Times", width: "82px" },
-  { label: "Target Reps", width: "62px" },
-  { label: "Target Intensity", width: "82px" },
-  { label: "Cues", width: "150px" },
-  { label: "Actual Reps", width: "62px" },
-  { label: "Weight", width: "58px" },
-  { label: "Equipment", width: "110px" },
-  { label: "Tempo", width: "52px" },
-  { label: "Rest", width: "48px" },
+  { label: "Set Number",            width: "56px" },
+  { label: "Target Reps / Time (s)", width: "90px" },
+  { label: "Target Intensity",      width: "82px" },
+  { label: "Set Rest",              width: "54px" },
+  { label: "Cues",                  width: "150px" },
+  { label: "Actual Reps",           width: "62px" },
+  { label: "Weight",                width: "58px" },
+  { label: "Equipment",             width: "110px" },
+  { label: "Tempo",                 width: "52px" },
   { label: "Notes" },
 ];
 
