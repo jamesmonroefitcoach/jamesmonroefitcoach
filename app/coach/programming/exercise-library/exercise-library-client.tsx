@@ -5,10 +5,61 @@ import { useRouter } from "next/navigation";
 import type { MovementRow } from "@/lib/data";
 import {
   EQUIPMENT_OPTIONS, LIBRARY_HIERARCHY, MOVEMENT_LIBRARY,
-  type Category, type LibraryNode,
+  type Category, type LibraryNode, type LibraryGroup,
 } from "@/lib/programs";
 import { addMovement, updateMovement, archiveMovement, type MovementInput } from "./actions";
 import { decodeSpecs, encodeSpecs } from "@/lib/equipment-specs";
+
+// ── Coach-added custom categories/subcategories ──────────────────────────
+// Stored in localStorage on top of the static LIBRARY_HIERARCHY. New groups
+// get their own tab; new subs nest under whichever group they were added to.
+// Subtle + buttons in the tab bar and section headers drive this. Until a
+// proper database table exists, these are per-browser only — note shown next
+// to the buttons.
+
+type CustomExtras = {
+  groups: { id: string; label: string }[];
+  subs: Record<string, { id: string; label: string }[]>;
+};
+const CUSTOM_EXTRAS_KEY = "monroe-library-extras-v1";
+
+function loadCustomExtras(): CustomExtras {
+  if (typeof window === "undefined") return { groups: [], subs: {} };
+  try {
+    const raw = localStorage.getItem(CUSTOM_EXTRAS_KEY);
+    return raw ? (JSON.parse(raw) as CustomExtras) : { groups: [], subs: {} };
+  } catch { return { groups: [], subs: {} }; }
+}
+function saveCustomExtras(c: CustomExtras) {
+  try { localStorage.setItem(CUSTOM_EXTRAS_KEY, JSON.stringify(c)); } catch {}
+}
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+}
+
+function mergeHierarchy(extras: CustomExtras): LibraryGroup[] {
+  // Static groups first, then any custom group tabs at the end. For each
+  // group (static or custom), append the matching custom subs.
+  const out: LibraryGroup[] = LIBRARY_HIERARCHY.map((g) => ({
+    ...g,
+    nodes: [
+      ...g.nodes,
+      ...(extras.subs[g.id] ?? []).map((s) => ({
+        id: s.id, label: s.label, category: "mobility" as Category,
+      })),
+    ],
+  }));
+  for (const g of extras.groups) {
+    out.push({
+      id: g.id,
+      label: g.label,
+      nodes: (extras.subs[g.id] ?? []).map((s) => ({
+        id: s.id, label: s.label, category: "mobility" as Category,
+      })),
+    });
+  }
+  return out;
+}
 
 // ── Local-preset backfill helpers ─────────────────────────────────────────────
 // Mirrors the ExercisePreset shape from build-program-client.tsx so we can
@@ -665,8 +716,42 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
   const router = useRouter();
-  // Active file tab — each LIBRARY_HIERARCHY group is one tab.
+  // Active file tab — each LIBRARY_HIERARCHY group is one tab. Coach-added
+  // custom categories live in localStorage and merge on top of the static
+  // tree below.
   const [activeGroupId, setActiveGroupId] = useState<string>(LIBRARY_HIERARCHY[0]?.id ?? "");
+  const [customExtras, setCustomExtras] = useState<CustomExtras>({ groups: [], subs: {} });
+  useEffect(() => { setCustomExtras(loadCustomExtras()); }, []);
+
+  // Effective hierarchy = static LIBRARY_HIERARCHY ⊕ localStorage extras.
+  const fullHierarchy = useMemo(() => mergeHierarchy(customExtras), [customExtras]);
+
+  function addCustomGroup(label: string) {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    const id = `cust-grp-${slug(trimmed)}-${Date.now().toString(36)}`;
+    const next: CustomExtras = {
+      ...customExtras,
+      groups: [...customExtras.groups, { id, label }],
+    };
+    setCustomExtras(next);
+    saveCustomExtras(next);
+    setActiveGroupId(id);
+  }
+  function addCustomSub(groupId: string, label: string) {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    const id = `cust-sub-${slug(trimmed)}-${Date.now().toString(36)}`;
+    const next: CustomExtras = {
+      ...customExtras,
+      subs: {
+        ...customExtras.subs,
+        [groupId]: [...(customExtras.subs[groupId] ?? []), { id, label }],
+      },
+    };
+    setCustomExtras(next);
+    saveCustomExtras(next);
+  }
 
   // Count of presets sitting in localStorage but not yet in the database. Drives
   // the "Import N saved presets" button so coaches know there's work to do.
@@ -795,15 +880,16 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
 
       {/* File tabs — one per group, side by side. Active tab gets a rust
           bottom border; inactive ones sit flush so the active tab "files"
-          into the body below. */}
+          into the body below. A subtle + at the end opens an inline input
+          for adding a new category tab (persisted in localStorage). */}
       <div
         className="no-print"
         style={{
           display: "flex", gap: 0, borderBottom: "2px solid var(--rust)",
-          marginBottom: "1.1rem", flexWrap: "wrap",
+          marginBottom: "1.1rem", flexWrap: "wrap", alignItems: "flex-end",
         }}
       >
-        {LIBRARY_HIERARCHY.map((g) => {
+        {fullHierarchy.map((g) => {
           const allLabels = g.nodes.flatMap((n) => [n.label, ...(n.children?.map((c) => c.label) ?? [])]);
           const total = filtered.filter((m) => allLabels.some((l) => (m.subcategory ?? "").toLowerCase() === l.toLowerCase())).length;
           const isActive = activeGroupId === g.id;
@@ -838,6 +924,11 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
             </button>
           );
         })}
+        <AddInlineButton
+          title="Add a new category tab (saved in this browser only)"
+          placeholder="Category name…"
+          onSubmit={(name) => addCustomGroup(name)}
+        />
       </div>
 
       {/* When a search is active, show a flat list of all matches across
@@ -865,7 +956,7 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
         )
       ) : (
         (() => {
-          const activeGroup = LIBRARY_HIERARCHY.find((g) => g.id === activeGroupId) ?? LIBRARY_HIERARCHY[0];
+          const activeGroup = fullHierarchy.find((g) => g.id === activeGroupId) ?? fullHierarchy[0];
           if (!activeGroup) return null;
           return (
             <div style={{ paddingLeft: "0.5rem" }}>
@@ -877,10 +968,83 @@ export default function ExerciseLibraryClient({ movements }: { movements: Moveme
                   searchActive={false}
                 />
               ))}
+              {/* Subtle + for adding a new subcategory under this tab. */}
+              <div style={{ marginTop: "0.65rem", paddingTop: "0.5rem", borderTop: "1px dashed var(--line)", display: "flex" }}>
+                <AddInlineButton
+                  title="Add a new subcategory under this tab (saved in this browser only)"
+                  placeholder="Subcategory name…"
+                  onSubmit={(name) => addCustomSub(activeGroup.id, name)}
+                  label="+ Add subcategory"
+                />
+              </div>
             </div>
           );
         })()
       )}
     </main>
+  );
+}
+
+// ─── Subtle + button + inline input ─────────────────────────────────────
+// Used both in the tab bar (for adding a new top-level category) and at the
+// bottom of the active tab (for adding a new subcategory).
+function AddInlineButton({
+  title, placeholder, onSubmit, label = "+",
+}: {
+  title: string;
+  placeholder: string;
+  onSubmit: (name: string) => void;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  function submit() {
+    if (!value.trim()) return;
+    onSubmit(value);
+    setValue("");
+    setOpen(false);
+  }
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={title}
+        style={{
+          background: "transparent", border: "none", cursor: "pointer",
+          color: "var(--muted)", fontSize: "0.82rem", fontFamily: "inherit",
+          padding: "0.45rem 0.55rem", opacity: 0.55,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+        onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.55")}
+      >{label}</button>
+    );
+  }
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: "0.3rem",
+      padding: "0.32rem 0.45rem",
+      background: "var(--paper)",
+      border: "1px solid var(--rust)",
+      borderTopLeftRadius: 4, borderTopRightRadius: 4,
+      marginBottom: -2,
+    }}>
+      <input
+        autoFocus
+        className="input"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") { setOpen(false); setValue(""); }
+        }}
+        style={{ fontSize: "0.78rem", padding: "0.16rem 0.32rem", maxWidth: 200 }}
+      />
+      <button type="button" onClick={submit} disabled={!value.trim()} className="btn btn-primary"
+        style={{ fontSize: "0.7rem", padding: "0.12rem 0.45rem" }}>Save</button>
+      <button type="button" onClick={() => { setOpen(false); setValue(""); }} className="btn btn-ghost"
+        style={{ fontSize: "0.7rem", padding: "0.12rem 0.32rem" }}>✕</button>
+    </div>
   );
 }
