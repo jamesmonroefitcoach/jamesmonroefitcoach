@@ -35,7 +35,7 @@ const BLANK_PROSPECT: ProspectInput = {
 
 // ── sort header ──────────────────────────────────────────────────────────
 
-type SortKey = "name" | "tier" | "rate" | "monthly" | "completed" | "scheduled" | "last" | "next" | "owed";
+type SortKey = "name" | "tier" | "rate" | "monthly" | "completed" | "scheduled" | "last" | "next" | "program" | "owed";
 
 function SortTh({
   label, col, current, dir, onClick, style, className,
@@ -704,6 +704,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
         case "scheduled": cmp = a.sessions_this_month_scheduled - b.sessions_this_month_scheduled; break;
         case "last":    cmp = (a.last_session_at ?? "").localeCompare(b.last_session_at ?? ""); break;
         case "next":    cmp = (a.next_session_at ?? "zzz").localeCompare(b.next_session_at ?? "zzz"); break;
+        case "program": cmp = Number(a.needs_at_home_programming) - Number(b.needs_at_home_programming); break;
         case "owed":    cmp = a.balance_owed - b.balance_owed; break;
       }
       return sortDir === "asc" ? cmp : -cmp;
@@ -799,7 +800,7 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
                   <SortTh label="Scheduled"      col="scheduled" current={sortKey} dir={sortDir} onClick={toggleSort} style={{ textAlign: "center" }} />
                   <SortTh label="Last Session"   col="last"      current={sortKey} dir={sortDir} onClick={toggleSort} />
                   <SortTh label="Next Session"   col="next"      current={sortKey} dir={sortDir} onClick={toggleSort} />
-                  <th>Program</th>
+                  <SortTh label="Program"        col="program"   current={sortKey} dir={sortDir} onClick={toggleSort} />
                   <SortTh label="Owed"           col="owed"      current={sortKey} dir={sortDir} onClick={toggleSort} />
                   <th className="tbl-sticky-last"></th>
                 </tr>

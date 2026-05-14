@@ -760,64 +760,81 @@ function SelectExercisesPanel({
 
       {open && (
         <div style={{ padding: "0.65rem 0.85rem 0.85rem", borderTop: "1px solid var(--line)" }}>
-          {/* Categories row */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.55rem", alignItems: "center" }}>
-              {/* Checked categories (left) */}
-              {groups.filter((g) => openCats.has(g.id)).map((g) => (
-                <CategoryChip
-                  key={g.id}
-                  label={g.label}
-                  checked
-                  onToggle={() => toggleSet(openCats, g.id, setOpenCats)}
-                />
-              ))}
-              {/* Unchecked categories (right) */}
-              {groups.filter((g) => !openCats.has(g.id)).map((g) => (
-                <CategoryChip
-                  key={g.id}
-                  label={g.label}
-                  checked={false}
-                  onToggle={() => toggleSet(openCats, g.id, setOpenCats)}
-                />
-              ))}
-            </div>
+          {/* Categories laid out as evenly-spaced columns. Checked categories
+              come first, then unchecked. Each column stacks the category chip
+              at top, then any UNCHECKED subcategories vertically beneath it.
+              Checked subcategories drop into the full-width expanded sections
+              below the grid since they need room for exercise rows. */}
+          {(() => {
+            const checkedGroups = groups.filter((g) => openCats.has(g.id));
+            const uncheckedGroups = groups.filter((g) => !openCats.has(g.id));
+            const ordered = [...checkedGroups, ...uncheckedGroups];
+            return (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${ordered.length}, minmax(0, 1fr))`,
+                gap: "0.6rem 0.55rem",
+                alignItems: "start",
+              }}>
+                {ordered.map((g) => {
+                  const isChecked = openCats.has(g.id);
+                  const uncheckedSubs = g.nodes.filter((n) => !openSubs.has(n.id));
+                  return (
+                    <div key={g.id} style={{ display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 0 }}>
+                      <CategoryChip
+                        label={g.label}
+                        checked={isChecked}
+                        onToggle={() => toggleSet(openCats, g.id, setOpenCats)}
+                      />
+                      {isChecked && uncheckedSubs.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", paddingLeft: "0.15rem" }}>
+                          {uncheckedSubs.map((n) => (
+                            <SubChip
+                              key={n.id}
+                              label={n.label}
+                              checked={false}
+                              onToggle={() => toggleSet(openSubs, n.id, setOpenSubs)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
-            {/* For each checked category — show its subcategories list ABOVE */}
-            {groups.filter((g) => openCats.has(g.id)).map((g) => (
-              <div key={g.id} style={{ marginTop: "0.25rem", paddingTop: "0.45rem", borderTop: "1px dashed var(--line)" }}>
-                <div className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.3rem" }}>
-                  {g.label}
-                </div>
-                {/* Checked subcategories — collapsibles at top */}
-                {g.nodes.filter((n) => openSubs.has(n.id)).map((n) => (
+          {/* Expanded sections for every checked subcategory across all
+              checked categories. Each section spans full width so leaf-level
+              exercise rows have room to breathe. */}
+          {(() => {
+            const expandedNodes: { group: LibraryGroup; node: LibraryNode }[] = [];
+            for (const g of groups) {
+              if (!openCats.has(g.id)) continue;
+              for (const n of g.nodes) {
+                if (openSubs.has(n.id)) expandedNodes.push({ group: g, node: n });
+              }
+            }
+            if (expandedNodes.length === 0) return null;
+            return (
+              <div style={{ marginTop: "0.85rem", paddingTop: "0.55rem", borderTop: "1px dashed var(--line)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                {expandedNodes.map(({ group, node }) => (
                   <SubcategorySection
-                    key={n.id}
-                    node={n}
+                    key={node.id}
+                    node={node}
+                    groupLabel={group.label}
                     libraryMovements={libraryMovements}
                     selectedLeafIds={selectedLeafIds}
                     exerciseSlots={exerciseSlots}
-                    onToggleSub={() => toggleSet(openSubs, n.id, setOpenSubs)}
+                    onToggleSub={() => toggleSet(openSubs, node.id, setOpenSubs)}
                     onToggleLeaf={onToggleLeaf}
                     onSetOrderNum={onSetOrderNum}
                   />
                 ))}
-                {/* Unchecked subcategories — flat list */}
-                {g.nodes.filter((n) => !openSubs.has(n.id)).length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
-                    {g.nodes.filter((n) => !openSubs.has(n.id)).map((n) => (
-                      <SubChip
-                        key={n.id}
-                        label={n.label}
-                        checked={false}
-                        onToggle={() => toggleSet(openSubs, n.id, setOpenSubs)}
-                      />
-                    ))}
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
       )}
     </section>
@@ -846,24 +863,27 @@ function SubChip({ label, checked, onToggle }: { label: string; checked: boolean
   return (
     <label
       style={{
-        display: "inline-flex", alignItems: "center", gap: "0.3rem",
-        padding: "0.18rem 0.45rem", borderRadius: 3,
+        display: "flex", alignItems: "center", gap: "0.3rem",
+        padding: "0.2rem 0.45rem", borderRadius: 3,
         border: `1px solid ${checked ? "var(--rust)" : "var(--line)"}`,
         background: checked ? "rgba(168,61,43,0.06)" : "transparent",
-        cursor: "pointer", fontSize: "0.76rem",
+        cursor: "pointer", fontSize: "0.74rem",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}
+      title={label}
     >
-      <input type="checkbox" checked={checked} onChange={onToggle} style={{ accentColor: "var(--rust)" }} />
-      {label}
+      <input type="checkbox" checked={checked} onChange={onToggle} style={{ accentColor: "var(--rust)", flexShrink: 0 }} />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
     </label>
   );
 }
 
 function SubcategorySection({
-  node, libraryMovements, selectedLeafIds, exerciseSlots,
+  node, groupLabel, libraryMovements, selectedLeafIds, exerciseSlots,
   onToggleSub, onToggleLeaf, onSetOrderNum,
 }: {
   node: LibraryNode;
+  groupLabel?: string;
   libraryMovements: MovementRow[];
   selectedLeafIds: Set<string>;
   exerciseSlots: ExerciseSlot[];
@@ -876,7 +896,6 @@ function SubcategorySection({
 
   return (
     <div style={{
-      marginTop: "0.35rem",
       border: "1px solid var(--rust)",
       borderRadius: 4,
       background: "rgba(168,61,43,0.03)",
@@ -887,6 +906,9 @@ function SubcategorySection({
           <input type="checkbox" checked onChange={onToggleSub} style={{ accentColor: "var(--rust)" }} />
           <strong style={{ fontSize: "0.86rem", color: "var(--rust)" }}>{node.label}</strong>
         </label>
+        {groupLabel && (
+          <span className="meta" style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>· {groupLabel}</span>
+        )}
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
