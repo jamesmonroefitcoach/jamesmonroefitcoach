@@ -85,8 +85,10 @@ export default async function BuildProgramPage({
     })
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
-  // Active client program summary — for the Program tab banner
-  const activeClients = clients.filter((c) => c.lifecycle === "active");
+  // Active client program summary — for the Program tab banner. Only includes
+  // clients flagged with the + button on the Client Roster, so the banner
+  // reflects the coach's actual programming queue.
+  const activeClients = clients.filter((c) => c.lifecycle === "active" && c.needs_at_home_programming);
   const clientProgramSummary: ClientProgramItem[] = activeClients.map((c) => {
     const current = pastProgramsForClient(c.id).find(
       (p) => p.is_current && p.program_kind === "at_home"

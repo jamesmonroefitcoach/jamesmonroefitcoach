@@ -416,7 +416,9 @@ export default function ReworkClient({
         <button className="btn btn-ghost" onClick={() => setStep("picker")}>← Back</button>
       </div>
 
-      {/* Client summary card */}
+      {/* Client summary card — matches the existing Program tab's Programming
+          for header (badge, name, tier · cadence · since, full-profile link)
+          plus Goals + Injuries underneath. */}
       {selectedClient && (
         <div className="card" style={{ marginBottom: "1rem", borderLeft: "4px solid var(--rust)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -424,16 +426,25 @@ export default function ReworkClient({
               <span className="badge">Programming for</span>
               <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
               <div className="meta" style={{ fontSize: "0.82rem" }}>
-                {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk
+                {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {selectedClient.member_since ? new Date(selectedClient.member_since).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                 {selectedAppt ? <> · {new Date(selectedAppt.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</> : null}
               </div>
-              {selectedClient.injuries && (
-                <p className="meta" style={{ marginTop: "0.35rem", fontSize: "0.78rem", color: "var(--red)" }}>⚠ {selectedClient.injuries}</p>
-              )}
             </div>
             <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
               full profile →
             </Link>
+          </div>
+          <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+            <div>
+              <div className="stat-label">Goals</div>
+              <p style={{ marginTop: "0.25rem", fontSize: "0.88rem" }}>{selectedClient.goals ?? <span className="meta">No goals on file</span>}</p>
+            </div>
+            <div>
+              <div className="stat-label" style={{ color: selectedClient.injuries ? "var(--red)" : undefined }}>Injuries / cautions</div>
+              <p style={{ marginTop: "0.25rem", fontSize: "0.88rem", color: selectedClient.injuries ? "var(--red)" : undefined }}>
+                {selectedClient.injuries ?? <span className="meta">None reported</span>}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -762,9 +773,9 @@ function SelectExercisesPanel({
         <div style={{ padding: "0.65rem 0.85rem 0.85rem", borderTop: "1px solid var(--line)" }}>
           {/* Categories laid out as evenly-spaced columns. Checked categories
               come first, then unchecked. Each column stacks the category chip
-              at top, then any UNCHECKED subcategories vertically beneath it.
-              Checked subcategories drop into the full-width expanded sections
-              below the grid since they need room for exercise rows. */}
+              at top, then UNCHECKED subcategories beneath it as chips.
+              When a subcategory IS checked, its exercise list nests directly
+              below it inside the same column (indented). */}
           {(() => {
             const checkedGroups = groups.filter((g) => openCats.has(g.id));
             const uncheckedGroups = groups.filter((g) => !openCats.has(g.id));
@@ -778,7 +789,6 @@ function SelectExercisesPanel({
               }}>
                 {ordered.map((g) => {
                   const isChecked = openCats.has(g.id);
-                  const uncheckedSubs = g.nodes.filter((n) => !openSubs.has(n.id));
                   return (
                     <div key={g.id} style={{ display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 0 }}>
                       <CategoryChip
@@ -786,16 +796,30 @@ function SelectExercisesPanel({
                         checked={isChecked}
                         onToggle={() => toggleSet(openCats, g.id, setOpenCats)}
                       />
-                      {isChecked && uncheckedSubs.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", paddingLeft: "0.15rem" }}>
-                          {uncheckedSubs.map((n) => (
-                            <SubChip
-                              key={n.id}
-                              label={n.label}
-                              checked={false}
-                              onToggle={() => toggleSet(openSubs, n.id, setOpenSubs)}
-                            />
-                          ))}
+                      {isChecked && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", paddingLeft: "0.15rem" }}>
+                          {g.nodes.map((n) => {
+                            const subChecked = openSubs.has(n.id);
+                            return subChecked ? (
+                              <SubcategoryColumn
+                                key={n.id}
+                                node={n}
+                                libraryMovements={libraryMovements}
+                                selectedLeafIds={selectedLeafIds}
+                                exerciseSlots={exerciseSlots}
+                                onToggleSub={() => toggleSet(openSubs, n.id, setOpenSubs)}
+                                onToggleLeaf={onToggleLeaf}
+                                onSetOrderNum={onSetOrderNum}
+                              />
+                            ) : (
+                              <SubChip
+                                key={n.id}
+                                label={n.label}
+                                checked={false}
+                                onToggle={() => toggleSet(openSubs, n.id, setOpenSubs)}
+                              />
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -804,40 +828,99 @@ function SelectExercisesPanel({
               </div>
             );
           })()}
-
-          {/* Expanded sections for every checked subcategory across all
-              checked categories. Each section spans full width so leaf-level
-              exercise rows have room to breathe. */}
-          {(() => {
-            const expandedNodes: { group: LibraryGroup; node: LibraryNode }[] = [];
-            for (const g of groups) {
-              if (!openCats.has(g.id)) continue;
-              for (const n of g.nodes) {
-                if (openSubs.has(n.id)) expandedNodes.push({ group: g, node: n });
-              }
-            }
-            if (expandedNodes.length === 0) return null;
-            return (
-              <div style={{ marginTop: "0.85rem", paddingTop: "0.55rem", borderTop: "1px dashed var(--line)", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                {expandedNodes.map(({ group, node }) => (
-                  <SubcategorySection
-                    key={node.id}
-                    node={node}
-                    groupLabel={group.label}
-                    libraryMovements={libraryMovements}
-                    selectedLeafIds={selectedLeafIds}
-                    exerciseSlots={exerciseSlots}
-                    onToggleSub={() => toggleSet(openSubs, node.id, setOpenSubs)}
-                    onToggleLeaf={onToggleLeaf}
-                    onSetOrderNum={onSetOrderNum}
-                  />
-                ))}
-              </div>
-            );
-          })()}
         </div>
       )}
     </section>
+  );
+}
+
+// Subcategory rendered IN-COLUMN — its checkbox row at the top, with the
+// leaf exercises nested directly underneath, indented slightly. Each
+// checked exercise gets an inline order-# number input right next to the
+// exercise name on the same line.
+function SubcategoryColumn({
+  node, libraryMovements, selectedLeafIds, exerciseSlots,
+  onToggleSub, onToggleLeaf, onSetOrderNum,
+}: {
+  node: LibraryNode;
+  libraryMovements: MovementRow[];
+  selectedLeafIds: Set<string>;
+  exerciseSlots: ExerciseSlot[];
+  onToggleSub: () => void;
+  onToggleLeaf: (leafId: string, movement: Movement) => void;
+  onSetOrderNum: (leafId: string, n: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const leaves = useMemo(() => leafExercisesFor(node, libraryMovements), [node, libraryMovements]);
+  return (
+    <div style={{
+      border: "1px solid var(--rust)",
+      borderRadius: 3,
+      background: "rgba(168,61,43,0.04)",
+      padding: "0.3rem 0.4rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", cursor: "pointer", flex: 1, minWidth: 0 }}>
+          <input type="checkbox" checked onChange={onToggleSub} style={{ accentColor: "var(--rust)", flexShrink: 0 }} />
+          <strong style={{ fontSize: "0.78rem", color: "var(--rust)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{node.label}</strong>
+        </label>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: "0.66rem", flexShrink: 0 }}
+        >{expanded ? "▾" : "▸"}</button>
+      </div>
+      {expanded && (
+        <div style={{ marginTop: "0.3rem", paddingLeft: "0.85rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {leaves.map((leaf) => {
+            const checked = selectedLeafIds.has(leaf.id);
+            const exSlot = exerciseSlots.find((s) => s.leafId === leaf.id);
+            const orderNum = exSlot ? exerciseSlots.findIndex((s) => s.uid === exSlot.uid) + 1 : null;
+            return (
+              <label
+                key={leaf.id}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.3rem",
+                  padding: "0.16rem 0.25rem", borderRadius: 3,
+                  background: checked ? "rgba(168,61,43,0.07)" : "transparent",
+                  cursor: "pointer", fontSize: "0.74rem",
+                  minWidth: 0,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggleLeaf(leaf.id, leaf.movement)}
+                  style={{ accentColor: "var(--rust)", flexShrink: 0 }}
+                />
+                <span style={{ fontWeight: checked ? 600 : 400, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={leaf.label}>
+                  {leaf.label}
+                </span>
+                {checked && (
+                  <input
+                    type="number"
+                    min={1}
+                    value={orderNum ?? ""}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      if (!isNaN(n) && n >= 1) onSetOrderNum(leaf.id, n);
+                    }}
+                    onClick={(e) => e.preventDefault()}
+                    title="Order in the program"
+                    style={{
+                      width: 36, fontSize: "0.72rem", padding: "0.08rem 0.18rem",
+                      border: "1px solid var(--rust)", borderRadius: 3,
+                      flexShrink: 0, textAlign: "center",
+                      background: "var(--paper)",
+                    }}
+                  />
+                )}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

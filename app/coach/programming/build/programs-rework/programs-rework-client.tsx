@@ -20,6 +20,8 @@ import {
   type Category, type Equipment, type Movement,
   type LibraryGroup, type LibraryNode, type LibraryLeaf,
 } from "@/lib/programs";
+import { fmtDate } from "@/lib/format";
+import type { ClientProgramItem } from "../page";
 
 type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
 
@@ -49,9 +51,22 @@ type ProgramState = {
   durationWeeks: number;
   suggestedDaysPerWeek: number;
   dayCount: number;
+  startsOn: string;          // YYYY-MM-DD
   days: DayState[];        // active when kind=day
   weekItems: ExerciseSlot[]; // active when kind=week
 };
+
+// Compute the end date from a YYYY-MM-DD start + week count.
+function computeEndsOn(startsOn: string, durationWeeks: number): string | null {
+  if (!startsOn || durationWeeks <= 0) return null;
+  const d = new Date(startsOn + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + durationWeeks * 7);
+  return d.toISOString().slice(0, 10);
+}
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 // ── storage ────────────────────────────────────────────────────────────────
 const STORAGE_PREFIX = "monroe-programs-rework-";
@@ -94,6 +109,7 @@ function defaultProgram(): ProgramState {
     durationWeeks: 4,
     suggestedDaysPerWeek: 3,
     dayCount: 3,
+    startsOn: todayISO(),
     days: [freshDay(1), freshDay(2), freshDay(3)],
     weekItems: [],
   };
@@ -103,11 +119,12 @@ function defaultProgram(): ProgramState {
 // Main component
 // ───────────────────────────────────────────────────────────────────────────
 export default function ProgramsReworkClient({
-  clients, initialClientId, libraryMovements,
+  clients, initialClientId, libraryMovements, clientProgramSummary,
 }: {
   clients: ClientRow[];
   initialClientId: string;
   libraryMovements: MovementRow[];
+  clientProgramSummary: ClientProgramItem[];
 }) {
   const [clientId, setClientId] = useState(initialClientId);
   const selectedClient = useMemo(() => clients.find((c) => c.id === clientId) ?? null, [clients, clientId]);
@@ -276,7 +293,7 @@ export default function ProgramsReworkClient({
     <>
       <TabsHeader />
 
-      {/* Client selector at top */}
+      {/* Client picker + ClientProgramsBanner (flagged clients only) */}
       <div className="card" style={{ marginBottom: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
           <div>
@@ -288,7 +305,7 @@ export default function ProgramsReworkClient({
               style={{ marginTop: "0.2rem", minWidth: 220 }}
             >
               {clients.filter((c) => c.lifecycle === "active").map((c) => (
-                <option key={c.id} value={c.id}>{c.full_name}</option>
+                <option key={c.id} value={c.id}>{c.full_name}{c.needs_at_home_programming ? " · flagged" : ""}</option>
               ))}
             </select>
           </div>
@@ -300,9 +317,44 @@ export default function ProgramsReworkClient({
         </div>
       </div>
 
+      {/* Client Programs dropdown banner — only flagged clients */}
+      {clientProgramSummary.length > 0 && (
+        <ClientProgramsDropdown items={clientProgramSummary} onSelect={(id) => setClientId(id)} />
+      )}
+
+      {/* Client summary block — Programming for + goals + injuries */}
+      {selectedClient && (
+        <div className="card" style={{ marginBottom: "1rem", borderLeft: "4px solid var(--rust)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+            <div>
+              <span className="badge">Programming for</span>
+              <h2 style={{ marginTop: "0.35rem", marginBottom: "0.15rem" }}>{selectedClient.full_name}</h2>
+              <div className="meta" style={{ fontSize: "0.82rem" }}>
+                {selectedClient.tier?.replace("_", " ") ?? "—"} · {selectedClient.regular_frequency ?? "—"} sessions/wk · since {fmtDate(selectedClient.member_since)}
+              </div>
+            </div>
+            <Link className="btn btn-ghost" href={`/coach/clients/${selectedClient.id}`} style={{ padding: "0.35rem 0.7rem", fontSize: "0.72rem" }}>
+              full profile →
+            </Link>
+          </div>
+          <div style={{ marginTop: "0.7rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" }}>
+            <div>
+              <div className="stat-label">Goals</div>
+              <p style={{ marginTop: "0.25rem", fontSize: "0.88rem" }}>{selectedClient.goals ?? <span className="meta">No goals on file</span>}</p>
+            </div>
+            <div>
+              <div className="stat-label" style={{ color: selectedClient.injuries ? "var(--red)" : undefined }}>Injuries / cautions</div>
+              <p style={{ marginTop: "0.25rem", fontSize: "0.88rem", color: selectedClient.injuries ? "var(--red)" : undefined }}>
+                {selectedClient.injuries ?? <span className="meta">None reported</span>}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Program metadata row */}
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 0.8fr 0.8fr 1fr", gap: "0.75rem", alignItems: "end" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.75fr 0.9fr 0.9fr 0.7fr 1fr", gap: "0.65rem", alignItems: "end" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
             <span className="stat-label">Program name</span>
             <input
@@ -320,6 +372,24 @@ export default function ProgramsReworkClient({
               onChange={(e) => patchProgram({ durationWeeks: Math.max(1, parseInt(e.target.value, 10) || 1) })}
             />
           </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="stat-label">Start date</span>
+            <input
+              className="input"
+              type="date"
+              value={program.startsOn}
+              onChange={(e) => patchProgram({ startsOn: e.target.value })}
+            />
+          </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="stat-label">End date</span>
+            <div className="input" style={{ background: "rgba(0,0,0,0.04)", display: "flex", alignItems: "center", minHeight: "1.85rem", padding: "0.2rem 0.5rem", color: "var(--muted)", fontSize: "0.86rem" }}>
+              {(() => {
+                const end = computeEndsOn(program.startsOn, program.durationWeeks);
+                return end ? new Date(end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+              })()}
+            </div>
+          </div>
           {program.kind === "day" ? (
             <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
               <span className="stat-label">Days</span>
@@ -332,17 +402,13 @@ export default function ProgramsReworkClient({
             </label>
           ) : (
             <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-              <span className="stat-label">Suggested days to complete</span>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                <input
-                  className="input"
-                  type="number" min={1} max={7}
-                  value={program.suggestedDaysPerWeek}
-                  onChange={(e) => patchProgram({ suggestedDaysPerWeek: Math.max(1, Math.min(7, parseInt(e.target.value, 10) || 1)) })}
-                  style={{ maxWidth: 56 }}
-                />
-                <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>Days/Week</span>
-              </div>
+              <span className="stat-label">Days/wk suggested</span>
+              <input
+                className="input"
+                type="number" min={1} max={7}
+                value={program.suggestedDaysPerWeek}
+                onChange={(e) => patchProgram({ suggestedDaysPerWeek: Math.max(1, Math.min(7, parseInt(e.target.value, 10) || 1)) })}
+              />
             </label>
           )}
 
@@ -358,10 +424,10 @@ export default function ProgramsReworkClient({
                   style={{
                     background: program.kind === k ? "var(--rust)" : "transparent",
                     color: program.kind === k ? "#fff" : "var(--muted)",
-                    border: "none", padding: "0.35rem 0.95rem", fontSize: "0.8rem", cursor: "pointer",
+                    border: "none", padding: "0.3rem 0.7rem", fontSize: "0.76rem", cursor: "pointer",
                     fontFamily: "inherit", fontWeight: program.kind === k ? 700 : 500,
                   }}
-                >{k === "day" ? "Day level" : "Week level"}</button>
+                >{k === "day" ? "Day" : "Week"}</button>
               ))}
             </div>
           </div>
@@ -710,6 +776,110 @@ function ExerciseRow({ slot, onPatch, onDelete, onMoveUp, onMoveDown }: {
             onChange={(e) => onPatch({ equipment_specifics: e.target.value })}
             style={{ fontSize: "0.78rem", padding: "0.15rem 0.32rem" }}
           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Client Programs dropdown — collapsible banner of flagged clients with
+// active vs needs-program split. Clicking a client jumps the picker to them.
+// ───────────────────────────────────────────────────────────────────────────
+function ClientProgramsDropdown({
+  items, onSelect,
+}: {
+  items: ClientProgramItem[];
+  onSelect: (clientId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = items.filter((i) => i.hasCurrent);
+  const needs = items.filter((i) => !i.hasCurrent);
+  function daysLabel(d: number | null) {
+    if (d === null) return "no end date";
+    if (d < 0) return `expired ${Math.abs(d)}d ago`;
+    if (d === 0) return "expires today";
+    return `${d}d left`;
+  }
+  return (
+    <div className="card no-print" style={{ marginBottom: "1rem" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", background: "none", border: "none", padding: 0,
+          cursor: "pointer", display: "flex", alignItems: "center",
+          justifyContent: "space-between", fontFamily: "inherit",
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: "0.86rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
+          {open ? "▾" : "▸"} Client Programs
+        </h3>
+        <span className="meta" style={{ fontSize: "0.74rem" }}>
+          {active.length} active · {needs.length} need programming
+        </span>
+      </button>
+      {open && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem", marginTop: "0.65rem" }}>
+          <div>
+            <div style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--sage)", borderBottom: "2px solid var(--sage)", paddingBottom: "0.3rem", marginBottom: "0.4rem" }}>
+              ✓ Active <span style={{ fontWeight: 400, opacity: 0.7 }}>({active.length})</span>
+            </div>
+            {active.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.76rem" }}>None yet.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.28rem" }}>
+                {active.map((item) => (
+                  <button
+                    key={item.clientId}
+                    type="button"
+                    onClick={() => onSelect(item.clientId)}
+                    className="btn btn-ghost"
+                    style={{
+                      width: "100%", textAlign: "left",
+                      padding: "0.28rem 0.45rem", fontSize: "0.78rem",
+                      background: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14) ? "rgba(217,119,6,0.06)" : "rgba(90,107,74,0.06)",
+                      borderColor: "transparent",
+                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem",
+                    }}
+                  >
+                    <strong>{item.clientName}</strong>
+                    <span style={{ fontSize: "0.7rem", color: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14) ? "var(--amber)" : "var(--muted)" }}>
+                      {daysLabel(item.daysUntilEnd)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={{ fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--amber)", borderBottom: "2px solid var(--amber)", paddingBottom: "0.3rem", marginBottom: "0.4rem" }}>
+              ⚠ Needs Program <span style={{ fontWeight: 400, opacity: 0.7 }}>({needs.length})</span>
+            </div>
+            {needs.length === 0 ? (
+              <p className="meta" style={{ fontSize: "0.76rem" }}>All flagged clients are programmed 🎉</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.28rem" }}>
+                {needs.map((item) => (
+                  <button
+                    key={item.clientId}
+                    type="button"
+                    onClick={() => onSelect(item.clientId)}
+                    style={{
+                      width: "100%", textAlign: "left", background: "rgba(217,119,6,0.07)",
+                      border: "1px solid rgba(217,119,6,0.2)", borderRadius: 3,
+                      padding: "0.28rem 0.45rem", cursor: "pointer", fontFamily: "inherit",
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
+                    }}
+                    title="Click to start a new program for this client"
+                  >
+                    <strong style={{ fontSize: "0.78rem" }}>{item.clientName}</strong>
+                    <span style={{ fontSize: "0.7rem", color: "var(--amber)" }}>tap to program →</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
