@@ -100,6 +100,80 @@ const INPUT_SM: React.CSSProperties = {
 };
 const SELECT_SM: React.CSSProperties = { ...INPUT_SM, height: "auto" };
 
+// Program column cell — handles the +/x flag and renders the standard view
+// (date range, status link) only when the client has been flagged as needing
+// at-home programming. The flag is optimistic so the +/x toggle feels instant.
+function ProgramCell({ client, atHomeProg, daysLeft }: {
+  client: ClientRow;
+  atHomeProg: ReturnType<typeof pastProgramsForClient>[number] | null;
+  daysLeft: number | null;
+}) {
+  const [flagged, setFlagged] = useState(client.needs_at_home_programming);
+  const [, startToggle] = useTransition();
+
+  function toggle(next: boolean) {
+    setFlagged(next); // optimistic
+    startToggle(async () => {
+      const res = await quickUpdateClient(client.id, { needs_at_home_programming: next });
+      if (!res.ok) setFlagged(!next); // revert on failure
+    });
+  }
+
+  if (!flagged) {
+    return (
+      <button
+        type="button"
+        onClick={() => toggle(true)}
+        title="Flag this client as needing at-home programming"
+        style={{
+          fontSize: "0.78rem", fontWeight: 700,
+          padding: "0.2rem 0.55rem", borderRadius: 3,
+          border: "1px solid var(--line)", background: "transparent",
+          color: "var(--muted)", cursor: "pointer", fontFamily: "inherit",
+        }}
+      >+</button>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+      <div className="meta" style={{ fontSize: "0.72rem" }}>
+        {atHomeProg?.ends_on ? (
+          <>
+            {new Date(atHomeProg.ends_on).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            {" · "}
+            <span style={{ color: daysLeft !== null && daysLeft <= 7 ? "var(--amber)" : undefined }}>
+              {daysLeft !== null ? (daysLeft <= 0 ? "expired" : `${daysLeft}d left`) : "no end"}
+            </span>
+          </>
+        ) : <span style={{ color: "var(--muted)" }}>No program yet</span>}
+      </div>
+      <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
+        <Link
+          href={`/coach/programming/build?tab=program&client=${client.id}`}
+          style={{
+            fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
+            borderRadius: 3, border: "1px solid var(--sage)", color: "var(--sage)",
+            background: "rgba(90,107,74,0.07)", textDecoration: "none",
+            whiteSpace: "nowrap", display: "inline-block",
+          }}
+        >{atHomeProg ? "View →" : "Build →"}</Link>
+        <button
+          type="button"
+          onClick={() => toggle(false)}
+          title="Remove the need for programming (past programs stay in historicals)"
+          style={{
+            fontSize: "0.68rem", lineHeight: 1,
+            padding: "0.15rem 0.32rem", borderRadius: 3,
+            border: "1px solid var(--line)", background: "transparent",
+            color: "var(--muted)", cursor: "pointer", fontFamily: "inherit",
+          }}
+        >✕</button>
+      </div>
+    </div>
+  );
+}
+
 function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionStatus: NextSessionStatus }) {
   const atHomeProg = pastProgramsForClient(c.id).find(
     (p) => p.is_current && p.program_kind === "at_home"
@@ -279,28 +353,11 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
           </Link>
         )}
       </td>
-      {/* Program */}
+      {/* Program — + to flag this client as needing programming. Once flagged
+          the cell shows the standard program view + a small x to clear the
+          flag. Clearing does NOT erase any past program data. */}
       <td>
-        <div className="meta" style={{ fontSize: "0.72rem", marginBottom: "0.2rem" }}>
-          {atHomeProg?.ends_on ? (
-            <>
-              {new Date(atHomeProg.ends_on).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              {" · "}
-              <span style={{ color: daysLeft !== null && daysLeft <= 7 ? "var(--amber)" : undefined }}>
-                {daysLeft !== null ? (daysLeft <= 0 ? "expired" : `${daysLeft}d left`) : "no end"}
-              </span>
-            </>
-          ) : <span style={{ color: "var(--muted)" }}>No program</span>}
-        </div>
-        <Link
-          href={`/coach/programming/build?tab=program&client=${c.id}`}
-          style={{
-            fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
-            borderRadius: 3, border: "1px solid var(--sage)", color: "var(--sage)",
-            background: "rgba(90,107,74,0.07)", textDecoration: "none",
-            whiteSpace: "nowrap", display: "inline-block",
-          }}
-        >View →</Link>
+        <ProgramCell client={c} atHomeProg={atHomeProg} daysLeft={daysLeft} />
       </td>
       {/* Owed */}
       <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>

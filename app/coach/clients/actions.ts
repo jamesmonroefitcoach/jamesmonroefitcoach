@@ -99,7 +99,7 @@ export async function updateProspect(
 
 export async function quickUpdateClient(
   clientId: string,
-  input: { tier?: string | null; session_rate?: number | null; regular_frequency?: string | null; lifecycle?: string | null }
+  input: { tier?: string | null; session_rate?: number | null; regular_frequency?: string | null; lifecycle?: string | null; needs_at_home_programming?: boolean }
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   if (!user || (user.role !== "coach" && !user.is_admin)) return { ok: false, error: "unauthorized" };
@@ -115,6 +115,7 @@ export async function quickUpdateClient(
   if (input.session_rate !== undefined) payload.session_rate = input.session_rate;
   if (input.regular_frequency !== undefined) payload.regular_frequency = input.regular_frequency?.trim() || null;
   if (input.lifecycle !== undefined) payload.lifecycle = input.lifecycle || null;
+  if (input.needs_at_home_programming !== undefined) payload.needs_at_home_programming = input.needs_at_home_programming;
 
   if (!Object.keys(payload).length) return { ok: true };
 
@@ -122,6 +123,9 @@ export async function quickUpdateClient(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/coach/clients");
   revalidatePath(`/coach/clients/${clientId}`);
+  revalidatePath("/coach/programming");
+  revalidatePath("/coach/programming/build");
+  revalidatePath("/coach");
   return { ok: true };
 }
 

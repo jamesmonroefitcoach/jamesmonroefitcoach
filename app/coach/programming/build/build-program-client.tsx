@@ -1558,10 +1558,12 @@ export default function BuildProgramClient({
             <ClientProgramsBanner items={clientProgramSummary} onSelect={handleBannerProgramSelect} />
           )}
 
-          {/* Client selector — outside any card */}
+          {/* Client selector — outside any card. Restricted to clients flagged
+              via the + button on the Client Roster so the Program tab only
+              surfaces coaches' actual programming queue. */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <span className="stat-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Client</span>
-            <ClientCombobox clients={clients} value={clientId} onChange={selectClient} />
+            <ClientCombobox clients={clients.filter((c) => c.needs_at_home_programming)} value={clientId} onChange={selectClient} />
           </div>
 
           {/* Client summary card — only when selected */}
@@ -1581,6 +1583,12 @@ export default function BuildProgramClient({
               </div>
               <ClientGoalsSection client={selectedClient} />
             </div>
+          )}
+
+          {!clientId && clients.filter((c) => c.needs_at_home_programming).length === 0 && (
+            <p className="meta" style={{ fontSize: "0.82rem", padding: "0.6rem 0.8rem", border: "1px dashed var(--line)", borderRadius: 4 }}>
+              No clients are flagged for programming. Hit the <strong>+</strong> in the Program column on the <Link href="/coach/clients" style={{ color: "var(--rust)" }}>Client Roster</Link> to add one.
+            </p>
           )}
 
           {/* Step 2a: Pick existing */}

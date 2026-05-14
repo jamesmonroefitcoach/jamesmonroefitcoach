@@ -166,9 +166,11 @@ function statusColor(status: "Programmed" | "Drafted" | "Not Programmed" | "publ
   return "var(--muted)";
 }
 
-function ClientRow({ block }: { block: ClientProgramBlock }) {
+function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions" | "programs" }) {
   const [open, setOpen] = useState(false);
   const { active, historicalSessions, historicalPrograms, nextSession, scheduledThisMonth } = block;
+  const isSessionsView = view === "sessions";
+  const isProgramsView = view === "programs";
 
   // Subtext bits — Next Session, Program, this-month count, past sessions, past programs
   const programStatusLabel: "Programmed" | "Drafted" | "Not Programmed" =
@@ -207,72 +209,83 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
               fontSize: "0.72rem",
               marginTop: "0.25rem",
               display: "grid",
-              // Five fixed proportional columns so every row's stats line up.
-              gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1.15fr) minmax(0, 0.75fr) minmax(0, 0.65fr) minmax(0, 0.7fr)",
+              // Three columns when viewing Sessions (Next / This month / Past
+              // sessions), two when viewing Programs (Program / Past programs).
+              gridTemplateColumns: isSessionsView
+                ? "minmax(0, 1.8fr) minmax(0, 0.85fr) minmax(0, 0.85fr)"
+                : "minmax(0, 1.6fr) minmax(0, 0.85fr)",
               columnGap: "1rem",
               rowGap: "0.15rem",
               alignItems: "baseline",
             }}
           >
-            {/* Next Session — full date+time first, status link to the right */}
-            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Next Session:</span>{" "}
-              {nextSession ? (() => {
-                const startsParam = encodeURIComponent(nextSession.starts_at);
-                const viewParam = nextSession.status === "Programmed" ? "&view=plan" : "";
-                const href = `/coach/programming/build?tab=session&appt=${nextSession.id}&client=${block.clientId}&starts=${startsParam}${viewParam}`;
-                const verb = nextSession.status === "Programmed" ? "View"
-                  : nextSession.status === "Drafted" ? "Edit"
-                  : "Build";
-                return (
-                  <>
-                    <span style={{ color: "var(--ink)" }}>{fmtFullDateTime(nextSession.starts_at)}</span>
-                    {" · "}
-                    <Link
-                      href={href}
-                      title={`${verb} session program`}
-                      style={{ color: statusColor(nextSession.status), fontWeight: 600, textDecoration: "underline" }}
-                    >{nextSession.status}</Link>
-                  </>
-                );
-              })() : (
-                <span style={{ color: "var(--muted)" }}>None scheduled</span>
-              )}
-            </span>
-            {/* Program — date range first, status link to the right */}
-            {(() => {
-              const viewParam = programStatusLabel === "Programmed" ? "&view=plan" : "";
-              const href = `/coach/programming/build?tab=program&client=${block.clientId}${viewParam}`;
-              const verb = programStatusLabel === "Programmed" ? "View"
-                : programStatusLabel === "Drafted" ? "Edit"
-                : "Build";
-              return (
+            {isSessionsView && (
+              <>
+                {/* Next Session — full date+time first, status link to the right */}
                 <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Program:</span>{" "}
-                  {programDateText && <><span style={{ color: "var(--ink)" }}>{programDateText}</span>{" · "}</>}
-                  <Link
-                    href={href}
-                    title={`${verb} program`}
-                    style={{ color: statusColor(programStatusLabel), fontWeight: 600, textDecoration: "underline" }}
-                  >{programStatusLabel}</Link>
+                  <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Next Session:</span>{" "}
+                  {nextSession ? (() => {
+                    const startsParam = encodeURIComponent(nextSession.starts_at);
+                    const viewParam = nextSession.status === "Programmed" ? "&view=plan" : "";
+                    const href = `/coach/programming/build?tab=session&appt=${nextSession.id}&client=${block.clientId}&starts=${startsParam}${viewParam}`;
+                    const verb = nextSession.status === "Programmed" ? "View"
+                      : nextSession.status === "Drafted" ? "Edit"
+                      : "Build";
+                    return (
+                      <>
+                        <span style={{ color: "var(--ink)" }}>{fmtFullDateTime(nextSession.starts_at)}</span>
+                        {" · "}
+                        <Link
+                          href={href}
+                          title={`${verb} session program`}
+                          style={{ color: statusColor(nextSession.status), fontWeight: 600, textDecoration: "underline" }}
+                        >{nextSession.status}</Link>
+                      </>
+                    );
+                  })() : (
+                    <span style={{ color: "var(--muted)" }}>None scheduled</span>
+                  )}
                 </span>
-              );
-            })()}
-            {/* This-month count */}
-            <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
-              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>This month:</span>{" "}
-              <span style={{ color: "var(--ink)" }}>{scheduledThisMonth} session{scheduledThisMonth !== 1 ? "s" : ""}</span>
-            </span>
-            {/* Past sessions */}
-            <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
-              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past sessions:</span>{" "}
-              <span style={{ color: "var(--ink)" }}>{historicalSessions.length}</span>
-            </span>
-            {/* Past programs */}
-            <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
-              <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past programs:</span>{" "}
-              <span style={{ color: "var(--ink)" }}>{historicalPrograms.length}</span>
-            </span>
+                {/* This-month count */}
+                <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
+                  <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>This month:</span>{" "}
+                  <span style={{ color: "var(--ink)" }}>{scheduledThisMonth} session{scheduledThisMonth !== 1 ? "s" : ""}</span>
+                </span>
+                {/* Past sessions */}
+                <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
+                  <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past sessions:</span>{" "}
+                  <span style={{ color: "var(--ink)" }}>{historicalSessions.length}</span>
+                </span>
+              </>
+            )}
+            {isProgramsView && (
+              <>
+                {/* Program — date range first, status link to the right */}
+                {(() => {
+                  const viewParam = programStatusLabel === "Programmed" ? "&view=plan" : "";
+                  const href = `/coach/programming/build?tab=program&client=${block.clientId}${viewParam}`;
+                  const verb = programStatusLabel === "Programmed" ? "View"
+                    : programStatusLabel === "Drafted" ? "Edit"
+                    : "Build";
+                  return (
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Program:</span>{" "}
+                      {programDateText && <><span style={{ color: "var(--ink)" }}>{programDateText}</span>{" · "}</>}
+                      <Link
+                        href={href}
+                        title={`${verb} program`}
+                        style={{ color: statusColor(programStatusLabel), fontWeight: 600, textDecoration: "underline" }}
+                      >{programStatusLabel}</Link>
+                    </span>
+                  );
+                })()}
+                {/* Past programs */}
+                <span style={{ minWidth: 0, whiteSpace: "nowrap" }}>
+                  <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past programs:</span>{" "}
+                  <span style={{ color: "var(--ink)" }}>{historicalPrograms.length}</span>
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -300,13 +313,48 @@ function ClientRow({ block }: { block: ClientProgramBlock }) {
   );
 }
 
+// ─── Section header — collapsible wrapper for Sessions / Programs ─────────
+function SectionHeader({ title, count, open, onToggle }: {
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        width: "100%", background: "transparent",
+        border: "none", borderBottom: "2px solid var(--line)",
+        padding: "0.6rem 0.4rem", cursor: "pointer", fontFamily: "inherit",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>{open ? "▾" : "▸"}</span>
+        <span style={{ fontWeight: 700, fontSize: "1.02rem" }}>{title}</span>
+        <span className="badge" style={{ fontSize: "0.62rem" }}>{count}</span>
+      </span>
+    </button>
+  );
+}
+
 export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBlock[] }) {
   const [query, setQuery] = useState("");
+  const [sessionsOpen, setSessionsOpen] = useState(true);
+  const [programsOpen, setProgramsOpen] = useState(true);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return blocks;
     return blocks.filter((b) => b.clientName.toLowerCase().includes(q));
   }, [blocks, query]);
+
+  // Sessions: every active client appears. Programs: only those flagged via
+  // the + on the Client Roster.
+  const sessionBlocks = filtered;
+  const programBlocks = filtered.filter((b) => b.needsAtHomeProgramming);
 
   return (
     <div>
@@ -321,15 +369,39 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
         <span className="meta" style={{ fontSize: "0.78rem" }}>{filtered.length} client{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="meta">No matching clients.</p>
-      ) : (
-        <section className="card" style={{ padding: 0 }}>
-          {filtered.map((b) => (
-            <ClientRow key={b.clientId} block={b} />
-          ))}
-        </section>
-      )}
+      {/* Sessions section — unfiltered, every active client */}
+      <section style={{ marginBottom: "1.25rem" }}>
+        <SectionHeader title="Sessions" count={sessionBlocks.length} open={sessionsOpen} onToggle={() => setSessionsOpen((v) => !v)} />
+        {sessionsOpen && (
+          sessionBlocks.length === 0 ? (
+            <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>No matching clients.</p>
+          ) : (
+            <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
+              {sessionBlocks.map((b) => (
+                <ClientRow key={`s-${b.clientId}`} block={b} view="sessions" />
+              ))}
+            </div>
+          )
+        )}
+      </section>
+
+      {/* Programs section — only clients flagged via the + on the roster */}
+      <section>
+        <SectionHeader title="Programs" count={programBlocks.length} open={programsOpen} onToggle={() => setProgramsOpen((v) => !v)} />
+        {programsOpen && (
+          programBlocks.length === 0 ? (
+            <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>
+              No clients flagged for programming. Hit the <strong>+</strong> on the Client Roster to add one.
+            </p>
+          ) : (
+            <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
+              {programBlocks.map((b) => (
+                <ClientRow key={`p-${b.clientId}`} block={b} view="programs" />
+              ))}
+            </div>
+          )
+        )}
+      </section>
     </div>
   );
 }

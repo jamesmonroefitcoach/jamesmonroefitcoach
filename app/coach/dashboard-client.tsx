@@ -343,17 +343,22 @@ export default function DashboardClient({
   const activeClients = clients.filter((c) => c.lifecycle === "active");
   const sessionClientIds = new Set(weekSessions.map((s) => s.client_id));
 
-  const weekProgramItems: WeekProgramItem[] = activeClients.map((c) => {
-    const prog = clientProgramInfo.get(c.id);
-    return {
-      clientId: c.id,
-      clientName: c.full_name,
-      programName: prog?.name ?? null,
-      endsOn: prog?.endsOn ?? null,
-      daysUntilEnd: prog?.daysLeft ?? null,
-      hasCurrent: !!prog?.name,
-    };
-  });
+  // The Programs banner now only counts clients the coach has flagged with
+  // the + button on the Client Roster. Unflagged clients are intentionally
+  // hidden here so the banner reflects the coach's active programming queue.
+  const weekProgramItems: WeekProgramItem[] = activeClients
+    .filter((c) => c.needs_at_home_programming)
+    .map((c) => {
+      const prog = clientProgramInfo.get(c.id);
+      return {
+        clientId: c.id,
+        clientName: c.full_name,
+        programName: prog?.name ?? null,
+        endsOn: prog?.endsOn ?? null,
+        daysUntilEnd: prog?.daysLeft ?? null,
+        hasCurrent: !!prog?.name,
+      };
+    });
 
   const noSessionClients: NoSessionClient[] = activeClients
     .filter((c) => !sessionClientIds.has(c.id))

@@ -9,6 +9,7 @@ import ViewProgramsClient from "./view-programs-client";
 export type ClientProgramBlock = {
   clientId: string;
   clientName: string;
+  needsAtHomeProgramming: boolean;          // true when coach has hit + on the roster
   active: {
     sessions: PastProgramFull | null;       // current in_gym
     sessionsStatus: "draft" | "published" | "none";
@@ -93,6 +94,7 @@ export default async function ProgrammingLandingPage() {
     return {
       clientId: c.id,
       clientName: c.full_name,
+      needsAtHomeProgramming: c.needs_at_home_programming,
       active: {
         sessions,
         sessionsStatus: sessions ? "published" as const : "none" as const,
