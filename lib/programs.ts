@@ -180,7 +180,7 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
     ],
   },
   {
-    id: "other", label: "Other",
+    id: "conditioning", label: "Conditioning",
     nodes: [
       {
         id: "cardio", label: "Cardio", category: "cardio",
@@ -212,6 +212,11 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
           { id: "foot-drills", label: "Foot Drills", category: "cardio" },
         ],
       },
+    ],
+  },
+  {
+    id: "mobility", label: "Mobility",
+    nodes: [
       {
         id: "stretch", label: "Stretch", category: "mobility",
         children: [
