@@ -1469,6 +1469,7 @@ function ExerciseSlotCard({
       dayUid={`rework-${slot.uid}`}
       itemIdx={orderNum - 1}
       inSuperset={false}
+      inlineEquipment={false}
       drag={null}
       onDragStart={() => { /* cross-day drag not supported in rework */ }}
       onDragEnd={() => { /* noop */ }}

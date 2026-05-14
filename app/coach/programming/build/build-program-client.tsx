@@ -3991,6 +3991,7 @@ export function ExerciseCard({
   onRemove, onMoveUp, onMoveDown,
   onPatch, onToggleSameFormat, onPatchSetRow,
   bottomSlot,
+  inlineEquipment = true,
 }: {
   it: ProgramItem;
   dayUid: string;
@@ -4007,6 +4008,12 @@ export function ExerciseCard({
   onToggleSameFormat: () => void;
   onPatchSetRow: (si: number, patch: Partial<SetRow>) => void;
   bottomSlot?: React.ReactNode;
+  /** When false, the inline Equipment column is removed from the prescription
+   *  grid and a dedicated equipment row (flat checkbox pills + inline
+   *  Machine/Other specifics) renders just above the grid. Used by the
+   *  Sessions Rework view; default true preserves the existing build page
+   *  layout. */
+  inlineEquipment?: boolean;
 }) {
   // ─── Preset state ─────────────────────────────────────────────────
   const [localPresets, setLocalPresets] = useState<ExercisePreset[]>(() => loadPresets(it.movement.id));
@@ -4266,9 +4273,13 @@ export function ExerciseCard({
         const INP: React.CSSProperties = { fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center" };
         const activeFields: OptionalField[] = it.optional_fields ?? [];
         const optColStr = activeFields.map((f) => OPTIONAL_FIELD_CONFIG[f].width).join(" ");
-        // Column order: Sets | Reps | Exertion | Spec | Equip | [opt cols] | + | Notes(1fr)
-        const SF_COLS = `32px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
-        const PS_COLS = `24px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        // Column order: Sets | Reps | Exertion | Spec | [Equip] | [opt cols] | + | Notes(1fr)
+        // When inlineEquipment is false the Equipment column drops out and a
+        // separate equipment row renders above the grid.
+        const equipColSf = inlineEquipment ? " 60px" : "";
+        const equipColPs = inlineEquipment ? " 60px" : "";
+        const SF_COLS = `32px 76px 68px 62px${equipColSf}${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        const PS_COLS = `24px 76px 68px 62px${equipColPs}${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
 
         function removeOptField(f: OptionalField) {
           onPatch({ optional_fields: activeFields.filter((x) => x !== f) });
@@ -4286,6 +4297,77 @@ export function ExerciseCard({
               <span style={{ fontSize: "0.61rem", color: "var(--muted)", userSelect: "none" }}>All same</span>
             </label>
 
+            {/* Separate equipment row — only when inlineEquipment is false.
+                Flat checkbox pills + inline Machine/Other specifics input,
+                applied globally (not per-set). */}
+            {!inlineEquipment && (() => {
+              const decoded = decodeSpecs(it.equipment_list ?? [], it.equipment_specifics);
+              function patchEquipment(list: Equipment[], machineSpec: string, otherSpec: string) {
+                const spec = encodeSpecs(list, machineSpec, otherSpec);
+                onPatch({ equipment_list: list, equipment_specifics: spec || undefined });
+              }
+              return (
+                <div style={{ marginBottom: "0.35rem" }}>
+                  <div style={{ fontSize: "0.58rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.18rem" }}>
+                    Equipment
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem 0.4rem" }}>
+                    {EQUIPMENT_OPTIONS.map((opt) => {
+                      const checked = (it.equipment_list ?? []).includes(opt.value);
+                      return (
+                        <label key={opt.value} style={{
+                          display: "inline-flex", alignItems: "center", gap: "0.22rem",
+                          padding: "0.14rem 0.4rem", borderRadius: 999,
+                          border: `1px solid ${checked ? "var(--rust)" : "var(--line)"}`,
+                          background: checked ? "rgba(168,61,43,0.06)" : "transparent",
+                          cursor: "pointer", fontSize: "0.7rem",
+                          fontWeight: checked ? 600 : 500,
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const list = it.equipment_list ?? [];
+                              const next: Equipment[] = list.includes(opt.value)
+                                ? list.filter((x) => x !== opt.value)
+                                : [...list, opt.value];
+                              patchEquipment(next, decoded.machineSpec, decoded.otherSpec);
+                            }}
+                            style={{ accentColor: "var(--rust)" }}
+                          />
+                          {opt.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {(it.equipment_list ?? []).includes("machine") && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.22rem" }}>
+                      <span style={{ fontSize: "0.62rem", color: "var(--muted)", minWidth: 64 }}>Machine</span>
+                      <input
+                        className="input"
+                        value={decoded.machineSpec}
+                        onChange={(e) => patchEquipment(it.equipment_list ?? [], e.target.value, decoded.otherSpec)}
+                        placeholder="e.g. Preacher curl machine"
+                        style={{ flex: 1, maxWidth: 320, fontSize: "0.74rem", padding: "0.14rem 0.32rem" }}
+                      />
+                    </div>
+                  )}
+                  {(it.equipment_list ?? []).includes("other") && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.18rem" }}>
+                      <span style={{ fontSize: "0.62rem", color: "var(--muted)", minWidth: 64 }}>Other</span>
+                      <input
+                        className="input"
+                        value={decoded.otherSpec}
+                        onChange={(e) => patchEquipment(it.equipment_list ?? [], decoded.machineSpec, e.target.value)}
+                        placeholder="e.g. Resistance band"
+                        style={{ flex: 1, maxWidth: 320, fontSize: "0.74rem", padding: "0.14rem 0.32rem" }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Scroll wrapper so set grids never blow out the phone screen */}
             <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" as any, width: "100%", minWidth: 0 }}>
 
@@ -4300,10 +4382,12 @@ export function ExerciseCard({
                   <span className="hdr-full">Specification</span>
                   <span className="hdr-short">Spec</span>
                 </span>
-                <span style={HDR}>
-                  <span className="hdr-full">Equipment</span>
-                  <span className="hdr-short">Equip</span>
-                </span>
+                {inlineEquipment && (
+                  <span style={HDR}>
+                    <span className="hdr-full">Equipment</span>
+                    <span className="hdr-short">Equip</span>
+                  </span>
+                )}
                 {activeFields.map((f) => (
                   <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                     <button
@@ -4329,11 +4413,13 @@ export function ExerciseCard({
                   {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
                 <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
-                <EquipmentMultiSelect
-                  value={it.equipment_list} specifics={it.equipment_specifics}
-                  onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
-                  compact
-                />
+                {inlineEquipment && (
+                  <EquipmentMultiSelect
+                    value={it.equipment_list} specifics={it.equipment_specifics}
+                    onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
+                    compact
+                  />
+                )}
                 {activeFields.map((f) => (
                   <OptionalFieldInput
                     key={`inp-${f}`}
@@ -4366,10 +4452,12 @@ export function ExerciseCard({
                     <span className="hdr-full">Specification</span>
                     <span className="hdr-short">Spec</span>
                   </span>
-                  <span style={HDR}>
-                    <span className="hdr-full">Equipment</span>
-                    <span className="hdr-short">Equip</span>
-                  </span>
+                  {inlineEquipment && (
+                    <span style={HDR}>
+                      <span className="hdr-full">Equipment</span>
+                      <span className="hdr-short">Equip</span>
+                    </span>
+                  )}
                   {activeFields.map((f) => (
                     <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                       <button
@@ -4399,13 +4487,15 @@ export function ExerciseCard({
                         {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                       <VariationDropdown key={`spec-${si}`} value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
-                      <EquipmentMultiSelect
-                        key={`eq-${si}`}
-                        value={row.equipment_list ?? it.equipment_list}
-                        specifics={row.equipment_specifics ?? it.equipment_specifics}
-                        onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
-                        compact
-                      />
+                      {inlineEquipment && (
+                        <EquipmentMultiSelect
+                          key={`eq-${si}`}
+                          value={row.equipment_list ?? it.equipment_list}
+                          specifics={row.equipment_specifics ?? it.equipment_specifics}
+                          onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
+                          compact
+                        />
+                      )}
                       {activeFields.map((f) => (
                         <OptionalFieldInput
                           key={`opt-${f}-${si}`}
