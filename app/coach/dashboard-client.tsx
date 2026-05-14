@@ -446,7 +446,12 @@ export default function DashboardClient({
               noSessions={noSessionClients}
             />
 
-            {/* Sessions table — collapsible */}
+            {/* Sessions table — collapsible. Personal blocks are excluded
+                from the list and counts so the summary only reflects real
+                client sessions. */}
+            {(() => {
+              const sessionAppts = displayAppts.filter((a) => a.session_type === "session");
+              return (
             <details style={{ marginTop: "0.75rem", overflow: "hidden" }}>
               <summary style={{
                 cursor: "pointer", userSelect: "none",
@@ -458,10 +463,10 @@ export default function DashboardClient({
                 <span style={{ fontSize: "0.7rem" }}>▸</span>
                 All Sessions Summary
                 <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: "0.74rem" }}>
-                  ({displayAppts.filter(a => a.session_type === "session").length} sessions)
+                  ({sessionAppts.length} sessions)
                 </span>
               </summary>
-            {displayAppts.length === 0 ? (
+            {sessionAppts.length === 0 ? (
               <p className="meta" style={{ marginTop: "0.5rem" }}>No sessions booked for this week.</p>
             ) : (
               <div className="table-scroll-wrap" style={{ marginTop: "0.5rem" }}>
@@ -470,7 +475,7 @@ export default function DashboardClient({
                   <tr><th>When</th><th>Client</th><th>Rate</th><th>Paid</th><th>Status</th><th>Program</th></tr>
                 </thead>
                 <tbody>
-                  {displayAppts.map((a) => {
+                  {sessionAppts.map((a) => {
                     const progStatus: "programmed" | "draft" | "needs_programming" =
                       a.program_status === "programmed" ? "programmed"
                       : a.program_status === "draft" ? "draft"
@@ -563,6 +568,8 @@ export default function DashboardClient({
               </div>
             )}
             </details>
+              );
+            })()}
           </GroupShell>
 
           {/* Month group */}

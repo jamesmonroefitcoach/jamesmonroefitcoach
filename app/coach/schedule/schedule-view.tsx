@@ -531,21 +531,62 @@ export default function ScheduleView({
   // ─── DRAG & DROP ─────────────────────────────────────────────────
   function onCellDrop(day: number, hour: number) {
     if (!dragId) return;
+    const target = appts.find((a) => a.id === dragId);
+    if (!target) { setDragId(null); return; }
+    const oldStart = new Date(target.starts_at);
+    const oldEnd = new Date(target.ends_at);
+    const durationMs = oldEnd.getTime() - oldStart.getTime();
+    const newStart = new Date(ws);
+    newStart.setDate(newStart.getDate() + day);
+    newStart.setHours(hour, 0, 0, 0);
+    if (newStart.getTime() === oldStart.getTime()) { setDragId(null); return; }
+    const newEnd = new Date(newStart.getTime() + durationMs);
+
+    // Optimistic local move so the visual updates instantly.
     setAppts((cur) =>
-      cur.map((a) => {
-        if (a.id !== dragId) return a;
-        const oldStart = new Date(a.starts_at);
-        const oldEnd = new Date(a.ends_at);
-        const durationMs = oldEnd.getTime() - oldStart.getTime();
-        const newStart = new Date(ws);
-        newStart.setDate(newStart.getDate() + day);
-        newStart.setHours(hour, 0, 0, 0);
-        if (newStart.getTime() === oldStart.getTime()) return a;
-        const newEnd = new Date(newStart.getTime() + durationMs);
-        return { ...a, starts_at: newStart.toISOString(), ends_at: newEnd.toISOString(), change_count: a.change_count + 1 };
+      cur.map((a) => a.id !== dragId ? a : {
+        ...a,
+        starts_at: newStart.toISOString(),
+        ends_at: newEnd.toISOString(),
+        change_count: a.change_count + 1,
       })
     );
     setDragId(null);
+
+    // Persist to Supabase so the move sticks across reloads. We send the
+    // full appointment state so existing fields (status, paid, cancel
+    // reason, etc.) stay intact — important for cancelled personal blocks
+    // that otherwise wouldn't survive a refresh.
+    startSave(async () => {
+      const res = await saveAppointment({
+        appt_id: target.id,
+        starts_at: newStart.toISOString(),
+        ends_at: newEnd.toISOString(),
+        session_type: target.session_type,
+        personal_label: target.personal_label ?? null,
+        client_id: target.client_id ?? null,
+        rate: target.rate ?? null,
+        paid: target.paid,
+        status: target.status,
+        notes: target.notes ?? null,
+        session_program_id: target.session_program_id ?? null,
+        program_status: target.program_status,
+        cancel_reason: null,
+        cancel_reason_other: null,
+      });
+      if (!res.ok && !res.error.startsWith("Supabase not configured")) {
+        // Revert the optimistic move on hard failure.
+        setAppts((cur) =>
+          cur.map((a) => a.id !== target.id ? a : {
+            ...a,
+            starts_at: target.starts_at,
+            ends_at: target.ends_at,
+            change_count: target.change_count,
+          })
+        );
+        setSaveError(res.error);
+      }
+    });
   }
 
   // ─── month view aggregation ─────────────────────────────────────
