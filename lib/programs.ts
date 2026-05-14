@@ -191,14 +191,6 @@ export const LIBRARY_HIERARCHY: LibraryGroup[] = [
     ],
   },
   {
-    id: "specialty-skills", label: "Specialty Skills",
-    nodes: [
-      { id: "speed",     label: "Speed",     category: "cardio" },
-      { id: "agility",   label: "Agility",   category: "cardio" },
-      { id: "quickness", label: "Quickness", category: "cardio" },
-    ],
-  },
-  {
     id: "saq", label: "SAQ",
     nodes: [
       { id: "foot-drills", label: "Foot Drills", category: "cardio" },
