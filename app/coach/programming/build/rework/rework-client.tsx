@@ -404,7 +404,6 @@ export default function ReworkClient({
 
   // ── Other modal state ────────────────────────────────────────────────────
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [printoutOpen, setPrintoutOpen] = useState(false);
 
   // ─── PICKER STEP ────────────────────────────────────────────────────────
   if (step === "picker") {
@@ -434,7 +433,6 @@ export default function ReworkClient({
       <div className="no-print" style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginBottom: "0.85rem", flexWrap: "wrap" }}>
         <button className="btn btn-ghost" onClick={() => setImportOpen(true)} title="Import from a past program or session">⇪ Import</button>
         <button className="btn btn-ghost" onClick={() => setUploadOpen(true)} title="Upload a photo of a printout to populate this session (coming soon)">📤 Upload</button>
-        <button className="btn btn-ghost" onClick={() => setPrintoutOpen(true)} title="Open a printout draft to take to the gym floor">📄 View Printout</button>
         <button className="btn btn-ghost" onClick={() => setStep("picker")}>← Back</button>
       </div>
 
@@ -574,16 +572,6 @@ export default function ReworkClient({
           </p>
           <p className="meta" style={{ fontSize: "0.78rem" }}>For now please enter the session by hand using the Select Exercises panel above, or use Import to pull from a past session.</p>
         </SmallModal>
-      )}
-
-      {printoutOpen && (
-        <PrintoutModal
-          slots={slots}
-          clientName={selectedClient?.full_name ?? ""}
-          sessionTitle={sessionTitle}
-          startsAt={selectedAppt?.starts_at ?? initialStartsAt}
-          onClose={() => setPrintoutOpen(false)}
-        />
       )}
 
       {swappingUid && (() => {
@@ -1773,127 +1761,3 @@ function SwapModal({ groups, libraryMovements, currentLeafId, onClose, onPick }:
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Printout modal — fully blank handwriting template. Coach prints it on a
-// Kindle-friendly letter-landscape PDF, writes set-by-set in the gym, and
-// later photographs it so an AI pass can parse it back into a session.
-//
-// One row per set. Headers: Exercise / Target Sets or Times / Target Reps /
-// Target Intensity / Cues / Actual Reps / Weight / Equipment / Tempo / Rest /
-// Notes. Every cell is empty so the coach handwrites everything. Name + Date
-// are pre-filled at the top from session context.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const PRINTOUT_BLANK_ROW_COUNT = 26;
-const PRINTOUT_COLUMNS: { label: string; width?: string }[] = [
-  { label: "Exercise" },
-  { label: "Target Sets or Times", width: "82px" },
-  { label: "Target Reps", width: "62px" },
-  { label: "Target Intensity", width: "82px" },
-  { label: "Cues", width: "150px" },
-  { label: "Actual Reps", width: "62px" },
-  { label: "Weight", width: "58px" },
-  { label: "Equipment", width: "110px" },
-  { label: "Tempo", width: "52px" },
-  { label: "Rest", width: "48px" },
-  { label: "Notes" },
-];
-
-function PrintoutModal({ slots, clientName, sessionTitle, startsAt, onClose }: {
-  slots: Slot[];
-  clientName: string;
-  sessionTitle: string;
-  startsAt: string;
-  onClose: () => void;
-}) {
-  const date = startsAt ? new Date(startsAt) : new Date();
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.6)", zIndex: 1100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "1.5rem 1rem", overflowY: "auto" }}
-      onClick={onClose}
-    >
-      <div className="card" style={{ width: "min(1100px, 98vw)", padding: 0, maxHeight: "92vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-        <div className="no-print" style={{ padding: "0.6rem 0.85rem", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>Printout (handwriting template)</h3>
-          <div style={{ display: "flex", gap: "0.4rem" }}>
-            <button className="btn btn-primary" onClick={() => window.print()}>Print / Save PDF</button>
-            <button className="btn btn-ghost" onClick={onClose}>✕</button>
-          </div>
-        </div>
-        <div style={{ overflowY: "auto" }}>
-          <div className="rework-printout" style={{
-            padding: "0.35in", fontFamily: "Georgia, serif",
-            color: "#000", background: "#fff",
-            fontSize: "0.74rem", lineHeight: 1.3,
-          }}>
-            {/* Header — Name + Date in the top-left */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "0.5rem", gap: "1rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "auto minmax(220px, 1fr) auto minmax(160px, 1fr)", gap: "0.35rem 0.5rem", fontSize: "0.78rem", alignItems: "center", flex: 1 }}>
-                <span style={{ fontWeight: 700 }}>Name:</span>
-                <span style={{ borderBottom: "1px solid #000", padding: "0 0.25rem", minHeight: "1.1rem" }}>{clientName || ""}</span>
-                <span style={{ fontWeight: 700 }}>Date:</span>
-                <span style={{ borderBottom: "1px solid #000", padding: "0 0.25rem", minHeight: "1.1rem" }}>
-                  {date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </span>
-              </div>
-            </div>
-
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.7rem" }}>
-              <colgroup>
-                {PRINTOUT_COLUMNS.map((c, i) => (
-                  <col key={i} style={{ width: c.width }} />
-                ))}
-              </colgroup>
-              <thead>
-                <tr style={{ background: "#eee", textAlign: "left" }}>
-                  {PRINTOUT_COLUMNS.map((c) => (
-                    <th key={c.label} style={{ border: "1px solid #000", padding: "0.22rem 0.32rem", fontWeight: 700, whiteSpace: "nowrap" }}>
-                      {c.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {/* Blank rows — one set per row. Coach can write a ditto mark
-                    (〃) in a cell that matches the row above. To mark a
-                    between-exercise rest, write "Rest" in the Exercise column
-                    and the duration in the Rest column. */}
-                {Array.from({ length: PRINTOUT_BLANK_ROW_COUNT }, (_, i) => (
-                  <tr key={i}>
-                    {PRINTOUT_COLUMNS.map((c, ci) => (
-                      <td
-                        key={ci}
-                        style={{
-                          border: "1px solid #000",
-                          padding: "0.32rem 0.32rem",
-                          minHeight: "1.3rem",
-                          height: "1.3rem",
-                        }}
-                      >
-                        &nbsp;
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Tiny session footer for any notes that don't fit the table */}
-            <div style={{ marginTop: "0.4rem", display: "flex", justifyContent: "space-between", fontSize: "0.62rem", color: "#444" }}>
-              <span>Tip: write 〃 (ditto) when a cell repeats the row above. For a rest between exercises, write &ldquo;Rest&rdquo; in the Exercise column.</span>
-            </div>
-          </div>
-        </div>
-
-        <style jsx global>{`
-          @media print {
-            @page { size: letter landscape; margin: 0.35in; }
-            body * { visibility: hidden !important; }
-            .rework-printout, .rework-printout * { visibility: visible !important; }
-            .rework-printout { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; }
-          }
-        `}</style>
-      </div>
-    </div>
-  );
-}
