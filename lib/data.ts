@@ -51,9 +51,13 @@ export type ClientRow = {
   // visibility in the Dashboard Programs banner, View Programs Programs
   // table, and the Build Program client picker on the Program tab.
   needs_at_home_programming: boolean;
+  // Free-text "who they are" notes the coach writes for themselves.
+  // Shown on the client profile page between profile rows and the High
+  // Level Plan section.
+  client_description: string | null;
 };
 
-const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0, needs_at_home_programming: false };
+const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0, needs_at_home_programming: false, client_description: null };
 
 const DEMO_CLIENTS: ClientRow[] = [
   { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-abbey",   full_name: "Abbey Archer",      email: null, age_category: "22",  goals: "Form & knowledge",               regular_frequency: "4", session_rate: 100, test_rate: 100, monthly_revenue: 200,  current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 4 * 86400000).toISOString(), total_sessions: 4,  injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
@@ -77,7 +81,7 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         tier, member_since, status, coach_id, lifecycle, requires_confirmation,
         trained_since_note, accountability, education, commitment,
         dire_need_ranking, time_window_note, birthday,
-        form_received_at, form_data, needs_at_home_programming
+        form_received_at, form_data, needs_at_home_programming, client_description
       )
     `)
     .eq("role", "client");
@@ -127,6 +131,7 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         form_received_at: d?.form_received_at ?? null,
         form_data: d?.form_data ?? null,
         needs_at_home_programming: d?.needs_at_home_programming ?? false,
+        client_description: d?.client_description ?? null,
       } satisfies ClientRow;
     });
   const rows = baseRows.filter((r): r is ClientRow => r !== null);

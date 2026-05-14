@@ -5,7 +5,7 @@ import { getClient, listAppointmentsForClient, getClientReminderPrefs, getHighLe
 import { pastProgramsForClient, isExpiringSoon, CATEGORY_LABELS, type Category, type PastProgramFull } from "@/lib/programs";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import ClientSettings from "./client-settings";
-import { CoachProfileCard, ClientProfileCard } from "./client-profile-edit";
+import { CoachProfileCard, ClientProfileCard, ClientDescriptionCard } from "./client-profile-edit";
 import { HighLevelPlanSection } from "./high-level-plan";
 import PastPrograms, { type PastSessionItem } from "./past-programs";
 import ExercisesLearnedSection from "./exercises-learned-section";
@@ -226,6 +226,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <CoachProfileCard client={client} />
         <ClientProfileCard client={client} />
       </div>
+
+      {/* ── Client Description — who they are, in James's own words ── */}
+      <ClientDescriptionCard client={client} />
 
       <HighLevelPlanSection
         clientId={client.id}

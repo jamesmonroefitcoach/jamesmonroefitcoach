@@ -6,6 +6,7 @@ import {
   updateCoachProfile, type CoachProfileInput,
   updateClientInfo,  type ClientInfoInput,
   setLifecycle,
+  updateClientDescription,
 } from "./actions";
 
 // ── shared helpers ──────────────────────────────────────────────────────────
@@ -287,6 +288,72 @@ export function ClientProfileCard({ client }: { client: ClientRow }) {
         <button className="btn btn-ghost" onClick={() => { setEditing(false); setError(null); }} disabled={saving}>Cancel</button>
         <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
       </div>
+    </div>
+  );
+}
+
+// ── Client Description Card ───────────────────────────────────────────────
+// Free-text "who they are" notes. James writes about the client in his own
+// words — context, history, observations — for his future self.
+
+export function ClientDescriptionCard({ client }: { client: ClientRow }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(client.client_description ?? "");
+  const [saving, startSave] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    setError(null);
+    startSave(async () => {
+      const res = await updateClientDescription(client.id, draft);
+      if (!res.ok) { setError(res.error ?? "Save failed"); return; }
+      setEditing(false);
+    });
+  }
+
+  return (
+    <div className="card" style={{ marginTop: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h2 style={{ fontSize: "1rem", margin: 0 }}>Client Description</h2>
+        {!editing && (
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: "0.78rem", padding: "0.2rem 0.55rem" }}
+            onClick={() => { setDraft(client.client_description ?? ""); setEditing(true); }}
+          >✎ Edit</button>
+        )}
+      </div>
+      <hr className="divider" />
+      {editing ? (
+        <>
+          <p className="meta" style={{ fontSize: "0.74rem", marginTop: 0, marginBottom: "0.45rem" }}>
+            Who is this client, in your own words? Context, history, observations — anything that helps your future self pick up where you left off.
+          </p>
+          <textarea
+            className="textarea"
+            rows={6}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="e.g. Acacia is a 30-year-old marketing manager with a desk job, mild low-back tightness, and a goal of being able to lift her toddler without thinking about it. She's consistent with sessions but tends to under-eat on training days…"
+            style={{ width: "100%", resize: "vertical", fontSize: "0.86rem", padding: "0.5rem 0.65rem", lineHeight: 1.45 }}
+          />
+          {error && <p style={{ color: "var(--red)", fontSize: "0.82rem", marginTop: "0.4rem" }}>{error}</p>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.6rem" }}>
+            <button className="btn btn-ghost" onClick={() => { setEditing(false); setError(null); }} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+          </div>
+        </>
+      ) : (
+        client.client_description?.trim() ? (
+          <p style={{ whiteSpace: "pre-wrap", fontSize: "0.88rem", lineHeight: 1.5, margin: 0 }}>
+            {client.client_description}
+          </p>
+        ) : (
+          <p className="meta" style={{ fontStyle: "italic", margin: 0 }}>
+            Nothing here yet. Click Edit to describe who this client is — in your own words.
+          </p>
+        )
+      )}
     </div>
   );
 }

@@ -43,6 +43,29 @@ export async function updateCoachProfile(
   return { ok: true };
 }
 
+// ── Client Description ────────────────────────────────────────────────────
+// Free-text "who they are" notes the coach writes for themselves on the
+// client profile page. Stored in client_details.client_description.
+
+export async function updateClientDescription(
+  clientId: string,
+  description: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin" && !user.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) { revalidatePath(`/coach/clients/${clientId}`); return { ok: true }; }
+
+  const supabase = createSupabaseAdmin();
+  const value = description.trim() || null;
+  const { error } = await supabase
+    .from("client_details")
+    .update({ client_description: value })
+    .eq("profile_id", clientId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/coach/clients/${clientId}`);
+  return { ok: true };
+}
+
 // ── Client-provided / contact fields ──────────────────────────────────────
 export type ClientInfoInput = {
   goals?: string;
