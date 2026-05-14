@@ -1348,10 +1348,23 @@ export default function BuildProgramClient({
   return (
     <LibraryMovementsContext.Provider value={libraryMovements}>
     <div>
-      {/* ─── Page-level Session / Program tab bar — always visible, lives at the
-            very top regardless of viewMode (plan view, builder, etc.) ─── */}
+      {/* ─── Page-level tab bar — Sessions Rework WIP / Sessions / Program ─── */}
       <div className="no-print" style={{ borderBottom: "2px solid var(--line)", marginBottom: "1.5rem", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
         <div style={{ display: "flex" }}>
+          <Link
+            href="/coach/programming/build/rework"
+            style={{
+              padding: "0.55rem 1.4rem",
+              background: "transparent",
+              borderBottom: "2px solid transparent",
+              marginBottom: "-2px",
+              fontSize: "0.95rem",
+              fontWeight: 400,
+              color: "var(--muted)",
+              cursor: "pointer",
+              textDecoration: "none",
+            }}
+          >Sessions Rework WIP</Link>
           {(["in_gym", "at_home"] as const).map((k) => (
             <button
               key={k}
@@ -1371,7 +1384,7 @@ export default function BuildProgramClient({
                 letterSpacing: programKind === k ? "0.01em" : undefined,
               }}
             >
-              {k === "in_gym" ? "Session" : "Program"}
+              {k === "in_gym" ? "Sessions" : "Program"}
             </button>
           ))}
         </div>
