@@ -410,6 +410,23 @@ function listFieldOr(list: string[] | null | undefined, map?: (v: string) => str
   return list.map((v) => (map ? map(v) : v)).join(", ");
 }
 
+// Look up which top-level group (Upper / Middle / Lower / Conditioning /
+// Mobility / etc.) contains a node whose label matches the given
+// subcategory. Returns the group label or null if no match.
+function groupLabelForSubcategory(sub: string | null | undefined): string | null {
+  if (!sub) return null;
+  const target = sub.trim().toLowerCase();
+  for (const g of LIBRARY_HIERARCHY) {
+    for (const n of g.nodes) {
+      if (n.label.trim().toLowerCase() === target) return g.label;
+      for (const c of n.children ?? []) {
+        if (c.label.trim().toLowerCase() === target) return g.label;
+      }
+    }
+  }
+  return null;
+}
+
 function ExerciseDropdown({ m, onEdit, onArchive }: {
   m: MovementRow;
   onEdit: () => void;
@@ -417,11 +434,12 @@ function ExerciseDropdown({ m, onEdit, onArchive }: {
 }) {
   const [open, setOpen] = useState(false);
 
-  // Decode machine/other specifics back out for display when present
-  const decoded = decodeSpecs(m.equipment_list ?? [], m.equipment_specifics);
+  // Equipment label list (skip the spec encoding — we don't surface
+  // machine/other free text on the read-only details anymore).
   const equipLabel = (m.equipment_list ?? [])
     .map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e)
     .join(", ");
+  const groupLabel = groupLabelForSubcategory(m.subcategory);
 
   return (
     <div style={{ borderBottom: "1px solid var(--line)" }}>
@@ -470,17 +488,15 @@ function ExerciseDropdown({ m, onEdit, onArchive }: {
       {/* Expanded body — fields combined onto fewer lines, "No Data" for blanks */}
       {open && (
         <div style={{ padding: "0.3rem 1.1rem 0.55rem", fontSize: "0.78rem", lineHeight: 1.5 }}>
-          {/* Line 1 — classification */}
+          {/* Line 1 — classification (Category shows the top-level group
+              label like Upper / Mobility — not the raw push/pull enum) */}
           <FieldRow>
-            <Field label="Category" value={fieldOr(m.category)} />
+            <Field label="Category" value={fieldOr(groupLabel)} />
             <Field label="Subcategory" value={fieldOr(m.subcategory)} />
-            <Field label="Core" value={m.is_core ? "Yes" : "No"} />
           </FieldRow>
-          {/* Line 2 — equipment + specifications */}
+          {/* Line 2 — equipment options */}
           <FieldRow>
-            <Field label="Equipment" value={equipLabel || NO_DATA} />
-            <Field label="Machine" value={fieldOr(decoded.machineSpec)} />
-            <Field label="Other" value={fieldOr(decoded.otherSpec)} />
+            <Field label="Equipment Options" value={equipLabel || NO_DATA} />
           </FieldRow>
           {/* Line 3 — position + muscles */}
           <FieldRow>
@@ -491,16 +507,11 @@ function ExerciseDropdown({ m, onEdit, onArchive }: {
           <FieldRow>
             <Field label="Cues" value={m.cues ? <em>{m.cues}</em> : NO_DATA} fullWidth />
           </FieldRow>
-          {/* Line 5 — demo + added */}
+          {/* Line 5 — demo link */}
           <FieldRow>
             <Field label="Demo" value={m.demo_url
               ? <a href={m.demo_url} target="_blank" rel="noopener" style={{ color: "var(--rust)", wordBreak: "break-all" }}>{m.demo_url}</a>
               : NO_DATA} fullWidth />
-          </FieldRow>
-          <FieldRow>
-            <Field label="Added" value={m.created_at
-              ? new Date(m.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-              : NO_DATA} />
           </FieldRow>
         </div>
       )}

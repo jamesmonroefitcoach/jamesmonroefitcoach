@@ -4281,16 +4281,19 @@ export function ExerciseCard({
         const INP: React.CSSProperties = { fontSize: "0.72rem", padding: "0.14rem 0.14rem", textAlign: "center" };
         const activeFields: OptionalField[] = it.optional_fields ?? [];
         const optColStr = activeFields.map((f) => OPTIONAL_FIELD_CONFIG[f].width).join(" ");
-        // Column order: Sets | Reps | Exertion | Spec | [Equip] | [opt cols] | + | Notes(1fr)
+        // Column order: Sets | Reps | Exertion | Spec | [Equip] | [Pos when
+        // inlineEquipment=false] | [opt cols] | + | Notes(1fr)
         // When inlineEquipment is false AND same_format is true, Equipment +
-        // Spec drop out of the same-format grid and render as dedicated pill
-        // rows above. Per-set mode (same_format=false) always keeps every
-        // column inline so the coach can configure each set independently.
-        const sfDropInline = !inlineEquipment;   // only affects same_format=true grid
+        // Spec + Position drop out of the same-format grid and render as
+        // pill rows above. Per-set mode keeps everything inline; when
+        // inlineEquipment=false we also surface Position inline so it has
+        // parity with Equipment + Spec.
+        const sfDropInline = !inlineEquipment;
+        const showPositionInline = !inlineEquipment;
         const SF_COLS = sfDropInline
           ? `32px 76px 68px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`
           : `32px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
-        const PS_COLS = `24px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        const PS_COLS = `24px 76px 68px 62px 60px${showPositionInline ? " 76px" : ""}${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
 
         function removeOptField(f: OptionalField) {
           onPatch({ optional_fields: activeFields.filter((x) => x !== f) });
@@ -4587,6 +4590,12 @@ export function ExerciseCard({
                     <span className="hdr-full">Equipment</span>
                     <span className="hdr-short">Equip</span>
                   </span>
+                  {showPositionInline && (
+                    <span style={HDR}>
+                      <span className="hdr-full">Position</span>
+                      <span className="hdr-short">Pos</span>
+                    </span>
+                  )}
                   {activeFields.map((f) => (
                     <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                       <button
@@ -4623,6 +4632,23 @@ export function ExerciseCard({
                         onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
                         compact
                       />
+                      {showPositionInline && (
+                        <select
+                          key={`pos-${si}`}
+                          className="select"
+                          style={{ ...INP, fontSize: "0.7rem" }}
+                          value={(row.position ?? "").startsWith("incline") ? "incline" : (row.position ?? "")}
+                          onChange={(e) => onPatchSetRow(si, { position: e.target.value })}
+                        >
+                          <option value="">—</option>
+                          <option value="standing">Standing</option>
+                          <option value="seated">Seated</option>
+                          <option value="bent_over">Bent over</option>
+                          <option value="kneeling">Kneeling</option>
+                          <option value="incline">Incline</option>
+                          <option value="lying">Lying</option>
+                        </select>
+                      )}
                       {activeFields.map((f) => (
                         <OptionalFieldInput
                           key={`opt-${f}-${si}`}
