@@ -145,7 +145,7 @@ export default function PastPrograms({
             )}
           </div>
 
-          {/* Right: Programs listed by name + date range */}
+          {/* Right: Programs split into Coach Assigned + Client Created */}
           <div>
             <div style={{
               fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase",
@@ -153,34 +153,75 @@ export default function PastPrograms({
               paddingBottom: "0.3rem", borderBottom: "1px solid var(--line)",
               marginBottom: "0.5rem",
             }}>Programs</div>
-            {programs.length === 0 ? (
-              <p className="meta" style={{ fontSize: "0.74rem" }}>No past programs.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-                {programs.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={`/coach/programming/build?tab=program&client=${clientId}`}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
-                      padding: "0.35rem 0.5rem", borderRadius: 3,
-                      background: "rgba(0,0,0,0.025)",
-                      border: "1px solid var(--line)",
-                      textDecoration: "none", color: "var(--ink)",
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: "0.8rem" }}>{p.name}</div>
-                      <div className="meta" style={{ fontSize: "0.68rem" }}>
-                        {fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}
-                      </div>
-                    </div>
-                    <span style={{ color: "var(--rust)", fontSize: "0.78rem", flexShrink: 0 }}>→</span>
-                  </Link>
-                ))}
-              </div>
-            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <ProgramGroupCollapsible
+                title="Coach Assigned"
+                clientId={clientId}
+                items={programs.filter((p) => !p.created_by_client)}
+              />
+              <ProgramGroupCollapsible
+                title="Client Created"
+                clientId={clientId}
+                items={programs.filter((p) => p.created_by_client)}
+              />
+            </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProgramGroupCollapsible({
+  title, clientId, items,
+}: {
+  title: string;
+  clientId: string;
+  items: PastProgramFull[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: "1px solid var(--line)", borderRadius: 3, overflow: "hidden" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", background: "rgba(0,0,0,0.025)", border: "none",
+          padding: "0.35rem 0.55rem", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          fontFamily: "inherit",
+        }}
+      >
+        <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>{open ? "▾" : "▸"} {title}</span>
+        <span className="meta" style={{ fontSize: "0.68rem" }}>{items.length}</span>
+      </button>
+      {open && (
+        <div style={{ padding: "0.3rem 0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+          {items.length === 0 ? (
+            <p className="meta" style={{ fontSize: "0.72rem", fontStyle: "italic", margin: "0.2rem 0.1rem" }}>
+              None yet.
+            </p>
+          ) : items.map((p) => (
+            <Link
+              key={p.id}
+              href={`/coach/programming/build?tab=program&client=${clientId}`}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
+                padding: "0.3rem 0.45rem", borderRadius: 3,
+                background: "var(--paper)",
+                border: "1px solid var(--line)",
+                textDecoration: "none", color: "var(--ink)",
+              }}
+            >
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: "0.78rem" }}>{p.name}</div>
+                <div className="meta" style={{ fontSize: "0.66rem" }}>
+                  {fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}
+                </div>
+              </div>
+              <span style={{ color: "var(--rust)", fontSize: "0.76rem", flexShrink: 0 }}>→</span>
+            </Link>
+          ))}
         </div>
       )}
     </div>

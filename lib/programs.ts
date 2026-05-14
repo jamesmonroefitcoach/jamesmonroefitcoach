@@ -237,6 +237,10 @@ export type PastProgramSummary = {
   category_counts: Partial<Record<Category, number>>;
   program_kind: ProgramKind;
   at_home_cadence?: string | null;
+  // Authorship flag — true when the client built this themselves via the
+  // client-side builder. Drives the split between Coach Assigned vs Client
+  // Created on the Past Programs widget.
+  created_by_client?: boolean;
 };
 
 export type PastProgramDay = {
