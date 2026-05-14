@@ -12,6 +12,23 @@ import type { WeekSessionItem, WeekProgramItem, NoSessionClient } from "./week-b
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+// Mirrors the schedule view's status pill colors so the dashboard's All
+// Sessions Summary table reads the same as the schedule.
+const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
+  scheduled:        { bg: "#5b6d7a", fg: "#fff" },
+  completed:        { bg: "#5a6b4a", fg: "#fff" },
+  cancelled:        { bg: "#c0392b", fg: "#fff" },
+  no_show:          { bg: "#7a3a55", fg: "#fff" },
+  change_requested: { bg: "#d97706", fg: "#fff" },
+};
+const STATUS_LABELS: Record<AppointmentRow["status"], string> = {
+  scheduled:        "Scheduled",
+  completed:        "Completed",
+  cancelled:        "Cancelled",
+  no_show:          "No-show",
+  change_requested: "Change requested",
+};
+
 function startOfWeekLocal(d: Date): Date {
   const s = new Date(d);
   s.setHours(0, 0, 0, 0);
@@ -511,9 +528,18 @@ export default function DashboardClient({
                           <div className="meta" style={{ fontSize: "0.7rem", marginBottom: "0.25rem" }}>
                             {sessionDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {fmtDaysAway(sessionDate)}
                           </div>
-                          {a.change_count > 0
-                            ? <span className="badge badge-amber">{a.change_count}× changed</span>
-                            : <span className="badge">{a.status}</span>}
+                          {a.change_count > 0 ? (
+                            <span className="badge badge-amber">{a.change_count}× changed</span>
+                          ) : (
+                            <span
+                              className="badge"
+                              style={{
+                                background: STATUS_COLORS[a.status].bg,
+                                color: STATUS_COLORS[a.status].fg,
+                                fontWeight: 600,
+                              }}
+                            >{STATUS_LABELS[a.status]}</span>
+                          )}
                         </td>
                         <td>
                           {isSession ? (
