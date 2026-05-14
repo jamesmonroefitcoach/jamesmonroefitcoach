@@ -61,21 +61,24 @@ export type SetRow = {
   position?: string;       // e.g. "standing" | "seated" | "lying" | "incline:45"
 };
 
-export type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
-const VARIATIONS: Variation[] = ["stretch", "plyometric", "isometric", "single_sided", "bilateral", "dropset"];
-const VARIATION_LABELS: Record<Variation, string> = {
+export type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset" | "moving" | "hold";
+export const VARIATIONS: Variation[] = ["stretch", "plyometric", "isometric", "single_sided", "bilateral", "dropset", "moving", "hold"];
+export const VARIATION_LABELS: Record<Variation, string> = {
   stretch: "Stretch", plyometric: "Plyo", isometric: "Iso",
   single_sided: "Unilateral", bilateral: "Bilateral", dropset: "Dropset",
+  moving: "Moving", hold: "Hold",
 };
 const VARIATION_COLORS: Record<Variation, string> = {
   stretch: "rgba(59,130,246,0.12)", plyometric: "rgba(249,115,22,0.12)",
   isometric: "rgba(139,92,246,0.12)", single_sided: "rgba(34,197,94,0.12)",
   bilateral: "rgba(6,182,212,0.12)", dropset: "rgba(168,61,43,0.12)",
+  moving: "rgba(20,184,166,0.12)", hold: "rgba(120,113,108,0.12)",
 };
 const VARIATION_TEXT: Record<Variation, string> = {
   stretch: "rgb(37,99,235)", plyometric: "rgb(194,65,12)",
   isometric: "rgb(109,40,217)", single_sided: "rgb(21,128,57)",
   bilateral: "rgb(14,116,144)", dropset: "var(--rust)",
+  moving: "rgb(13,148,136)", hold: "rgb(87,83,78)",
 };
 
 // ─── Optional per-set fields ─────────────────────────────────────────────
@@ -4279,12 +4282,15 @@ export function ExerciseCard({
         const activeFields: OptionalField[] = it.optional_fields ?? [];
         const optColStr = activeFields.map((f) => OPTIONAL_FIELD_CONFIG[f].width).join(" ");
         // Column order: Sets | Reps | Exertion | Spec | [Equip] | [opt cols] | + | Notes(1fr)
-        // When inlineEquipment is false the Equipment column drops out and a
-        // separate equipment row renders above the grid.
-        const equipColSf = inlineEquipment ? " 60px" : "";
-        const equipColPs = inlineEquipment ? " 60px" : "";
-        const SF_COLS = `32px 76px 68px 62px${equipColSf}${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
-        const PS_COLS = `24px 76px 68px 62px${equipColPs}${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        // When inlineEquipment is false AND same_format is true, Equipment +
+        // Spec drop out of the same-format grid and render as dedicated pill
+        // rows above. Per-set mode (same_format=false) always keeps every
+        // column inline so the coach can configure each set independently.
+        const sfDropInline = !inlineEquipment;   // only affects same_format=true grid
+        const SF_COLS = sfDropInline
+          ? `32px 76px 68px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`
+          : `32px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
+        const PS_COLS = `24px 76px 68px 62px 60px${optColStr ? ` ${optColStr}` : ""} 26px 1fr`;
 
         function removeOptField(f: OptionalField) {
           onPatch({ optional_fields: activeFields.filter((x) => x !== f) });
@@ -4302,10 +4308,126 @@ export function ExerciseCard({
               <span style={{ fontSize: "0.61rem", color: "var(--muted)", userSelect: "none" }}>All same</span>
             </label>
 
-            {/* Separate equipment row — only when inlineEquipment is false.
-                Flat checkbox pills + inline Machine/Other specifics input,
-                applied globally (not per-set). */}
-            {!inlineEquipment && (() => {
+            {/* Separate Specification (variations) + Position + Equipment
+                pill rows — only when inlineEquipment is false AND same_format
+                is true (per-set mode keeps these as inline columns). */}
+            {!inlineEquipment && it.same_format && (
+              <>
+                {/* Specification (variations) pill row */}
+                <div style={{ marginBottom: "0.32rem" }}>
+                  <div style={{ fontSize: "0.58rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.18rem" }}>
+                    Specification
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem 0.4rem" }}>
+                    {VARIATIONS.map((v) => {
+                      const checked = it.variations.includes(v);
+                      return (
+                        <label key={v} style={{
+                          display: "inline-flex", alignItems: "center", gap: "0.22rem",
+                          padding: "0.14rem 0.4rem", borderRadius: 999,
+                          border: `1px solid ${checked ? "var(--rust)" : "var(--line)"}`,
+                          background: checked ? "rgba(168,61,43,0.06)" : "transparent",
+                          cursor: "pointer", fontSize: "0.7rem",
+                          fontWeight: checked ? 600 : 500,
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const next = checked
+                                ? it.variations.filter((x) => x !== v)
+                                : [...it.variations, v];
+                              onPatch({ variations: next });
+                            }}
+                            style={{ accentColor: "var(--rust)" }}
+                          />
+                          {VARIATION_LABELS[v]}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Position pill row — stored CSV in it.position */}
+                <div style={{ marginBottom: "0.32rem" }}>
+                  <div style={{ fontSize: "0.58rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.18rem" }}>
+                    Position
+                  </div>
+                  {(() => {
+                    const posOpts: { value: string; label: string }[] = [
+                      { value: "standing", label: "Standing" },
+                      { value: "seated", label: "Seated" },
+                      { value: "bent_over", label: "Bent over" },
+                      { value: "kneeling", label: "Kneeling" },
+                      { value: "incline", label: "Incline" },
+                      { value: "lying", label: "Lying" },
+                    ];
+                    const raw = (it.position ?? "").trim();
+                    const tokens = raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+                    const selected = new Set(tokens.map((t) => t.startsWith("incline") ? "incline" : t));
+                    const inclineToken = tokens.find((t) => t.startsWith("incline"));
+                    const inclineAngle = inclineToken && inclineToken.includes(":")
+                      ? inclineToken.slice("incline:".length) : "";
+                    function writeBack(next: Set<string>, angle: string) {
+                      const out: string[] = [];
+                      if (next.has("standing"))  out.push("standing");
+                      if (next.has("seated"))    out.push("seated");
+                      if (next.has("bent_over")) out.push("bent_over");
+                      if (next.has("kneeling"))  out.push("kneeling");
+                      if (next.has("incline"))   out.push(angle ? `incline:${angle}` : "incline");
+                      if (next.has("lying"))     out.push("lying");
+                      onPatch({ position: out.join(",") });
+                    }
+                    return (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem 0.4rem", alignItems: "center" }}>
+                        {posOpts.map((p) => {
+                          const checked = selected.has(p.value);
+                          return (
+                            <label key={p.value} style={{
+                              display: "inline-flex", alignItems: "center", gap: "0.22rem",
+                              padding: "0.14rem 0.4rem", borderRadius: 999,
+                              border: `1px solid ${checked ? "var(--rust)" : "var(--line)"}`,
+                              background: checked ? "rgba(168,61,43,0.06)" : "transparent",
+                              cursor: "pointer", fontSize: "0.7rem",
+                              fontWeight: checked ? 600 : 500,
+                            }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  const next = new Set(selected);
+                                  if (next.has(p.value)) next.delete(p.value);
+                                  else next.add(p.value);
+                                  writeBack(next, inclineAngle);
+                                }}
+                                style={{ accentColor: "var(--rust)" }}
+                              />
+                              {p.label}
+                            </label>
+                          );
+                        })}
+                        {selected.has("incline") && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.22rem" }}>
+                            <input
+                              className="input"
+                              type="number" min={0} max={90} placeholder="°"
+                              value={inclineAngle}
+                              onChange={(e) => writeBack(selected, e.target.value)}
+                              style={{ width: 52, fontSize: "0.72rem", padding: "0.14rem 0.28rem" }}
+                            />
+                            <span style={{ fontSize: "0.66rem", color: "var(--muted)" }}>°</span>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+
+            {/* Separate equipment row — only when inlineEquipment is false
+                AND same_format is true. Flat checkbox pills + inline
+                Machine/Other specifics input, applied globally. */}
+            {!inlineEquipment && it.same_format && (() => {
               const decoded = decodeSpecs(it.equipment_list ?? [], it.equipment_specifics);
               function patchEquipment(list: Equipment[], machineSpec: string, otherSpec: string) {
                 const spec = encodeSpecs(list, machineSpec, otherSpec);
@@ -4383,11 +4505,13 @@ export function ExerciseCard({
                 <span style={HDR}>Sets</span>
                 <span style={HDR}>Reps</span>
                 <span style={HDR}>Exertion</span>
-                <span style={HDR}>
-                  <span className="hdr-full">Specification</span>
-                  <span className="hdr-short">Spec</span>
-                </span>
-                {inlineEquipment && (
+                {!sfDropInline && (
+                  <span style={HDR}>
+                    <span className="hdr-full">Specification</span>
+                    <span className="hdr-short">Spec</span>
+                  </span>
+                )}
+                {!sfDropInline && (
                   <span style={HDR}>
                     <span className="hdr-full">Equipment</span>
                     <span className="hdr-short">Equip</span>
@@ -4417,8 +4541,10 @@ export function ExerciseCard({
                   value={it.exertion_score} onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}>
                   {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-                <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
-                {inlineEquipment && (
+                {!sfDropInline && (
+                  <VariationDropdown value={it.variations} onChange={(v) => onPatch({ variations: v })} />
+                )}
+                {!sfDropInline && (
                   <EquipmentMultiSelect
                     value={it.equipment_list} specifics={it.equipment_specifics}
                     onChange={(eq, sp) => onPatch({ equipment_list: eq, equipment_specifics: sp })}
@@ -4457,12 +4583,10 @@ export function ExerciseCard({
                     <span className="hdr-full">Specification</span>
                     <span className="hdr-short">Spec</span>
                   </span>
-                  {inlineEquipment && (
-                    <span style={HDR}>
-                      <span className="hdr-full">Equipment</span>
-                      <span className="hdr-short">Equip</span>
-                    </span>
-                  )}
+                  <span style={HDR}>
+                    <span className="hdr-full">Equipment</span>
+                    <span className="hdr-short">Equip</span>
+                  </span>
                   {activeFields.map((f) => (
                     <span key={`hdr-${f}`} style={{ ...HDR, display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                       <button
@@ -4492,15 +4616,13 @@ export function ExerciseCard({
                         {Object.entries(EXERTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                       <VariationDropdown key={`spec-${si}`} value={row.variations ?? []} onChange={(v) => onPatchSetRow(si, { variations: v })} />
-                      {inlineEquipment && (
-                        <EquipmentMultiSelect
-                          key={`eq-${si}`}
-                          value={row.equipment_list ?? it.equipment_list}
-                          specifics={row.equipment_specifics ?? it.equipment_specifics}
-                          onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
-                          compact
-                        />
-                      )}
+                      <EquipmentMultiSelect
+                        key={`eq-${si}`}
+                        value={row.equipment_list ?? it.equipment_list}
+                        specifics={row.equipment_specifics ?? it.equipment_specifics}
+                        onChange={(eq, sp) => onPatchSetRow(si, { equipment_list: eq, equipment_specifics: sp })}
+                        compact
+                      />
                       {activeFields.map((f) => (
                         <OptionalFieldInput
                           key={`opt-${f}-${si}`}

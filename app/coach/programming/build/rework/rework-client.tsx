@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ClientRow, MovementRow } from "@/lib/data";
 import {
-  CATEGORY_LABELS, EQUIPMENT_OPTIONS, EXERTION_LABELS,
+  CATEGORY_LABELS, EQUIPMENT_OPTIONS, EXERTION_LABELS, EXERTION_SHORT,
   LIBRARY_HIERARCHY, hierarchyLeaves, leafToMovement,
   type Category, type Equipment, type Movement,
   type LibraryGroup, type LibraryNode, type LibraryLeaf,
@@ -29,7 +29,8 @@ import ImportPickerModal, { type ImportScope, type ImportResult } from "../impor
 import { addMovement } from "../../exercise-library/actions";
 import {
   ExerciseCard, LibraryMovementsContext,
-  type ProgramItem, type SetRow,
+  VARIATION_LABELS,
+  type ProgramItem, type SetRow, type Variation,
 } from "../build-program-client";
 
 // ── Slot model ───────────────────────────────────────────────────────────────
@@ -1361,99 +1362,165 @@ function ExerciseSlotCard({
     );
   }
 
-  // Perform mode — log fields visible, exercise locked
+  // Perform mode — published-view-style log table. Mirrors the columns the
+  // session plan view shows: SET / REPS (prescribed) / ACTUAL / WEIGHT /
+  // EXERTION / SPECIFICATION / EQUIPMENT / TEMPO / COACH NOTES / NOTES.
+  // Inputs: ACTUAL, WEIGHT, NOTES per set + Overall notes textarea below.
   if (slot.mode === "perform") {
-    const setCount = slot.sets;
+    const setCount = Math.max(1, slot.sets);
     const ensureLen = (arr: string[]) => Array.from({ length: setCount }, (_, i) => arr[i] ?? "");
     const weights = ensureLen(slot.perform.weights);
     const reps = ensureLen(slot.perform.actualReps);
     const notes = ensureLen(slot.perform.setNotes);
+    // Resolve per-set prescription, falling back to the global one for
+    // same_format=true (set_rows will be empty).
+    const rowFor = (i: number): Partial<SetRow> => slot.same_format ? {} : (slot.set_rows[i] ?? {});
+    const equipLabel = (slot.equipment_list ?? [])
+      .map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e)
+      .join(", ");
+
+    const TH: React.CSSProperties = {
+      fontSize: "0.58rem", color: "var(--muted)", textTransform: "uppercase",
+      letterSpacing: "0.05em", padding: "0.22rem 0.45rem", textAlign: "left",
+      borderBottom: "1px solid var(--line)", whiteSpace: "nowrap",
+    };
+    const TD: React.CSSProperties = {
+      padding: "0.32rem 0.45rem", fontSize: "0.78rem", verticalAlign: "middle",
+    };
+    const INP: React.CSSProperties = {
+      fontSize: "0.78rem", padding: "0.18rem 0.32rem", width: 64,
+    };
+
     return (
-      <div style={{ border: "1px solid var(--rust)", borderRadius: 4, padding: "0.5rem 0.6rem", background: "rgba(168,61,43,0.04)" }}>
-        <RowHeader
-          left={
-            <>
-              <button type="button" className="btn btn-ghost" style={{ padding: "0.1rem 0.32rem", fontSize: "0.7rem" }} onClick={onMoveUp}>↑</button>
-              <button type="button" className="btn btn-ghost" style={{ padding: "0.1rem 0.32rem", fontSize: "0.7rem" }} onClick={onMoveDown}>↓</button>
-              <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>#{orderNum} {slot.movement.name}</span>
-              <span className="badge badge-amber" style={{ fontSize: "0.6rem" }}>Performing</span>
-            </>
-          }
-          right={
-            <>
-              <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.1rem 0.42rem" }} onClick={() => onSetMode("plan")} title="Back to plan (edit setup)">✎ Edit setup</button>
-              <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.1rem 0.42rem" }} onClick={onSwap}>🔁 Swap</button>
-              <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.1rem 0.42rem", color: "var(--red)" }} onClick={onDelete}>✕</button>
-            </>
-          }
+      <div style={{ border: "1px solid var(--line)", borderRadius: 4, padding: "0.45rem 0.55rem", background: "var(--paper)" }}>
+        {/* Title row + Edit-setup / Swap / Delete actions */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.3rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0 }}>
+            <button type="button" className="btn btn-ghost no-print" style={{ padding: "0.08rem 0.28rem", fontSize: "0.62rem" }} onClick={onMoveUp}>↑</button>
+            <button type="button" className="btn btn-ghost no-print" style={{ padding: "0.08rem 0.28rem", fontSize: "0.62rem" }} onClick={onMoveDown}>↓</button>
+            <strong style={{ fontSize: "0.95rem" }}>{slot.movement.name}</strong>
+            <span className="badge badge-amber" style={{ fontSize: "0.6rem" }}>Performing</span>
+          </div>
+          <div style={{ display: "flex", gap: "0.25rem" }} className="no-print">
+            <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.12rem 0.42rem" }} onClick={() => onSetMode("plan")} title="Back to plan (edit setup)">✎ Edit setup</button>
+            <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.12rem 0.42rem" }} onClick={onSwap}>🔁 Swap</button>
+            <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.12rem 0.42rem", color: "var(--red)" }} onClick={onDelete}>✕</button>
+          </div>
+        </div>
+
+        {/* Set log table */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+            <thead>
+              <tr>
+                <th style={TH}>Set</th>
+                <th style={TH}>Reps</th>
+                <th style={TH}>Actual</th>
+                <th style={TH}>Weight</th>
+                <th style={TH}>Exertion</th>
+                <th style={TH}>Specification</th>
+                <th style={TH}>Equipment</th>
+                <th style={TH}>Tempo</th>
+                <th style={TH}>Coach notes</th>
+                <th style={TH}>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: setCount }, (_, si) => {
+                const row = rowFor(si);
+                const repsVal = (row.reps ?? slot.reps) || "—";
+                const exertion = (row.exertion_score ?? slot.exertion_score);
+                const exertionLabel = EXERTION_SHORT[exertion] ?? EXERTION_LABELS[exertion] ?? "—";
+                const vList = (row.variations ?? slot.variations ?? []) as Variation[];
+                const specLabel = vList.length > 0
+                  ? vList.map((v) => VARIATION_LABELS[v] ?? v).join(", ")
+                  : "—";
+                const eqLabel = (row.equipment_list ?? slot.equipment_list).length > 0
+                  ? (row.equipment_list ?? slot.equipment_list).map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e).join(", ")
+                  : "—";
+                const tempoLabel = (row as any).tempo ?? slot.tempo ?? "—";
+                const coachNoteText = row.notes ?? "";
+                return (
+                  <tr key={si} style={{ borderBottom: "1px dashed var(--line)" }}>
+                    <td style={{ ...TD, fontWeight: 700 }}>{si + 1}</td>
+                    <td style={TD}>{repsVal}</td>
+                    <td style={TD}>
+                      <input
+                        className="input"
+                        style={INP}
+                        value={reps[si]}
+                        onChange={(e) => {
+                          const next = [...reps]; next[si] = e.target.value;
+                          onPatch({ perform: { ...slot.perform, actualReps: next } });
+                        }}
+                        placeholder="—"
+                      />
+                    </td>
+                    <td style={TD}>
+                      <input
+                        className="input"
+                        style={INP}
+                        value={weights[si]}
+                        onChange={(e) => {
+                          const next = [...weights]; next[si] = e.target.value;
+                          onPatch({ perform: { ...slot.perform, weights: next } });
+                        }}
+                        placeholder="—"
+                      />
+                    </td>
+                    <td style={TD}>{exertionLabel}</td>
+                    <td style={TD}>{specLabel}</td>
+                    <td style={TD}>
+                      {eqLabel}
+                      {slot.equipment_specifics ? <div className="meta" style={{ fontSize: "0.66rem" }}>{slot.equipment_specifics}</div> : null}
+                    </td>
+                    <td style={TD}>{tempoLabel}</td>
+                    <td style={{ ...TD, fontStyle: coachNoteText ? "italic" : undefined, color: coachNoteText ? "var(--ink)" : "var(--muted)" }}>
+                      {coachNoteText || "—"}
+                    </td>
+                    <td style={TD}>
+                      <input
+                        className="input"
+                        style={{ fontSize: "0.78rem", padding: "0.18rem 0.32rem", minWidth: 120 }}
+                        value={notes[si]}
+                        onChange={(e) => {
+                          const next = [...notes]; next[si] = e.target.value;
+                          onPatch({ perform: { ...slot.perform, setNotes: next } });
+                        }}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Coach notes (read-only) — overall movement_notes from the plan */}
+        {slot.movement_notes && (
+          <div style={{ marginTop: "0.45rem", padding: "0.4rem 0.6rem", background: "rgba(0,0,0,0.025)", borderRadius: 3 }}>
+            <div style={{ fontSize: "0.62rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.18rem" }}>Coach notes</div>
+            <div style={{ fontSize: "0.84rem", whiteSpace: "pre-wrap" }}>{slot.movement_notes}</div>
+          </div>
+        )}
+
+        {/* Overall notes textarea */}
+        <textarea
+          className="textarea"
+          rows={2}
+          style={{ marginTop: "0.4rem", width: "100%", fontSize: "0.82rem", padding: "0.32rem 0.45rem", resize: "vertical" }}
+          placeholder="Overall notes…"
+          value={slot.perform.sessionNote}
+          onChange={(e) => onPatch({ perform: { ...slot.perform, sessionNote: e.target.value } })}
         />
 
-        <div className="meta" style={{ fontSize: "0.72rem", marginTop: "0.25rem" }}>
-          Prescribed: {slot.sets}× {slot.reps} · RPE {EXERTION_LABELS[slot.exertion_score] ?? slot.exertion_score}
-          {slot.equipment_list.length > 0 ? <> · {slot.equipment_list.join(", ")}</> : null}
-          {slot.equipment_specifics ? <> · {slot.equipment_specifics}</> : null}
-        </div>
-
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "auto repeat(3, minmax(0, 1fr))",
-          gap: "0.25rem 0.45rem", marginTop: "0.4rem", alignItems: "center",
-        }}>
-          <span></span>
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Weight</span>
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Reps</span>
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Set notes</span>
-          {Array.from({ length: setCount }, (_, si) => (
-            <div key={si} style={{ display: "contents" }}>
-              <span style={{ fontSize: "0.74rem", color: "var(--muted)" }}>Set {si + 1}</span>
-              <input
-                className="input"
-                style={{ fontSize: "0.78rem", padding: "0.18rem 0.32rem" }}
-                value={weights[si]}
-                onChange={(e) => {
-                  const next = [...weights]; next[si] = e.target.value;
-                  onPatch({ perform: { ...slot.perform, weights: next } });
-                }}
-                placeholder="lb"
-              />
-              <input
-                className="input"
-                style={{ fontSize: "0.78rem", padding: "0.18rem 0.32rem" }}
-                value={reps[si]}
-                onChange={(e) => {
-                  const next = [...reps]; next[si] = e.target.value;
-                  onPatch({ perform: { ...slot.perform, actualReps: next } });
-                }}
-                placeholder={slot.reps}
-              />
-              <input
-                className="input"
-                style={{ fontSize: "0.78rem", padding: "0.18rem 0.32rem" }}
-                value={notes[si]}
-                onChange={(e) => {
-                  const next = [...notes]; next[si] = e.target.value;
-                  onPatch({ perform: { ...slot.perform, setNotes: next } });
-                }}
-                placeholder="optional"
-              />
-            </div>
-          ))}
-        </div>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem", marginTop: "0.45rem" }}>
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Exercise notes</span>
-          <textarea
-            className="textarea"
-            rows={2}
-            style={{ fontSize: "0.82rem", padding: "0.28rem 0.4rem" }}
-            value={slot.perform.sessionNote}
-            onChange={(e) => onPatch({ perform: { ...slot.perform, sessionNote: e.target.value } })}
-            placeholder="How did it go? Any tweaks for next time?"
-          />
-        </label>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.4rem", marginTop: "0.55rem" }}>
-          <button className="btn btn-primary" onClick={() => onSetMode("complete")}>✓ Complete</button>
+        {/* Complete */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.45rem" }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => onSetMode("complete")}
+            style={{ fontSize: "0.78rem", padding: "0.28rem 0.85rem", color: "var(--sage)", borderColor: "var(--sage)" }}
+          >✓ Complete</button>
         </div>
       </div>
     );
