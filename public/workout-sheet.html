@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monroe Fit Coach — Workout Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /*
+   * Monroe Fit Coach — multi-day workout sheet (SAMPLE).
+   * "Old-gym editorial" theme, matching the app's globals.css.
+   *
+   * Works three ways, per James's brief:
+   *   1. Type — every field is a real input; type, then Save PDF / Send.
+   *   2. Handwrite — print blank and write set-by-set in the gym.
+   *   3. Stylus — open the PDF on a tablet and annotate.
+   *
+   * Each set is a Reps + Weight pair. Columns are drag-resizable (grab the
+   * divider in the header). Controls:
+   *   • + Add Day  — appends another day block
+   *   • + Set      — adds a Reps/Wt set to every day (columns stay aligned)
+   *   • + Row      — adds a movement row to that day
+   * Letter portrait. Entries auto-save to this browser. Responsive on phones.
+   */
+  :root {
+    --bg:    #f5efe4;
+    --paper: #ffffff;
+    --ink:   #171311;
+    --muted: #7a6f63;
+    --line:  #d8cdb8;
+    --rust:  #a83d2b;
+    --clay:  #c9613e;
+    --sage:  #5a6b4a;
+    --bar:   #efe7d7;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", "Helvetica Neue", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Screen-only toolbar */
+  .toolbar {
+    width: min(8.5in, 100% - 1rem);
+    margin: 1.25rem auto 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+  }
+  .toolbar p { margin: 0; color: var(--muted); font-size: 0.82rem; flex: 1 1 320px; }
+  .btn {
+    flex: none;
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--rust);
+    border: none;
+    border-radius: 3px;
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+  }
+  .btn:hover { background: #8f3324; }
+  .btn.ghost { background: transparent; color: var(--rust); border: 1px solid var(--rust); }
+  .btn.ghost:hover { background: var(--rust); color: #fff; }
+  .actions { display: flex; align-items: center; gap: 0.5rem; flex: none; }
+  .saved-flag {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--sage);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    white-space: nowrap;
+  }
+  .saved-flag.show { opacity: 1; }
+
+  /* The sheet === letter page(s) — fluid on small screens */
+  .sheet {
+    width: min(8.5in, 100%);
+    margin: 0.5rem auto 2rem;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 0.55in 0.55in 0.45in;
+    box-shadow: 0 10px 30px rgba(23,19,17,0.16);
+  }
+
+  /* Masthead */
+  .masthead { border-bottom: 3px double var(--ink); padding-bottom: 0.45rem; }
+  .masthead-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .wordmark {
+    font-family: "Oswald", sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 1.45rem;
+    line-height: 1;
+  }
+  .wordmark .accent { color: var(--rust); }
+  .sheet-kicker {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  /* Client-level fields (once) */
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.1rem; margin: 0.8rem 0 0.2rem; }
+  .field { display: flex; flex-direction: column; gap: 0.1rem; }
+  .field.wide { grid-column: 1 / -1; }
+  .field-label {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .field input {
+    font-family: "Georgia", serif;
+    font-size: 0.95rem;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--ink);
+    padding: 0.16rem 0.12rem 0.1rem;
+    width: 100%;
+  }
+  .field input:focus { outline: none; border-bottom-color: var(--rust); background: #fbf7ef; }
+
+  /* ---------- Day block ---------- */
+  .day-block { margin-top: 1rem; page-break-inside: avoid; position: relative; }
+  .day-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: var(--bar);
+    border: 1px solid var(--ink);
+    border-bottom: none;
+    padding: 0.28rem 0.5rem;
+  }
+  .day-tag {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--rust);
+    white-space: nowrap;
+  }
+  .day-bar .bar-field { display: flex; align-items: baseline; gap: 0.35rem; flex: 1 1 130px; }
+  .day-bar .bar-label {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .day-bar .bar-field input {
+    font-family: "Georgia", serif;
+    font-size: 0.88rem;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--ink);
+    padding: 0.02rem 0.1rem;
+    width: 100%;
+    min-width: 0;
+  }
+  .day-bar .bar-field input:focus { outline: none; border-bottom-color: var(--rust); }
+  .remove-day {
+    border: none; background: transparent; color: var(--muted);
+    cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.1rem; flex: none;
+  }
+  .remove-day:hover { color: var(--rust); }
+
+  /* Movement table */
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; table-layout: fixed; }
+  thead th {
+    position: relative;
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-align: left;
+    color: var(--ink);
+    background: var(--bar);
+    border: 1px solid var(--ink);
+    padding: 0.26rem 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  thead th.center { text-align: center; }
+  /* drag-to-resize handle on the right edge of a column */
+  .col-resizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 9px;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 3;
+  }
+  .col-resizer::after {
+    content: "";
+    position: absolute;
+    top: 15%;
+    bottom: 15%;
+    right: 4px;
+    width: 2px;
+    background: var(--line);
+  }
+  thead th:hover .col-resizer::after { background: var(--rust); }
+  tbody td { border: 1px solid #b9ad98; padding: 0; height: 0.3in; overflow: hidden; }
+  tbody td input {
+    font-family: "Georgia", serif;
+    font-size: 0.86rem;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    width: 100%;
+    height: 100%;
+    padding: 0.05rem 0.4rem;
+  }
+  tbody td input.center { text-align: center; padding: 0.05rem 0.1rem; }
+  tbody td input:focus { outline: none; background: #fbf7ef; }
+  tbody tr:nth-child(even) td { background: #faf6ee; }
+  tbody tr:nth-child(even) td input:focus { background: #f3ecdd; }
+
+  /* controls */
+  .day-controls { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+  .sheet-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  .mini {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--rust);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.2rem 0.55rem;
+    cursor: pointer;
+  }
+  .mini:hover { border-color: var(--rust); background: #fbf7ef; }
+
+  .footnote { margin-top: 0.55rem; font-size: 0.68rem; color: var(--muted); line-height: 1.45; }
+  .footnote strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 768px) {
+    .toolbar { flex-direction: column-reverse; align-items: stretch; }
+    .toolbar .actions { width: 100%; justify-content: space-between; }
+    .toolbar .btn { flex: 1; text-align: center; }
+    .sheet { padding: 0.7rem; }
+  }
+
+  /* ---------- Print ---------- */
+  @media print {
+    @page { size: letter portrait; margin: 0.5in; }
+    html, body { background: #fff; }
+    .toolbar, .sheet-controls, .remove-day, .day-controls, .col-resizer { display: none !important; }
+    .table-wrap { overflow: visible; }
+    .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; }
+    .field input, tbody td input, .day-bar .bar-field input { background: transparent !important; }
+    .day-bar, thead th { background: #e7ddc9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tbody tr:nth-child(even) td { background: #f4eee2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <p>Sample workout sheet. Type into any field, then <strong>Save&nbsp;PDF</strong> or <strong>Send</strong>. Each set has <strong>Reps + Wt</strong>; drag the header dividers to resize columns. Use <strong>+ Row</strong> / <strong>+ Set</strong> / <strong>+ Add Day</strong>. Auto-saves in this browser.</p>
+    <div class="actions">
+      <span class="saved-flag" id="saved-flag">Saved &check;</span>
+      <button class="btn ghost" id="send-btn" type="button">Send</button>
+      <button class="btn" onclick="window.print()" type="button">Save PDF</button>
+    </div>
+  </div>
+
+  <div class="sheet">
+    <header class="masthead">
+      <div class="masthead-row">
+        <span class="wordmark">Monroe <span class="accent">Fit</span> Coach</span>
+        <span class="sheet-kicker">Workout Sheet</span>
+      </div>
+    </header>
+
+    <section class="fields">
+      <div class="field">
+        <span class="field-label">Client Name</span>
+        <input type="text" name="client_name" autocomplete="off" />
+      </div>
+      <div class="field">
+        <span class="field-label">Goal</span>
+        <input type="text" name="goal" autocomplete="off" />
+      </div>
+      <div class="field wide">
+        <span class="field-label">Deficit / Nutrition</span>
+        <input type="text" name="nutrition" placeholder="e.g. target kcal, protein, notes" autocomplete="off" />
+      </div>
+    </section>
+
+    <div id="days"></div>
+
+    <div class="sheet-controls">
+      <button class="btn ghost" id="add-day" type="button">+ Add Day</button>
+      <button class="btn ghost" id="add-set" type="button">+ Set (all days)</button>
+    </div>
+
+    <p class="footnote">
+      <strong>Movement &amp; Equipment</strong> = the pattern + exercise and the tool used.
+      Each <strong>Set</strong> records <strong>Reps</strong> and <strong>Wt</strong> (load). Add sets with <strong>+ Set</strong>, rows with <strong>+ Row</strong>.
+      Drag a header divider to widen or narrow a column.
+    </p>
+  </div>
+
+  <script>
+    var DEFAULT_ROWS = 9;
+    var STORE_KEY = "mfc-workout-sheet-v3";
+
+    // Global column model (shared by every day's table so columns line up).
+    var setCount = 3;
+    var DEF_MOVE = 210, DEF_REPS = 46, DEF_WT = 54, DEF_NOTES = 150, MIN_COL = 30;
+    var colWidths = buildDefaultWidths(setCount);
+
+    var dayCount = 0;
+    var restoring = false;
+    var daysEl = document.getElementById("days");
+
+    function buildDefaultWidths(n) {
+      var w = [DEF_MOVE];
+      for (var i = 0; i < n; i++) { w.push(DEF_REPS); w.push(DEF_WT); }
+      w.push(DEF_NOTES);
+      return w;
+    }
+    function totalWidth() { return colWidths.reduce(function (a, b) { return a + b; }, 0); }
+
+    function cell(center) {
+      var td = document.createElement("td");
+      var input = document.createElement("input");
+      input.type = "text";
+      input.autocomplete = "off";
+      if (center) input.className = "center";
+      td.appendChild(input);
+      return td;
+    }
+
+    // movement + setCount×(reps, wt) + load/notes
+    function makeRow() {
+      var tr = document.createElement("tr");
+      tr.appendChild(cell(false));
+      for (var s = 0; s < setCount; s++) { tr.appendChild(cell(true)); tr.appendChild(cell(true)); }
+      tr.appendChild(cell(false));
+      return tr;
+    }
+
+    function renderHead(table) {
+      var oldHead = table.querySelector("thead"); if (oldHead) oldHead.remove();
+      var oldCg = table.querySelector("colgroup"); if (oldCg) oldCg.remove();
+
+      var cg = document.createElement("colgroup");
+      var cgHtml = "";
+      for (var i = 0; i < colWidths.length; i++) cgHtml += '<col style="width:' + colWidths[i] + 'px" />';
+      cg.innerHTML = cgHtml;
+      table.insertBefore(cg, table.firstChild);
+
+      var row1 = "<tr>";
+      row1 += '<th rowspan="2">Movement &amp; Equipment<span class="col-resizer" data-col="0"></span></th>';
+      for (var s = 0; s < setCount; s++) row1 += '<th colspan="2" class="center">Set ' + (s + 1) + "</th>";
+      row1 += '<th rowspan="2">Load / Notes</th></tr>';
+
+      var row2 = "<tr>";
+      for (var s2 = 0; s2 < setCount; s2++) {
+        row2 += '<th class="center">Reps<span class="col-resizer" data-col="' + (1 + 2 * s2) + '"></span></th>';
+        row2 += '<th class="center">Wt<span class="col-resizer" data-col="' + (2 + 2 * s2) + '"></span></th>';
+      }
+      row2 += "</tr>";
+
+      var thead = document.createElement("thead");
+      thead.innerHTML = row1 + row2;
+      table.insertBefore(thead, cg.nextSibling);
+      table.style.width = totalWidth() + "px";
+    }
+
+    function applyColWidths() {
+      var total = totalWidth() + "px";
+      daysEl.querySelectorAll(".day-block table").forEach(function (table) {
+        var cols = table.querySelectorAll("colgroup col");
+        cols.forEach(function (c, i) { if (colWidths[i] != null) c.style.width = colWidths[i] + "px"; });
+        table.style.width = total;
+      });
+    }
+
+    function mini(label) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "mini"; b.textContent = label;
+      return b;
+    }
+
+    function buildDay(rowCount) {
+      rowCount = rowCount || DEFAULT_ROWS;
+      dayCount += 1;
+
+      var block = document.createElement("section");
+      block.className = "day-block";
+
+      var bar = document.createElement("div");
+      bar.className = "day-bar";
+      bar.innerHTML =
+        '<span class="day-tag">Day ' + dayCount + '</span>' +
+        '<span class="bar-field"><span class="bar-label">Date</span><input type="text" autocomplete="off" /></span>' +
+        '<span class="bar-field"><span class="bar-label">Current Weight</span><input type="text" autocomplete="off" /></span>' +
+        '<span class="bar-field"><span class="bar-label">Sleep (hrs)</span><input type="text" autocomplete="off" /></span>';
+      var rm = document.createElement("button");
+      rm.className = "remove-day"; rm.type = "button"; rm.title = "Remove this day"; rm.textContent = "×";
+      rm.addEventListener("click", function () { block.remove(); renumber(); saveState(); });
+      bar.appendChild(rm);
+      block.appendChild(bar);
+
+      var wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      var table = document.createElement("table");
+      renderHead(table);
+      var tbody = document.createElement("tbody");
+      for (var r = 0; r < rowCount; r++) tbody.appendChild(makeRow());
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      block.appendChild(wrap);
+
+      var ctrl = document.createElement("div");
+      ctrl.className = "day-controls";
+      var addRowBtn = mini("+ Row");
+      addRowBtn.addEventListener("click", function () {
+        table.querySelector("tbody").appendChild(makeRow());
+        applyColWidths();
+        saveState();
+      });
+      ctrl.appendChild(addRowBtn);
+      block.appendChild(ctrl);
+
+      daysEl.appendChild(block);
+      renumber();
+      applyColWidths();
+      return block;
+    }
+
+    function addSetGlobal() {
+      setCount += 1;
+      colWidths.splice(colWidths.length - 1, 0, DEF_REPS, DEF_WT); // before Load/Notes
+      daysEl.querySelectorAll(".day-block").forEach(function (b) {
+        var table = b.querySelector("table");
+        renderHead(table);
+        table.querySelectorAll("tbody tr").forEach(function (tr) {
+          tr.insertBefore(cell(true), tr.lastElementChild);
+          tr.insertBefore(cell(true), tr.lastElementChild);
+        });
+      });
+      applyColWidths();
+      saveState();
+    }
+
+    function renumber() {
+      var blocks = daysEl.querySelectorAll(".day-block");
+      blocks.forEach(function (b, i) {
+        b.querySelector(".day-tag").textContent = "Day " + (i + 1);
+        b.querySelector(".remove-day").style.display = blocks.length > 1 ? "" : "none";
+      });
+      dayCount = blocks.length;
+    }
+
+    document.getElementById("add-day").addEventListener("click", function () { buildDay(); saveState(); });
+    document.getElementById("add-set").addEventListener("click", addSetGlobal);
+
+    // ---------- column resize (pointer events → works with mouse + touch) ----------
+    document.addEventListener("pointerdown", function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains("col-resizer")) return;
+      e.preventDefault();
+      var idx = parseInt(t.getAttribute("data-col"), 10);
+      var startX = e.clientX;
+      var startW = colWidths[idx];
+      function move(ev) {
+        colWidths[idx] = Math.max(MIN_COL, startW + (ev.clientX - startX));
+        applyColWidths();
+      }
+      function up() {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        saveState();
+      }
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    });
+
+    // ---------- save / restore ----------
+    function val(name) { var el = document.querySelector('[name="' + name + '"]'); return el ? el.value : ""; }
+    function setVal(name, v) { var el = document.querySelector('[name="' + name + '"]'); if (el) el.value = v || ""; }
+
+    function collectState() {
+      var days = [];
+      daysEl.querySelectorAll(".day-block").forEach(function (b) {
+        var bar = b.querySelectorAll(".day-bar .bar-field input");
+        var rows = [];
+        b.querySelectorAll("tbody tr").forEach(function (tr) {
+          var vals = [];
+          tr.querySelectorAll("input").forEach(function (i) { vals.push(i.value); });
+          rows.push(vals);
+        });
+        days.push({ date: bar[0].value, weight: bar[1].value, sleep: bar[2].value, rows: rows });
+      });
+      return {
+        client: val("client_name"), goal: val("goal"), nutrition: val("nutrition"),
+        setCount: setCount, colWidths: colWidths.slice(), days: days,
+      };
+    }
+
+    function fillDay(block, d) {
+      var bar = block.querySelectorAll(".day-bar .bar-field input");
+      bar[0].value = d.date || ""; bar[1].value = d.weight || ""; bar[2].value = d.sleep || "";
+      var trs = block.querySelectorAll("tbody tr");
+      (d.rows || []).forEach(function (vals, ri) {
+        if (!trs[ri]) return;
+        var ins = trs[ri].querySelectorAll("input");
+        vals.forEach(function (v, ci) { if (ins[ci]) ins[ci].value = v; });
+      });
+    }
+
+    var flagTimer;
+    function flashSaved() {
+      var f = document.getElementById("saved-flag");
+      f.classList.add("show");
+      clearTimeout(flagTimer);
+      flagTimer = setTimeout(function () { f.classList.remove("show"); }, 1400);
+    }
+    var saveTimer;
+    function saveState() {
+      if (restoring) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(collectState())); flashSaved(); } catch (e) {}
+      }, 300);
+    }
+
+    function restoreState() {
+      var saved = null;
+      try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (e) {}
+      if (saved && saved.days && saved.days.length) {
+        restoring = true;
+        if (typeof saved.setCount === "number" && saved.setCount >= 1) setCount = saved.setCount;
+        if (Array.isArray(saved.colWidths) && saved.colWidths.length === 2 + 2 * setCount) {
+          colWidths = saved.colWidths.slice();
+        } else {
+          colWidths = buildDefaultWidths(setCount);
+        }
+        setVal("client_name", saved.client);
+        setVal("goal", saved.goal);
+        setVal("nutrition", saved.nutrition);
+        saved.days.forEach(function (d) {
+          var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
+          fillDay(buildDay(rowN), d);
+        });
+        restoring = false;
+        applyColWidths();
+        return true;
+      }
+      return false;
+    }
+
+    document.addEventListener("input", function (e) {
+      if (e.target && e.target.tagName === "INPUT") saveState();
+    });
+
+    // ---------- send / share ----------
+    function sheetSummary() {
+      var lines = [];
+      var client = val("client_name").trim();
+      lines.push("MONROE FIT COACH — Workout Sheet");
+      if (client) lines.push("Client: " + client);
+      if (val("goal").trim()) lines.push("Goal: " + val("goal").trim());
+      if (val("nutrition").trim()) lines.push("Deficit / Nutrition: " + val("nutrition").trim());
+
+      daysEl.querySelectorAll(".day-block").forEach(function (b, i) {
+        var bar = b.querySelectorAll(".day-bar .bar-field input");
+        var meta = [];
+        if (bar[0].value.trim()) meta.push("Date " + bar[0].value.trim());
+        if (bar[1].value.trim()) meta.push("Weight " + bar[1].value.trim());
+        if (bar[2].value.trim()) meta.push("Sleep " + bar[2].value.trim());
+        lines.push("");
+        lines.push("Day " + (i + 1) + (meta.length ? " — " + meta.join(" · ") : ""));
+        b.querySelectorAll("tbody tr").forEach(function (tr) {
+          var ins = tr.querySelectorAll("input");
+          var mv = ins[0].value.trim();
+          if (!mv) return;
+          var sets = [];
+          for (var k = 1; k < ins.length - 1; k += 2) {
+            var reps = ins[k].value.trim();
+            var wt = ins[k + 1] ? ins[k + 1].value.trim() : "";
+            if (reps || wt) sets.push(wt ? reps + "×" + wt : reps);
+          }
+          var notes = ins[ins.length - 1].value.trim();
+          var line = "  • " + mv;
+          if (sets.length) line += "  [" + sets.join(" / ") + "]";
+          if (notes) line += "  — " + notes;
+          lines.push(line);
+        });
+      });
+      return lines.join("\n");
+    }
+
+    document.getElementById("send-btn").addEventListener("click", function () {
+      var client = val("client_name").trim();
+      var subject = "Workout Sheet" + (client ? " — " + client : "");
+      var text = sheetSummary();
+      if (navigator.share) {
+        navigator.share({ title: subject, text: text }).catch(function () {});
+      } else {
+        window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(text);
+      }
+    });
+
+    // ---------- init ----------
+    if (!restoreState()) {
+      buildDay();
+      buildDay();
+    }
+  </script>
+</body>
+</html>
