@@ -96,14 +96,14 @@ c.drawString(CX_L, CY_T - 4, "MONROE FIT COACH")
 c.drawRightString(CX_R, CY_T - 4, "MONROEFITCOACH.COM")
 double_rule(CX_L, CY_T - 10, CX_R)
 
-# name + subtitle
-name_y = 178
-c.setFillColor(INK); c.setFont(BOLD, 34)
-c.drawString(CX_L, name_y, "JAMES MONROE")
+# stacked name (editorial portrait pairing)
+c.setFillColor(INK); c.setFont(BOLD, 36)
+c.drawString(CX_L, 240, "JAMES")
+c.drawString(CX_L, 204, "MONROE")
 
 # subtitle — letterspaced, with rust separators
 subtitle_segments = ["STRENGTH", "RECOMPOSITION", "BOXING", "EDUCATION"]
-sx, sy = CX_L, name_y - 14
+sx, sy = CX_L, 184
 c.setFont(BOLD, 7.8)
 for i, seg in enumerate(subtitle_segments):
     if i > 0:
@@ -112,10 +112,41 @@ for i, seg in enumerate(subtitle_segments):
     c.setFillColor(MUTED); c.drawString(sx, sy, seg)
     sx += c.stringWidth(seg, BOLD, 7.8)
 
-# italic statement
-c.setFont(ITAL, 10.5); c.setFillColor(INK)
-c.drawString(CX_L, name_y - 36,
-             "Well-rounded by design. Strong. Balanced. Well-conditioned. Well-fed.")
+# italic quote tagline
+c.setFont(ITAL, 11.5); c.setFillColor(INK)
+c.drawString(CX_L, 158, "“Keeping the full picture in mind.”")
+
+# ─── portrait placeholder (right side) ───
+PHOTO_X1, PHOTO_X2 = 273, 413          # ~140 pt wide (≈ 1.94")
+PHOTO_Y1, PHOTO_Y2 = 88, 256           # ~168 pt tall (≈ 2.33") — roughly 4:5
+# faint paper fill
+c.setFillColor(PAPER)
+c.rect(PHOTO_X1, PHOTO_Y1, PHOTO_X2 - PHOTO_X1, PHOTO_Y2 - PHOTO_Y1, fill=1, stroke=0)
+# dashed rust border
+c.setDash([3, 2])
+c.setStrokeColor(RUST); c.setLineWidth(0.6)
+c.rect(PHOTO_X1, PHOTO_Y1, PHOTO_X2 - PHOTO_X1, PHOTO_Y2 - PHOTO_Y1, fill=0, stroke=1)
+c.setDash([])  # reset solid
+# corner brackets (viewfinder feel)
+c.setStrokeColor(INK); c.setLineWidth(1.0)
+BR = 10
+for (cx, cy, dx, dy) in [
+    (PHOTO_X1, PHOTO_Y1, +1, +1),
+    (PHOTO_X2, PHOTO_Y1, -1, +1),
+    (PHOTO_X1, PHOTO_Y2, +1, -1),
+    (PHOTO_X2, PHOTO_Y2, -1, -1),
+]:
+    c.line(cx, cy, cx + dx * BR, cy)
+    c.line(cx, cy, cx, cy + dy * BR)
+# center labels
+mx = (PHOTO_X1 + PHOTO_X2) / 2
+my = (PHOTO_Y1 + PHOTO_Y2) / 2
+c.setFont(BOLD, 9); c.setFillColor(MUTED)
+label = "[ PORTRAIT ]"
+c.drawString(mx - c.stringWidth(label, BOLD, 9) / 2, my + 2, label)
+c.setFont(REG, 7); c.setFillColor(MUTED)
+sub = "drop a photo here"
+c.drawString(mx - c.stringWidth(sub, REG, 7) / 2, my - 10, sub)
 
 # bottom rule + contact row
 bot_y = CY_B + 22
@@ -195,6 +226,15 @@ col_block(CX_L2 + col_w + 20, col_top, "PROGRESSION", [
     "Balance & mobility",
     "Boxing fundamentals",
 ], col_w)
+
+# centered pull quote (signature sentiment)
+quote_y = 95
+c.setFont(ITAL, 14); c.setFillColor(INK)
+quote = "“I do it because I care.”"
+c.drawString((PAGE_W - c.stringWidth(quote, ITAL, 14)) / 2, quote_y, quote)
+c.setFont(BOLD, 7); c.setFillColor(MUTED)
+sig = "— JAMES MONROE"
+c.drawString((PAGE_W - c.stringWidth(sig, BOLD, 7)) / 2, quote_y - 13, sig)
 
 # pillar row above rust bar
 pillars = "STRENGTH   ·   CARDIO   ·   NUTRITION   ·   POSTURE   ·   RANGE OF MOTION   ·   MOBILITY"
