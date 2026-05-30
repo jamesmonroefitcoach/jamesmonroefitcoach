@@ -102,7 +102,7 @@ c.setFillColor(INK); c.setFont(BOLD, 34)
 c.drawString(CX_L, name_y, "JAMES MONROE")
 
 # subtitle — letterspaced, with rust separators
-subtitle_segments = ["HEAD COACH", "STRENGTH + CONDITIONING", "BOXING"]
+subtitle_segments = ["STRENGTH", "RECOMPOSITION", "BOXING", "EDUCATION"]
 sx, sy = CX_L, name_y - 14
 c.setFont(BOLD, 7.8)
 for i, seg in enumerate(subtitle_segments):
