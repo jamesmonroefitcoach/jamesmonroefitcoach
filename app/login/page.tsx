@@ -48,7 +48,7 @@ export default async function LoginPage() {
         <span className="badge">Monroe Fit Coach</span>
         <h1 style={{ marginTop: "0.75rem" }}>Sign in</h1>
         <p className="meta" style={{ marginTop: "0.4rem" }}>
-          Pick your profile to continue. (No password — auth comes later.)
+          Pick your profile to continue, or sign in with your email + password if you&rsquo;ve set one at <a href="/account">/account</a>.
         </p>
         <hr className="divider" />
         <LoginForm profiles={profiles} />

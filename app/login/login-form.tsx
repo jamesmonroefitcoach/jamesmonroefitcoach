@@ -71,8 +71,9 @@ export default function LoginForm({ profiles }: { profiles: ProfileRow[] }) {
       setBusy(false);
       return;
     }
-    router.replace("/");
-    router.refresh();
+    // Hard navigation — see app/account/account-form.tsx for why
+    // router.refresh() races the Auth cookie write here.
+    window.location.assign("/");
   }
 
   const tabStyle = (active: boolean): React.CSSProperties => ({

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE } from "@/lib/types";
 import { getSessionUser } from "@/lib/session";
 import {
   createSupabaseAdmin,
-  createSupabaseServer,
+  createSupabaseServerForResponse,
   hasSupabaseEnv,
 } from "@/lib/supabase/server";
 
@@ -74,10 +75,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Establish the Supabase Auth session so subsequent requests resolve via Auth.
-  const sb = await createSupabaseServer();
+  // Attach cookies to the response (not just the in-memory store) so the
+  // session reaches the browser on this same response.
+  const response = NextResponse.json({ ok: true });
+  const sb = await createSupabaseServerForResponse(response);
   const { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
   if (signInErr) {
     return NextResponse.json({ error: signInErr.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  // Drop the legacy picker cookie now that Auth is the source of truth.
+  response.cookies.delete(SESSION_COOKIE);
+  return response;
 }

@@ -1,6 +1,5 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function AccountForm({
   initialEmail,
@@ -11,7 +10,6 @@ export default function AccountForm({
   emailLocked: boolean;
   hasPassword: boolean;
 }) {
-  const router = useRouter();
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -47,7 +45,12 @@ export default function AccountForm({
       );
       setPassword("");
       setConfirm("");
-      router.refresh();
+      // Hard navigation so the freshly-set Supabase Auth cookies are visible
+      // on the next request (router.refresh() reuses the same RSC payload and
+      // can race the cookie write).
+      setTimeout(() => {
+        window.location.replace("/account");
+      }, 800);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to save password.");
     } finally {

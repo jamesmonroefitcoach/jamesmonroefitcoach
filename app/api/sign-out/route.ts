@@ -1,22 +1,24 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/types";
-import { createSupabaseServer, hasSupabaseEnv } from "@/lib/supabase/server";
+import { createSupabaseServerForResponse, hasSupabaseEnv } from "@/lib/supabase/server";
 
 export async function POST() {
-  // Clear the legacy profile-picker cookie.
-  const store = await cookies();
-  store.delete(SESSION_COOKIE);
+  const response = NextResponse.json({ ok: true });
+  // Clear the legacy profile-picker cookie on the outgoing response.
+  response.cookies.delete(SESSION_COOKIE);
 
-  // Also sign out of Supabase Auth so the next request doesn't resolve back.
+  // Sign out of Supabase Auth too. Using the response-aware client so
+  // Supabase's `setAll` (which clears sb-* tokens) actually writes onto the
+  // response that reaches the browser — otherwise the tokens often survive
+  // and the next page load re-resolves the auth user.
   if (hasSupabaseEnv()) {
     try {
-      const sb = await createSupabaseServer();
+      const sb = await createSupabaseServerForResponse(response);
       await sb.auth.signOut();
     } catch {
-      /* nothing to do — best-effort cleanup */
+      /* best-effort */
     }
   }
 
-  return NextResponse.json({ ok: true });
+  return response;
 }
