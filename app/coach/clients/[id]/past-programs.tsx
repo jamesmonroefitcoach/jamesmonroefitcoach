@@ -78,14 +78,23 @@ function MonthGroup({ clientId, month, sessions }: {
   );
 }
 
+export type PdfSheetItem = {
+  id: string;
+  name: string;
+  filename: string | null;
+  uploaded_at: string;
+};
+
 export default function PastPrograms({
   clientId,
   sessions,
   programs,
+  pdfSheets = [],
 }: {
   clientId: string;
   sessions: PastSessionItem[];
   programs: PastProgramFull[];
+  pdfSheets?: PdfSheetItem[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -101,7 +110,7 @@ export default function PastPrograms({
     return Array.from(map.entries());
   }, [sessions]);
 
-  if (sessions.length === 0 && programs.length === 0) return null;
+  if (sessions.length === 0 && programs.length === 0 && pdfSheets.length === 0) return null;
 
   return (
     <div style={{ marginTop: "1rem" }}>
@@ -122,6 +131,7 @@ export default function PastPrograms({
         </span>
         <span className="meta" style={{ fontSize: "0.72rem" }}>
           {sessions.length} session{sessions.length !== 1 ? "s" : ""} · {programs.length} program{programs.length !== 1 ? "s" : ""}
+          {pdfSheets.length > 0 ? ` · ${pdfSheets.length} PDF${pdfSheets.length !== 1 ? "s" : ""}` : ""}
         </span>
       </button>
 
@@ -167,8 +177,72 @@ export default function PastPrograms({
                 items={programs.filter((p) => p.created_by_client)}
                 allowFeedback={true}
               />
+              <PdfSheetsCollapsible items={pdfSheets} />
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PdfSheetsCollapsible({ items }: { items: PdfSheetItem[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: "1px solid var(--line)", borderRadius: 3, overflow: "hidden" }} id="pdf-sheets">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", background: "rgba(0,0,0,0.025)", border: "none",
+          padding: "0.35rem 0.55rem", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          fontFamily: "inherit",
+        }}
+      >
+        <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>{open ? "▾" : "▸"} PDF Sheets</span>
+        <span className="meta" style={{ fontSize: "0.68rem" }}>{items.length}</span>
+      </button>
+      {open && (
+        <div style={{ padding: "0.3rem 0.4rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+          {items.length === 0 ? (
+            <p className="meta" style={{ fontSize: "0.72rem", fontStyle: "italic", margin: "0.2rem 0.1rem" }}>
+              None yet — upload one from the Workout Sheets section below.
+            </p>
+          ) : (
+            items.map((p) => (
+              <Link
+                key={p.id}
+                href={`/api/workout-sheets/${p.id}/pdf`}
+                target="_blank"
+                rel="noopener"
+                style={{
+                  textDecoration: "none",
+                  color: "inherit",
+                  border: "1px solid var(--line)",
+                  borderRadius: 3,
+                  padding: "0.4rem 0.55rem",
+                  background: "var(--paper)",
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: "0.5rem",
+                }}
+              >
+                <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                  {p.name}
+                  {p.filename && p.filename !== p.name ? (
+                    <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: "0.45rem", fontSize: "0.72rem" }}>
+                      {p.filename}
+                    </span>
+                  ) : null}
+                </span>
+                <span style={{ fontSize: "0.7rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                  {fmtDate(p.uploaded_at)}
+                </span>
+              </Link>
+            ))
+          )}
         </div>
       )}
     </div>

@@ -10,6 +10,7 @@ import { HighLevelPlanSection } from "./high-level-plan";
 import PastPrograms, { type PastSessionItem } from "./past-programs";
 import ExercisesLearnedSection from "./exercises-learned-section";
 import WorkoutSheetsSection from "./workout-sheets-section";
+import { listWorkoutSheets } from "@/lib/workout-sheets.server";
 import LogPaymentButton, { type PaymentApptRow } from "./log-payment-modal";
 
 const FORM_SECTIONS: { title: string; keys: string[] }[] = [
@@ -132,6 +133,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const past = appts.filter((a) => new Date(a.starts_at) < new Date());
   const upcoming = appts.filter((a) => new Date(a.starts_at) >= new Date());
   const programs = pastProgramsForClient(id);
+  const pdfSheets = await listWorkoutSheets({ clientId: id, kind: "pdf", limit: 50 });
   const currentInGym = programs.find((p) => p.is_current && p.program_kind === "in_gym") ?? null;
   const currentAtHome = programs.find((p) => p.is_current && p.program_kind === "at_home") ?? null;
   const pastList = programs.filter((p) => !p.is_current);
@@ -342,6 +344,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           clientId={client.id}
           sessions={pastSessions}
           programs={pastList.filter((p) => p.program_kind === "at_home")}
+          pdfSheets={pdfSheets.map((s) => ({
+            id: s.id,
+            name: s.name,
+            filename: s.pdf_original_filename,
+            uploaded_at: s.created_at,
+          }))}
         />
 
         <ExercisesLearnedSection clientId={client.id} />
