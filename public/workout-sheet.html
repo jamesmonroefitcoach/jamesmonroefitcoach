@@ -180,7 +180,8 @@
   body.locked-by-other .col-resizer,
   body.locked-by-other #add-day,
   body.locked-by-other #save-modal-trigger,
-  body.locked-by-other #clear-btn { pointer-events: none; opacity: 0.65; }
+  body.locked-by-other #clear-btn,
+  body.locked-by-other #cancel-btn { pointer-events: none; opacity: 0.65; }
   body.locked-by-other input:not([type=submit]):not([type=button]) { background: #fbf7ef !important; }
 
   /* save modal */
@@ -233,6 +234,7 @@
     <div class="actions">
       <span class="saved-flag" id="saved-flag">Saved &check;</span>
       <button class="btn ghost" id="clear-btn" type="button">Clear</button>
+      <button class="btn ghost" id="cancel-btn" type="button" style="display:none;" title="Discard edits — revert to the version you opened">Cancel</button>
       <button class="btn ghost" id="save-modal-trigger" type="button" style="display:none;">Save</button>
       <button class="btn ghost" id="send-btn" type="button">Send</button>
       <button class="btn" onclick="window.print()" type="button">Save PDF</button>
@@ -610,6 +612,7 @@
     var SESSION_LIST = [];       // [{ id, label, client_id }]
     var LOCKED_BY_OTHER = false;
     var LAST_REMOTE_AT = null;   // updated_at of last fetched row
+    var INITIAL_SNAPSHOT = null; // JSON of the state when the sheet was opened — Cancel reverts to this
     var pollTimer = null, heartbeatTimer = null, serverSaveTimer = null;
     var IS_IFRAME = window.parent && window.parent !== window;
     var INIT_HANDLED = false;
@@ -674,6 +677,8 @@
             fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
           });
           restoring = false;
+          // Snapshot for the Cancel button — revert reverts to here.
+          INITIAL_SNAPSHOT = JSON.stringify(collectState());
           return s;
         });
     }
@@ -816,6 +821,8 @@
         }).then(function (rj) {
           if (rj.ok && rj.j.sheet) {
             LAST_REMOTE_AT = rj.j.sheet.updated_at;
+            // Explicit save → current state is the new "starting point" for Cancel.
+            INITIAL_SNAPSHOT = JSON.stringify(collectState());
             closeSaveModal();
             flashSaved();
             window.parent && window.parent.postMessage({ type: "mfc.workout-sheet.saved", sheet: rj.j.sheet }, "*");
@@ -834,10 +841,13 @@
           if (rj.ok && rj.j.sheet) {
             SHEET_ID = rj.j.sheet.id;
             LAST_REMOTE_AT = rj.j.sheet.updated_at;
+            INITIAL_SNAPSHOT = JSON.stringify(collectState());
             try { localStorage.removeItem(STORE_KEY); } catch (e) {}
             closeSaveModal();
             flashSaved();
             window.parent && window.parent.postMessage({ type: "mfc.workout-sheet.saved", sheet: rj.j.sheet }, "*");
+            // Cancel becomes available now that the sheet is saved.
+            var cb = document.getElementById("cancel-btn"); if (cb) cb.style.display = "";
             tryAcquireLock();
             startPolling();
           } else {
@@ -888,6 +898,36 @@
       clearAllNow();
     });
 
+    // ─── Cancel (revert to the snapshot from when the sheet was opened) ─
+    function applySnapshot(snapJson) {
+      var snap;
+      try { snap = JSON.parse(snapJson); } catch (e) { return; }
+      if (!snap) return;
+      restoring = true;
+      setVal("client_name", snap.client || "");
+      setVal("goal", snap.goal || "");
+      setVal("nutrition", snap.nutrition || "");
+      daysEl.innerHTML = "";
+      dayCount = 0;
+      var days = (snap.days || []);
+      if (days.length === 0) { buildDay(); buildDay(); }
+      else days.forEach(function (d) {
+        var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
+        fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
+      });
+      restoring = false;
+    }
+    document.getElementById("cancel-btn").addEventListener("click", function () {
+      if (LOCKED_BY_OTHER || !SHEET_ID || !INITIAL_SNAPSHOT) return;
+      // No-op when there's nothing to undo
+      var current = JSON.stringify(collectState());
+      if (current === INITIAL_SNAPSHOT) return;
+      if (!window.confirm("Discard edits and revert to the version you opened? The reverted state will auto-save.")) return;
+      applySnapshot(INITIAL_SNAPSHOT);
+      saveState();   // push the reverted state back to the server
+    });
+
+
     document.getElementById("save-modal").addEventListener("click", function (e) {
       if (e.target.id === "save-modal") closeSaveModal();
     });
@@ -926,8 +966,14 @@
       populateClientDatalist();
       var saveBtn = document.getElementById("save-modal-trigger");
       if (saveBtn) saveBtn.style.display = "";
-      if (d.sheetId) initSavedMode(d.sheetId);
-      else if (!daysEl.children.length) { if (!restoreState()) { buildDay(); buildDay(); } }
+      // Cancel only makes sense for a saved sheet (there's a known starting point).
+      if (d.sheetId) {
+        var cb = document.getElementById("cancel-btn");
+        if (cb) cb.style.display = "";
+        initSavedMode(d.sheetId);
+      } else if (!daysEl.children.length) {
+        if (!restoreState()) { buildDay(); buildDay(); }
+      }
     });
 
     if (IS_IFRAME) {
