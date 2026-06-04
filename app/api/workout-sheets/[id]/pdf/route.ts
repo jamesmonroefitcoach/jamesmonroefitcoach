@@ -10,8 +10,10 @@ function canSee(user: SessionUser, sheet: { coach_id: string; client_id: string 
   return false;
 }
 
-// GET /api/workout-sheets/[id]/pdf — returns a short-lived signed URL for the uploaded PDF.
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// GET /api/workout-sheets/[id]/pdf
+//   Default: 302 redirect to a short-lived signed URL (so the link Just Works).
+//   ?as=json returns { url, filename } instead (for programmatic use).
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
@@ -24,5 +26,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
   const url = await createSignedPdfUrl(sheet.pdf_storage_path, 60 * 60);
   if (!url) return NextResponse.json({ error: "Signed URL failed" }, { status: 500 });
-  return NextResponse.json({ url, filename: sheet.pdf_original_filename });
+
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("as") === "json") {
+    return NextResponse.json({ url, filename: sheet.pdf_original_filename });
+  }
+  return NextResponse.redirect(url, 302);
 }

@@ -9,6 +9,7 @@ import { CoachProfileCard, ClientProfileCard, ClientDescriptionCard } from "./cl
 import { HighLevelPlanSection } from "./high-level-plan";
 import PastPrograms, { type PastSessionItem } from "./past-programs";
 import ExercisesLearnedSection from "./exercises-learned-section";
+import WorkoutSheetsSection from "./workout-sheets-section";
 import LogPaymentButton, { type PaymentApptRow } from "./log-payment-modal";
 
 const FORM_SECTIONS: { title: string; keys: string[] }[] = [
@@ -344,6 +345,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         />
 
         <ExercisesLearnedSection clientId={client.id} />
+
+        <WorkoutSheetsSection clientId={client.id} />
       </section>
 
       <hr className="divider" />

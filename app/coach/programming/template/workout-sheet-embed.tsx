@@ -4,14 +4,13 @@ import { useRouter } from "next/navigation";
 
 // Embed the interactive workout sheet (public/workout-sheet.html, a copy of
 // samples/client-materials/workout-sheet.html) in a same-origin auto-sizing
-// iframe. Inline JS in that file keeps everything working (Add Day, +Set,
-// +Row, drag-resize, Save PDF, Send) while staying isolated from the app CSS.
+// iframe. Inline JS in the file keeps everything working (Add Day, +Set,
+// +Row, drag-resize, Save PDF, Send) while staying isolated from app CSS.
 //
 // When user/clients/sessions are passed in, we do a postMessage handshake so
 // the embedded sheet can hit /api/workout-sheets/* — the iframe sends a
-// "ready" message on load and we reply with the init payload (user context,
-// clients list for the combo box, sessions list for the Save modal, and an
-// optional sheetId to open an existing sheet).
+// "ready" message on load, we reply with the init payload (user, clients,
+// sessions, optional sheetId).
 
 export type ClientLite = { id: string; name: string };
 export type SessionLite = { id: string; label: string; client_id: string };
@@ -23,7 +22,7 @@ export default function WorkoutSheetEmbed({
   clients,
   sessions,
 }: {
-  sheetId?: string;
+  sheetId?: string | null;
   user?: UserLite | null;
   clients?: ClientLite[];
   sessions?: SessionLite[];
@@ -31,7 +30,6 @@ export default function WorkoutSheetEmbed({
   const ref = useRef<HTMLIFrameElement>(null);
   const router = useRouter();
 
-  // auto-resize the iframe to fit its content
   function resize() {
     const f = ref.current;
     if (!f) return;
@@ -43,7 +41,6 @@ export default function WorkoutSheetEmbed({
     }
   }
 
-  // message handshake with the embedded sheet
   useEffect(() => {
     function onMessage(ev: MessageEvent) {
       if (ev.origin !== window.location.origin) return;
@@ -62,7 +59,6 @@ export default function WorkoutSheetEmbed({
         );
       }
       if (data.type === "mfc.workout-sheet.saved") {
-        // reload parent data (sheets lists, etc.)
         router.refresh();
       }
     }
@@ -83,34 +79,24 @@ export default function WorkoutSheetEmbed({
     }
   }
 
-  // Cache-bust by sheetId so opening a different saved sheet remounts the iframe.
+  // sheetId in the src remounts the iframe when a different sheet is opened.
   const src = sheetId ? `/workout-sheet.html?sheet=${sheetId}` : "/workout-sheet.html";
 
   return (
-    <section className="shell" style={{ paddingTop: "0.75rem" }}>
-      <header>
-        <span className="badge">Coach</span>
-        <h1 style={{ marginTop: "0.5rem" }}>Workout Sheet</h1>
-        <p className="meta">
-          Interactive sheet — type set-by-set, add days/sets/rows, drag column dividers, then
-          Save (to a client), Save&nbsp;PDF, or Send. Edits auto-sync once the sheet is saved.
-        </p>
-      </header>
-      <hr className="divider" />
-      <iframe
-        ref={ref}
-        src={src}
-        title="Workout Sheet"
-        onLoad={onLoad}
-        style={{
-          width: "100%",
-          minHeight: 600,
-          border: "1px solid var(--line)",
-          borderRadius: 6,
-          display: "block",
-          background: "var(--bg)",
-        }}
-      />
-    </section>
+    <iframe
+      key={sheetId || "new"}
+      ref={ref}
+      src={src}
+      title="Workout Sheet"
+      onLoad={onLoad}
+      style={{
+        width: "100%",
+        minHeight: 600,
+        border: "1px solid var(--line)",
+        borderRadius: 6,
+        display: "block",
+        background: "var(--bg)",
+      }}
+    />
   );
 }
