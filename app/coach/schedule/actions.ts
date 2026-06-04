@@ -326,14 +326,49 @@ export async function markApptPaid(apptId: string, paid: boolean): Promise<Resul
 
 export async function deleteAppointment(apptId: string): Promise<Result> {
   const me = await getSessionUser();
-  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!me) return { ok: false, error: "Not signed in." };
+  const isCoachLike = me.role === "coach" || me.role === "admin" || me.is_admin;
+  if (!isCoachLike) return { ok: false, error: "Only coaches can delete appointments." };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  if (!apptId || typeof apptId !== "string") return { ok: false, error: "Missing appointment id." };
+
   const supabase = createSupabaseAdmin();
-  const { error } = await supabase.from("appointments").delete().eq("id", apptId).eq("coach_id", me.id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/coach/schedule");
-  revalidatePath("/coach");
-  return { ok: true };
+  try {
+    // Look it up first so we can give a clear "not found / not yours" message
+    // instead of letting the .eq filter silently no-op (the previous version
+    // returned ok=true even when the coach_id filter excluded the row).
+    const { data: existing, error: lookupErr } = await supabase
+      .from("appointments")
+      .select("id, coach_id, session_type")
+      .eq("id", apptId)
+      .maybeSingle();
+    if (lookupErr) {
+      console.error("[deleteAppointment] lookup error", { apptId, error: lookupErr.message });
+      return { ok: false, error: `Couldn't load appointment: ${lookupErr.message}` };
+    }
+    if (!existing) {
+      return { ok: false, error: "Appointment not found — it may have already been deleted." };
+    }
+    // Coaches can delete their own appointments; admins can delete any.
+    const isAdmin = me.is_admin || me.role === "admin";
+    if (!isAdmin && existing.coach_id && existing.coach_id !== me.id) {
+      return { ok: false, error: "This appointment belongs to another coach." };
+    }
+
+    const { error: delErr } = await supabase.from("appointments").delete().eq("id", apptId);
+    if (delErr) {
+      console.error("[deleteAppointment] delete error", { apptId, error: delErr.message });
+      return { ok: false, error: delErr.message };
+    }
+
+    revalidatePath("/coach/schedule");
+    revalidatePath("/coach");
+    revalidatePath("/coach/clients", "layout");
+    return { ok: true };
+  } catch (e) {
+    console.error("[deleteAppointment] threw", { apptId, error: e });
+    return { ok: false, error: e instanceof Error ? e.message : "Delete failed." };
+  }
 }
 
 export async function requestSessionChange(apptId: string, kind: "reschedule" | "cancel", note?: string): Promise<Result> {
