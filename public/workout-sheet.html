@@ -158,10 +158,66 @@
     .sheet { padding: 0.7rem; }
   }
 
+  /* lock banner + locked-by-other state */
+  .lock-banner {
+    display: none;
+    width: min(8.5in, 100% - 1rem);
+    margin: 0.5rem auto;
+    padding: 0.5rem 0.75rem;
+    background: #fff4d3;
+    border: 1px solid #d9a300;
+    color: #6b4400;
+    font-size: 0.78rem;
+    border-radius: 3px;
+  }
+  body.locked-by-other .lock-banner { display: block; }
+  body.locked-by-other input,
+  body.locked-by-other select,
+  body.locked-by-other .mini,
+  body.locked-by-other .row-del,
+  body.locked-by-other .set-del,
+  body.locked-by-other .remove-day,
+  body.locked-by-other .col-resizer,
+  body.locked-by-other #add-day,
+  body.locked-by-other #save-modal-trigger { pointer-events: none; opacity: 0.65; }
+  body.locked-by-other input:not([type=submit]):not([type=button]) { background: #fbf7ef !important; }
+
+  /* save modal */
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(23,19,17,0.45);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; padding: 1rem;
+  }
+  .modal.show { display: flex; }
+  .modal-box {
+    background: var(--paper); border: 1px solid var(--ink);
+    padding: 1.1rem 1.25rem 1.25rem;
+    width: 100%; max-width: 380px; border-radius: 4px;
+    box-shadow: 0 20px 60px rgba(23,19,17,0.4);
+  }
+  .modal-header {
+    font-family: "Oswald", sans-serif; text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 700; font-size: 1rem; color: var(--ink); margin-bottom: 0.8rem;
+  }
+  .modal-row { margin: 0.55rem 0; display: flex; flex-direction: column; gap: 0.15rem; }
+  .modal-row label {
+    font-family: "Oswald", sans-serif; text-transform: uppercase; letter-spacing: 0.1em;
+    font-size: 0.62rem; font-weight: 600; color: var(--muted);
+  }
+  .modal-row input, .modal-row select {
+    font-family: "Georgia", serif; font-size: 0.92rem; color: var(--ink);
+    background: #fff; border: 1px solid var(--ink); border-radius: 3px;
+    padding: 0.32rem 0.45rem; width: 100%;
+  }
+  .modal-row input:focus, .modal-row select:focus { outline: none; border-color: var(--rust); background: #fbf7ef; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+  .modal-error { color: var(--rust); font-size: 0.78rem; margin-top: 0.4rem; min-height: 0.9rem; }
+
   @media print {
     @page { size: letter portrait; margin: 0.5in; }
     html, body { background: #fff; }
-    .toolbar, .sheet-controls, .remove-day, .day-controls, .col-resizer, .set-del, .row-del { display: none !important; }
+    .toolbar, .sheet-controls, .remove-day, .day-controls, .col-resizer, .set-del, .row-del, .lock-banner, .modal { display: none !important; }
     .table-wrap { overflow: visible; }
     .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; }
     .field input, tbody td input, .day-bar .bar-field input { background: transparent !important; }
@@ -175,10 +231,13 @@
     <p>Sample workout sheet. Type into any field, then <strong>Save&nbsp;PDF</strong> or <strong>Send</strong>. Each set has <strong>Reps + Wt</strong>; drag header dividers to resize. Per day: <strong>+ Row</strong> / <strong>+ Set</strong>; use the small <strong>×</strong> to delete a row or set. Auto-saves here.</p>
     <div class="actions">
       <span class="saved-flag" id="saved-flag">Saved &check;</span>
+      <button class="btn ghost" id="save-modal-trigger" type="button" style="display:none;">Save</button>
       <button class="btn ghost" id="send-btn" type="button">Send</button>
       <button class="btn" onclick="window.print()" type="button">Save PDF</button>
     </div>
   </div>
+
+  <div id="lock-banner" class="lock-banner">Read-only — another user is editing this sheet.</div>
 
   <div class="sheet">
     <header class="masthead">
@@ -189,7 +248,7 @@
     </header>
 
     <section class="fields">
-      <div class="field"><span class="field-label">Client Name</span><input type="text" name="client_name" autocomplete="off" /></div>
+      <div class="field"><span class="field-label">Client Name</span><input type="text" name="client_name" autocomplete="off" list="clients-datalist" /><datalist id="clients-datalist"></datalist></div>
       <div class="field"><span class="field-label">Goal</span><input type="text" name="goal" autocomplete="off" /></div>
       <div class="field wide"><span class="field-label">Deficit / Nutrition</span><input type="text" name="nutrition" placeholder="e.g. target kcal, protein, notes" autocomplete="off" /></div>
     </section>
@@ -205,6 +264,31 @@
       Each <strong>Set</strong> records <strong>Reps</strong> and <strong>Wt</strong> (load); load &amp; cues also go under <strong>Load / Notes</strong>.
       Add with <strong>+ Row</strong> / <strong>+ Set</strong>; delete with the small <strong>×</strong>.
     </p>
+  </div>
+
+  <!-- Save modal: opens when the coach clicks Save (only visible once the
+       app has passed user context via postMessage). -->
+  <div id="save-modal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div class="modal-header" id="save-modal-title">Save Sheet</div>
+      <div class="modal-row">
+        <label for="save-name">File name</label>
+        <input type="text" id="save-name" autocomplete="off" />
+      </div>
+      <div class="modal-row">
+        <label for="save-client">Assign to client</label>
+        <input type="text" id="save-client" list="clients-datalist" autocomplete="off" placeholder="Search or type a name" />
+      </div>
+      <div class="modal-row">
+        <label for="save-session">Assign to session (optional)</label>
+        <select id="save-session"><option value="">— None — saves to client&rsquo;s Programs —</option></select>
+      </div>
+      <div class="modal-error" id="save-error"></div>
+      <div class="modal-footer">
+        <button class="btn ghost" id="save-cancel" type="button">Cancel</button>
+        <button class="btn" id="save-confirm" type="button">Save</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -443,6 +527,7 @@
     var saveTimer;
     function saveState() {
       if (restoring) return;
+      if (SHEET_ID) { saveToServer(); return; }   // saved-sheet path: server is the source of truth
       clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
         try { localStorage.setItem(STORE_KEY, JSON.stringify(collectState())); flashSaved(); } catch (e) {}
@@ -509,8 +594,309 @@
       else { window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(text); }
     });
 
-    // ---------- init ----------
-    if (!restoreState()) { buildDay(); buildDay(); }
+    // ────────────────────────────────────────────────────────────────
+    // App-context sync layer
+    // ────────────────────────────────────────────────────────────────
+    // When the sheet is embedded inside the Monroe Fit Coach app, the React
+    // parent posts in user info + the clients/sessions list + (optionally) a
+    // sheetId. The sheet then loads from / saves to Supabase via API routes,
+    // acquires a soft lock to coordinate coach ↔ client editing, and polls
+    // every 4s so the other side's view stays fresh.
+    var USER = null;             // { id, name, role }
+    var SHEET_ID = null;         // populated when sheet is saved (or opened from a saved row)
+    var CLIENT_LIST = [];        // [{ id, name }]
+    var SESSION_LIST = [];       // [{ id, label, client_id }]
+    var LOCKED_BY_OTHER = false;
+    var LAST_REMOTE_AT = null;   // updated_at of last fetched row
+    var pollTimer = null, heartbeatTimer = null, serverSaveTimer = null;
+    var IS_IFRAME = window.parent && window.parent !== window;
+    var INIT_HANDLED = false;
+
+    function populateClientDatalist() {
+      var dl = document.getElementById("clients-datalist");
+      if (!dl) return;
+      dl.innerHTML = "";
+      CLIENT_LIST.forEach(function (c) {
+        var o = document.createElement("option");
+        o.value = c.name;
+        dl.appendChild(o);
+      });
+    }
+
+    function holderLabel(id) {
+      if (!id) return "Another user";
+      if (USER && id === USER.id) return USER.name || "You";
+      var c = CLIENT_LIST.find(function (x) { return x.id === id; });
+      return c ? c.name : "Another user";
+    }
+
+    function isFreshLock(ts) {
+      if (!ts) return false;
+      return Date.now() - new Date(ts).getTime() <= 10 * 60 * 1000;
+    }
+
+    function setLockedByOther(locked, holderName) {
+      LOCKED_BY_OTHER = locked;
+      document.body.classList.toggle("locked-by-other", locked);
+      // readOnly inputs (still focusable/selectable, but no edits)
+      document.querySelectorAll("input").forEach(function (i) {
+        if (locked) i.setAttribute("readonly", "");
+        else i.removeAttribute("readonly");
+      });
+      var banner = document.getElementById("lock-banner");
+      if (banner) {
+        banner.textContent = locked
+          ? "Read-only — " + (holderName || "another user") + " is editing this sheet."
+          : "";
+      }
+    }
+
+    function loadSheet(id) {
+      return fetch("/api/workout-sheets/" + id, { credentials: "include" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (json) {
+          if (!json || !json.sheet) return null;
+          var s = json.sheet;
+          LAST_REMOTE_AT = s.updated_at;
+          // populate the editor with sheet_data
+          restoring = true;
+          daysEl.innerHTML = "";
+          dayCount = 0;
+          setVal("client_name", (s.sheet_data && s.sheet_data.client) || "");
+          setVal("goal", (s.sheet_data && s.sheet_data.goal) || "");
+          setVal("nutrition", (s.sheet_data && s.sheet_data.nutrition) || "");
+          var days = (s.sheet_data && s.sheet_data.days) || [];
+          if (days.length === 0) { buildDay(); buildDay(); }
+          else days.forEach(function (d) {
+            var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
+            fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
+          });
+          restoring = false;
+          return s;
+        });
+    }
+
+    function tryAcquireLock() {
+      if (!SHEET_ID) return Promise.resolve();
+      return fetch("/api/workout-sheets/" + SHEET_ID + "/lock", { method: "POST", credentials: "include" })
+        .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+        .then(function (rj) {
+          if (rj.status === 200 && rj.j.ok) {
+            setLockedByOther(false);
+            if (!heartbeatTimer) heartbeatTimer = setInterval(tryAcquireLock, 60000);
+          } else if (rj.status === 423) {
+            setLockedByOther(true, holderLabel(rj.j.lock_holder_id));
+          }
+        })
+        .catch(function () {});
+    }
+
+    function releaseLock(useBeacon) {
+      if (!SHEET_ID || LOCKED_BY_OTHER) return;
+      try {
+        fetch("/api/workout-sheets/" + SHEET_ID + "/lock", {
+          method: "DELETE",
+          credentials: "include",
+          keepalive: !!useBeacon,
+        });
+      } catch (e) {}
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(function () {
+        if (!SHEET_ID) return;
+        fetch("/api/workout-sheets/" + SHEET_ID, { credentials: "include" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (json) {
+            if (!json || !json.sheet) return;
+            var s = json.sheet;
+            var me = USER && USER.id;
+            var otherHolds = s.lock_holder_id && s.lock_holder_id !== me && isFreshLock(s.lock_acquired_at);
+            if (otherHolds && !LOCKED_BY_OTHER) {
+              setLockedByOther(true, holderLabel(s.lock_holder_id));
+            } else if (!otherHolds && LOCKED_BY_OTHER) {
+              tryAcquireLock();   // attempt take-over
+            }
+            // apply remote edits (only meaningful while we're read-only)
+            if (s.updated_at !== LAST_REMOTE_AT) {
+              LAST_REMOTE_AT = s.updated_at;
+              if (LOCKED_BY_OTHER && s.sheet_data) {
+                restoring = true;
+                daysEl.innerHTML = "";
+                dayCount = 0;
+                setVal("client_name", s.sheet_data.client || "");
+                setVal("goal", s.sheet_data.goal || "");
+                setVal("nutrition", s.sheet_data.nutrition || "");
+                (s.sheet_data.days || []).forEach(function (d) {
+                  var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
+                  fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
+                });
+                restoring = false;
+                // re-apply read-only after rebuilding inputs
+                document.querySelectorAll("input").forEach(function (i) { i.setAttribute("readonly", ""); });
+              }
+            }
+          })
+          .catch(function () {});
+      }, 4000);
+    }
+
+    function saveToServer() {
+      if (!SHEET_ID || LOCKED_BY_OTHER) return;
+      clearTimeout(serverSaveTimer);
+      serverSaveTimer = setTimeout(function () {
+        fetch("/api/workout-sheets/" + SHEET_ID, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sheet_data: collectState() }),
+        })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            if (j && j.sheet) { LAST_REMOTE_AT = j.sheet.updated_at; flashSaved(); }
+          })
+          .catch(function () {});
+      }, 600);
+    }
+
+    // ─── Save modal ──────────────────────────────────────────────────
+    function defaultName(client) {
+      var stamp = new Date().toISOString().slice(0, 10);
+      var who = (client || "").trim() || "Untitled";
+      return "Workout — " + who + " — " + stamp;
+    }
+    function refreshSessionOptions(clientName) {
+      var sel = document.getElementById("save-session");
+      sel.innerHTML = '<option value="">— None — saves to client’s Programs —</option>';
+      var match = CLIENT_LIST.find(function (c) { return c.name === clientName; });
+      if (!match) return;
+      SESSION_LIST.filter(function (s) { return s.client_id === match.id; }).forEach(function (s) {
+        var o = document.createElement("option");
+        o.value = s.id;
+        o.textContent = s.label;
+        sel.appendChild(o);
+      });
+    }
+    function openSaveModal() {
+      var modal = document.getElementById("save-modal");
+      var clientInput = document.getElementById("save-client");
+      var nameInput = document.getElementById("save-name");
+      var title = document.getElementById("save-modal-title");
+      document.getElementById("save-error").textContent = "";
+
+      var currentClient = val("client_name");
+      clientInput.value = currentClient;
+      title.textContent = SHEET_ID ? "Update sheet" : "Save sheet";
+      nameInput.value = nameInput.dataset.touched ? nameInput.value : defaultName(currentClient);
+      refreshSessionOptions(currentClient);
+      modal.classList.add("show");
+      setTimeout(function () { nameInput.focus(); nameInput.select(); }, 0);
+    }
+    function closeSaveModal() { document.getElementById("save-modal").classList.remove("show"); }
+
+    function confirmSave() {
+      var name = document.getElementById("save-name").value.trim() || "Workout Sheet";
+      var clientName = document.getElementById("save-client").value.trim();
+      var sessionId = document.getElementById("save-session").value || null;
+      var clientMatch = CLIENT_LIST.find(function (c) { return c.name === clientName; });
+      var clientId = clientMatch ? clientMatch.id : null;
+      var errEl = document.getElementById("save-error");
+      errEl.textContent = "";
+
+      if (SHEET_ID) {
+        fetch("/api/workout-sheets/" + SHEET_ID, {
+          method: "PUT", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name, client_id: clientId, session_id: sessionId, sheet_data: collectState() }),
+        }).then(function (r) {
+          return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+        }).then(function (rj) {
+          if (rj.ok && rj.j.sheet) {
+            LAST_REMOTE_AT = rj.j.sheet.updated_at;
+            closeSaveModal();
+            flashSaved();
+            window.parent && window.parent.postMessage({ type: "mfc.workout-sheet.saved", sheet: rj.j.sheet }, "*");
+          } else {
+            errEl.textContent = rj.j.error || "Update failed";
+          }
+        });
+      } else {
+        fetch("/api/workout-sheets", {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name, kind: "app", client_id: clientId, session_id: sessionId, sheet_data: collectState() }),
+        }).then(function (r) {
+          return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+        }).then(function (rj) {
+          if (rj.ok && rj.j.sheet) {
+            SHEET_ID = rj.j.sheet.id;
+            LAST_REMOTE_AT = rj.j.sheet.updated_at;
+            try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+            closeSaveModal();
+            flashSaved();
+            window.parent && window.parent.postMessage({ type: "mfc.workout-sheet.saved", sheet: rj.j.sheet }, "*");
+            tryAcquireLock();
+            startPolling();
+          } else {
+            errEl.textContent = rj.j.error || "Save failed";
+          }
+        });
+      }
+    }
+
+    document.getElementById("save-modal-trigger").addEventListener("click", openSaveModal);
+    document.getElementById("save-cancel").addEventListener("click", closeSaveModal);
+    document.getElementById("save-confirm").addEventListener("click", confirmSave);
+    document.getElementById("save-modal").addEventListener("click", function (e) {
+      if (e.target.id === "save-modal") closeSaveModal();
+    });
+    document.getElementById("save-name").addEventListener("input", function (e) { e.target.dataset.touched = "1"; });
+    document.getElementById("save-client").addEventListener("input", function (e) { refreshSessionOptions(e.target.value); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && document.getElementById("save-modal").classList.contains("show")) closeSaveModal();
+    });
+
+    window.addEventListener("beforeunload", function () { releaseLock(true); });
+
+    // ─── boot ────────────────────────────────────────────────────────
+    function initFromLocal() {
+      if (INIT_HANDLED) return;
+      INIT_HANDLED = true;
+      if (!restoreState()) { buildDay(); buildDay(); }
+    }
+    function initSavedMode(sheetId) {
+      SHEET_ID = sheetId;
+      // hide the local-storage flicker — clear default days that may have been built
+      daysEl.innerHTML = "";
+      dayCount = 0;
+      loadSheet(sheetId).then(function () {
+        tryAcquireLock();
+        startPolling();
+      });
+    }
+    window.addEventListener("message", function (ev) {
+      if (ev.origin !== window.location.origin) return;
+      var d = ev.data || {};
+      if (d.type !== "mfc.workout-sheet.init") return;
+      INIT_HANDLED = true;
+      USER = d.user || null;
+      CLIENT_LIST = Array.isArray(d.clientList) ? d.clientList : [];
+      SESSION_LIST = Array.isArray(d.sessionList) ? d.sessionList : [];
+      populateClientDatalist();
+      var saveBtn = document.getElementById("save-modal-trigger");
+      if (saveBtn) saveBtn.style.display = "";
+      if (d.sheetId) initSavedMode(d.sheetId);
+      else if (!daysEl.children.length) { if (!restoreState()) { buildDay(); buildDay(); } }
+    });
+
+    if (IS_IFRAME) {
+      window.parent.postMessage({ type: "mfc.workout-sheet.ready" }, "*");
+      // fall back to local mode if the parent never sends init
+      setTimeout(function () { if (!INIT_HANDLED) initFromLocal(); }, 800);
+    } else {
+      initFromLocal();
+    }
   </script>
 </body>
 </html>
