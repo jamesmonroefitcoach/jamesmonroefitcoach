@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { listClients } from "@/lib/data";
 import { listWorkoutSheets } from "@/lib/workout-sheets.server";
 import TemplateClient from "./template-client";
-import type { ClientLite } from "./workout-sheet-embed";
+import type { ClientLite } from "@/components/workout-sheet-embed";
 
 export default async function ProgrammingTemplatePage({
   searchParams,

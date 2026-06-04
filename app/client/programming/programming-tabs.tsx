@@ -7,7 +7,8 @@ export default function ClientProgrammingTabs() {
   const isBuild    = path.startsWith("/client/programming/build");
   const isLibrary  = path.startsWith("/client/programming/exercise-library");
   const isMaterials = path.startsWith("/client/programming/materials");
-  const isView     = !isBuild && !isLibrary && !isMaterials;
+  const isSheets   = path.startsWith("/client/programming/sheets");
+  const isView     = !isBuild && !isLibrary && !isMaterials && !isSheets;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -30,6 +31,7 @@ export default function ClientProgrammingTabs() {
         <Link href="/client/programming" style={tabStyle(isView)}>View Program</Link>
         <Link href="/client/programming/build" style={tabStyle(isBuild)}>Build Program</Link>
         <Link href="/client/programming/exercise-library" style={tabStyle(isLibrary)}>Exercise Library</Link>
+        <Link href="/client/programming/sheets" style={tabStyle(isSheets)}>Workout Sheets</Link>
         <Link href="/client/programming/materials" style={tabStyle(isMaterials)}>Materials</Link>
       </nav>
     </div>

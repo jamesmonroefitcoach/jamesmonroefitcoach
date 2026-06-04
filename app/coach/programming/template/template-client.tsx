@@ -5,7 +5,7 @@ import WorkoutSheetEmbed, {
   type ClientLite,
   type SessionLite,
   type UserLite,
-} from "./workout-sheet-embed";
+} from "@/components/workout-sheet-embed";
 import type { WorkoutSheet } from "@/lib/workout-sheets";
 
 export default function TemplateClient({
