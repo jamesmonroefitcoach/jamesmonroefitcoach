@@ -179,7 +179,8 @@
   body.locked-by-other .remove-day,
   body.locked-by-other .col-resizer,
   body.locked-by-other #add-day,
-  body.locked-by-other #save-modal-trigger { pointer-events: none; opacity: 0.65; }
+  body.locked-by-other #save-modal-trigger,
+  body.locked-by-other #clear-btn { pointer-events: none; opacity: 0.65; }
   body.locked-by-other input:not([type=submit]):not([type=button]) { background: #fbf7ef !important; }
 
   /* save modal */
@@ -231,6 +232,7 @@
     <p>Sample workout sheet. Type into any field, then <strong>Save&nbsp;PDF</strong> or <strong>Send</strong>. Each set has <strong>Reps + Wt</strong>; drag header dividers to resize. Per day: <strong>+ Row</strong> / <strong>+ Set</strong>; use the small <strong>×</strong> to delete a row or set. Auto-saves here.</p>
     <div class="actions">
       <span class="saved-flag" id="saved-flag">Saved &check;</span>
+      <button class="btn ghost" id="clear-btn" type="button">Clear</button>
       <button class="btn ghost" id="save-modal-trigger" type="button" style="display:none;">Save</button>
       <button class="btn ghost" id="send-btn" type="button">Send</button>
       <button class="btn" onclick="window.print()" type="button">Save PDF</button>
@@ -848,6 +850,44 @@
     document.getElementById("save-modal-trigger").addEventListener("click", openSaveModal);
     document.getElementById("save-cancel").addEventListener("click", closeSaveModal);
     document.getElementById("save-confirm").addEventListener("click", confirmSave);
+
+    // ─── Clear ─────────────────────────────────────────────────────────
+    // Wipe the editor back to two empty day blocks (+ blank client fields).
+    // Unsaved sheets get a second confirmation since the work would be lost
+    // for good; saved sheets get one confirm (the cleared state auto-saves
+    // to the server like any other edit, so it's recoverable from history).
+    function sheetHasContent() {
+      var inputs = document.querySelectorAll(
+        '.field input, .day-bar .bar-field input, tbody td input'
+      );
+      for (var i = 0; i < inputs.length; i++) {
+        if ((inputs[i].value || "").trim()) return true;
+      }
+      return false;
+    }
+    function clearAllNow() {
+      restoring = true;
+      ["client_name", "goal", "nutrition"].forEach(function (n) { setVal(n, ""); });
+      daysEl.innerHTML = "";
+      dayCount = 0;
+      buildDay();
+      buildDay();
+      restoring = false;
+      // Persist the cleared state (server if saved, localStorage otherwise).
+      saveState();
+    }
+    document.getElementById("clear-btn").addEventListener("click", function () {
+      if (LOCKED_BY_OTHER) return;
+      if (!sheetHasContent()) { clearAllNow(); return; }
+      if (SHEET_ID) {
+        if (!window.confirm("Reset the sheet content? The cleared version will auto-save.")) return;
+      } else {
+        if (!window.confirm("Clear this sheet? Unsaved work will be lost.")) return;
+        if (!window.confirm("Really clear? This can't be undone.")) return;
+      }
+      clearAllNow();
+    });
+
     document.getElementById("save-modal").addEventListener("click", function (e) {
       if (e.target.id === "save-modal") closeSaveModal();
     });
