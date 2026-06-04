@@ -106,6 +106,13 @@ export default function Sidebar({ user }: { user: SessionUser }) {
               <div style={{ color: "#d4c9bb", fontWeight: 600, fontSize: "0.8rem", padding: "0.15rem 0.55rem 0.25rem" }}>
                 {user.name}
               </div>
+              <Link
+                href="/account"
+                className="sidebar-link"
+                onClick={() => setMobileOpen(false)}
+              >
+                Account
+              </Link>
               <button
                 className="sidebar-link"
                 style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer" }}
@@ -195,9 +202,16 @@ export default function Sidebar({ user }: { user: SessionUser }) {
           <div className="sidebar-foot">
             <div style={{ color: "#d4c9bb", fontWeight: 600 }}>{user.name}</div>
             <div>{user.email ?? ""}</div>
+            <Link
+              href="/account"
+              className="btn btn-ghost"
+              style={{ marginTop: "0.5rem", width: "100%", color: "#d4c9bb", borderColor: "#3a322d", textAlign: "center" }}
+            >
+              Account
+            </Link>
             <button
               className="btn btn-ghost"
-              style={{ marginTop: "0.5rem", width: "100%", color: "#d4c9bb", borderColor: "#3a322d" }}
+              style={{ marginTop: "0.35rem", width: "100%", color: "#d4c9bb", borderColor: "#3a322d" }}
               onClick={signOut}
               disabled={pending}
             >
