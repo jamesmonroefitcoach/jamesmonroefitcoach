@@ -4,6 +4,7 @@ import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForClient } from "@/lib/data";
 import type { Category, ProgramKind } from "@/lib/programs";
+import { syncProgramToSheet } from "@/lib/programs-sheets-bridge";
 
 export type SaveProgramItem = {
   movement_id?: string;     // existing movement
@@ -179,9 +180,17 @@ export async function saveProgram(input: SaveProgramInput): Promise<Result<{ id:
       .eq("coach_id", me.id);
   }
 
+  // Bridge sync (Step 3): write the paired workout_sheets row so the
+  // Template view auto-renders the same plan as sheet rows. Best-effort —
+  // if the sheet write fails the structured save is still committed.
+  if (programId) {
+    try { await syncProgramToSheet(programId); } catch (e) { console.error("[saveProgram] syncProgramToSheet:", e); }
+  }
+
   revalidatePath(`/coach/clients/${input.client_id}`);
   revalidatePath("/coach/clients");
   revalidatePath("/coach/programming/build");
+  revalidatePath("/coach/programming/build/template");
   revalidatePath("/coach/schedule");
   revalidatePath("/coach");
   if (!programId) return { ok: false, error: "program id missing after save" };

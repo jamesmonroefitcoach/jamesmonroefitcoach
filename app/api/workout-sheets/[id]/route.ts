@@ -8,6 +8,7 @@ import {
   acquireLock,
 } from "@/lib/workout-sheets.server";
 import { isLockStale, type SheetData, type WorkoutSheetStatus } from "@/lib/workout-sheets";
+import { syncSheetToProgram } from "@/lib/programs-sheets-bridge";
 
 function canSee(user: SessionUser, sheet: { coach_id: string; client_id: string | null }): boolean {
   if (user.is_admin || user.role === "admin") return true;
@@ -73,6 +74,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     last_edited_by: user.id,
   });
   if (!updated) return NextResponse.json({ error: "Update failed" }, { status: 500 });
+
+  // Bridge sync (Step 3): mirror sheet_data into the paired program as
+  // free-text rows so the Builder side sees what was typed into the sheet.
+  // Best-effort — the sheet save itself is already committed.
+  if (body.sheet_data !== undefined) {
+    try { await syncSheetToProgram(id); } catch (e) { console.error("[sheet PUT] syncSheetToProgram:", e); }
+  }
+
   return NextResponse.json({ sheet: updated });
 }
 

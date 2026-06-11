@@ -4,6 +4,7 @@ import {
   createWorkoutSheet,
   uploadWorkoutPdf,
 } from "@/lib/workout-sheets.server";
+import { getOrCreatePairedProgram } from "@/lib/programs-sheets-bridge";
 
 // POST /api/workout-sheets/pdf-upload
 //   multipart/form-data with fields:
@@ -53,5 +54,13 @@ export async function POST(req: NextRequest) {
     last_edited_by: user.id,
   });
   if (!sheet) return NextResponse.json({ error: "Record save failed" }, { status: 500 });
+
+  // Bridge sync (Step 3): stub-create the paired programs row so the PDF
+  // shows up in View Programs / Past Programs alongside non-PDF programs.
+  // Only when we have a client_id — orphan PDFs stay PDF-only.
+  if (clientId) {
+    try { await getOrCreatePairedProgram(sheet.id); } catch (e) { console.error("[pdf-upload] getOrCreatePairedProgram:", e); }
+  }
+
   return NextResponse.json({ sheet });
 }
