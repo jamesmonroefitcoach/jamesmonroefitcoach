@@ -8,6 +8,7 @@ import { fmtMoney, fmtDate, fmtSessionAgo, fmtSessionAway } from "@/lib/format";
 import { addProspect, deleteProspect, updateProspect, quickUpdateClient, type ProspectInput } from "./actions";
 import type { NextSessionStatus } from "./page";
 import TierBoardModal from "./tier-board-modal";
+import QuickView from "./quick-view";
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -738,6 +739,9 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
       </header>
 
       <hr className="divider" />
+
+      {/* ── Quick View dropdown ───────────────────────────────────── */}
+      <QuickView clients={clients} />
 
       {/* ── Needs Review Banner ───────────────────────────────────── */}
       {needsReview.length > 0 && (
