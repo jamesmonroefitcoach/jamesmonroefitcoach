@@ -518,11 +518,26 @@ export async function listAppointmentsForWeek(coachId: string, weekStart?: Date)
 }
 
 export async function listAppointmentsForMonth(coachId: string, monthStart: Date): Promise<AppointmentRow[]> {
-  const start = new Date(monthStart);
-  start.setDate(1);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setMonth(start.getMonth() + 1);
+  // Expand the window to cover the FULL weekly buckets the dashboard chart
+  // will draw: from the Monday on or before the 1st through the Sunday on
+  // or after the last day. Without this, cross-month bucket weeks (e.g.
+  // Apr 27 – May 3 when viewing May) would silently miss the days that
+  // fall in the neighbouring month.
+  const monthFirst = new Date(monthStart);
+  monthFirst.setDate(1);
+  monthFirst.setHours(0, 0, 0, 0);
+  const monthLast = new Date(monthFirst);
+  monthLast.setMonth(monthFirst.getMonth() + 1);
+  monthLast.setDate(monthLast.getDate() - 1);
+
+  // Monday on or before the 1st (Monday-anchored week).
+  const start = new Date(monthFirst);
+  start.setDate(monthFirst.getDate() - ((monthFirst.getDay() + 6) % 7));
+  // Exclusive end = Monday after the last day of the month.
+  const end = new Date(monthLast);
+  end.setDate(monthLast.getDate() + (7 - ((monthLast.getDay() + 6) % 7)));
+  end.setHours(0, 0, 0, 0);
+
   if (!hasSupabaseEnv()) {
     return demoAppointments().filter((a) => {
       const t = new Date(a.starts_at).getTime();

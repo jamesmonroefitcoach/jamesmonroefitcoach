@@ -222,10 +222,17 @@ export default function ScheduleView({
   // Daily totals exclude personal blocks; cancellations stay in for visibility but not in revenue.
   const dayTotals = useMemo(() => {
     return DAYS.map((_, idx) => {
-      const list = appts.filter((a) => dayIndex(new Date(a.starts_at)) === idx && a.session_type === "session");
+      // Same convention as the dashboard chart: a session counts if it
+      // wasn't a no-show. Cancelled sessions DO count toward revenue
+      // (cancellation fee charged) and toward the count.
+      const list = appts.filter((a) =>
+        dayIndex(new Date(a.starts_at)) === idx
+        && a.session_type === "session"
+        && a.status !== "no_show"
+      );
       return {
-        revenue: list.reduce((acc, b) => acc + (b.status !== "cancelled" ? (b.rate ?? 0) : 0), 0),
-        count: list.filter((b) => b.status !== "cancelled").length
+        revenue: list.reduce((acc, b) => acc + (b.rate ?? 0), 0),
+        count: list.length
       };
     });
   }, [appts]);
