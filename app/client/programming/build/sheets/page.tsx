@@ -1,25 +1,12 @@
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session";
-import { listWorkoutSheets } from "@/lib/workout-sheets.server";
-import SheetsClient from "./sheets-client";
 
-export default async function ClientSheetsPage({
+// Legacy /build/sheets → Template. Preserves any in-flight bookmarks.
+export default async function LegacySheetsRedirect({
   searchParams,
 }: {
   searchParams: Promise<{ sheet?: string }>;
 }) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
-  if (user.role !== "client") redirect("/");
-
-  const { sheet: sheetId } = await searchParams;
-  const sheets = await listWorkoutSheets({ clientId: user.id, limit: 50 });
-
-  return (
-    <SheetsClient
-      user={{ id: user.id, name: user.name, role: user.role }}
-      sheets={sheets}
-      currentSheetId={sheetId ?? null}
-    />
-  );
+  const { sheet } = await searchParams;
+  const qs = sheet ? `?sheet=${encodeURIComponent(sheet)}` : "";
+  redirect(`/client/programming/build/template${qs}`);
 }
