@@ -64,9 +64,12 @@ function weekRangeLabel(start: Date, endExcl: Date): string {
   return `${start.getDate()}–${last.getDate()}`;
 }
 
+type ChartSeg = "paid" | "unpaid" | "cancelled";
+
 function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; monthStart?: Date }) {
   const now = new Date();
   const baseMonthStart = monthStart ?? new Date(now.getFullYear(), now.getMonth(), 1);
+  const [hover, setHover] = useState<{ weekIdx: number; seg: ChartSeg } | null>(null);
 
   const weeks = useMemo(() => {
     const firstWeek = startOfWeekLocal(baseMonthStart);
@@ -84,16 +87,20 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
       const isCurrentWeek = b.start <= now && now < b.end;
       const isPast = b.end <= now;
       // All sessions for the week, excluding no-shows (those produce no
-      // signal on this chart). Cancelled sessions still appear in the
-      // count so the coach can see them, but they don't add to the bar
-      // height because they aren't expected revenue.
+      // signal on this chart). Cancelled sessions DO count toward the bar
+      // height — coach still charges a cancellation fee, so the booked
+      // revenue is real money owed.
       const sessions = monthAppts.filter((a) => {
         const t = new Date(a.starts_at).getTime();
         return t >= b.start.getTime() && t < b.end.getTime()
           && a.session_type === "session"
           && a.status !== "no_show";
       });
-      const cancelled = sessions.filter((a) => a.status === "cancelled");
+      // Three non-overlapping buckets for the bar segments. Cancellation
+      // status trumps paid status here (a paid-then-cancelled session
+      // lives in the cancelled bucket so the rust segment shows what was
+      // charged for a no-go session).
+      const cancelledSess = sessions.filter((a) => a.status === "cancelled");
       const active = sessions.filter((a) => a.status !== "cancelled");
       const paidSess = active.filter((a) => a.paid);
       const unpaidSess = active.filter((a) => !a.paid);
@@ -101,7 +108,8 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
 
       const paidAmt = paidSess.reduce((s, a) => s + (a.rate ?? 0), 0);
       const unpaidAmt = unpaidSess.reduce((s, a) => s + (a.rate ?? 0), 0);
-      const bookings = paidAmt + unpaidAmt; // = active total (cancelled excluded)
+      const cancelledAmt = cancelledSess.reduce((s, a) => s + (a.rate ?? 0), 0);
+      const bookings = paidAmt + unpaidAmt + cancelledAmt;
 
       // How far through this week is "today" (0–1), used to draw the progress split
       const weekPct = isCurrentWeek
@@ -112,10 +120,14 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
         bookings,
         paidAmt,
         unpaidAmt,
+        cancelledAmt,
+        paidSess,
+        unpaidSess,
+        cancelledSess,
         countAll: sessions.length,
         countCompleted: completedSess.length,
         countPaid: paidSess.length,
-        countCancelled: cancelled.length,
+        countCancelled: cancelledSess.length,
         isCurrentWeek,
         isPast,
         weekPct,
@@ -172,38 +184,71 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
         ))}
       </div>
 
-      {/* Bars — stacked: green (paid $) on the bottom, steel-blue (unpaid $)
-          above it. Cancelled $ never enters the bar height since it isn't
-          expected revenue. Bar TOTAL height = paidAmt + unpaidAmt. */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem", height: chartH }}>
+      {/* Bars — true stacked segments, no overlap:
+            paid (green) → unpaid (steel) → cancelled (rust)
+          Each segment is a real div with hover handlers so we can pop a
+          per-segment tooltip showing the client list. */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem", height: chartH, position: "relative" }}>
         {weeks.map((w, i) => {
           const barH = Math.max(3, Math.round((w.bookings / maxVal) * chartH));
-          const paidH = Math.max(0, Math.round((w.paidAmt / maxVal) * chartH));
-          const unpaidH = Math.max(0, barH - paidH);
+          // Heights in px per segment. Round each then reconcile any
+          // remainder onto the topmost non-zero segment so the bar total
+          // matches barH exactly.
+          let paidH = w.bookings > 0 ? Math.round((w.paidAmt / w.bookings) * barH) : 0;
+          let unpaidH = w.bookings > 0 ? Math.round((w.unpaidAmt / w.bookings) * barH) : 0;
+          let cancelledH = w.bookings > 0 ? Math.round((w.cancelledAmt / w.bookings) * barH) : 0;
+          const totalH = paidH + unpaidH + cancelledH;
+          if (totalH !== barH && barH > 0) {
+            const diff = barH - totalH;
+            if (cancelledH > 0) cancelledH += diff;
+            else if (unpaidH > 0) unpaidH += diff;
+            else paidH += diff;
+          }
           const futureW = w.isCurrentWeek ? `${Math.round((1 - w.weekPct) * 100)}%` : "0%";
-          const tooltip = w.countAll > 0
-            ? `${fmtMoney(w.paidAmt)} paid · ${fmtMoney(w.unpaidAmt)} unpaid · ${w.countCancelled} cancelled (${fmtMoney(w.bookings)} expected total)`
-            : "No sessions";
-          // Past weeks get full saturation; future weeks get a subtle
-          // wash so it reads as "not yet realised."
-          const paidBg = w.isPast || w.isCurrentWeek ? "var(--sage)" : "rgba(90,107,74,0.55)";
-          const unpaidBg = w.isPast || w.isCurrentWeek ? "var(--steel)" : "rgba(62,96,121,0.55)";
+          // Past + current weeks get full saturation; future weeks get a
+          // wash so they read as "not yet realised."
+          const realised = w.isPast || w.isCurrentWeek;
+          const paidBg = realised ? "var(--sage)" : "rgba(90,107,74,0.55)";
+          const unpaidBg = realised ? "var(--steel)" : "rgba(62,96,121,0.55)";
+          const cancelledBg = realised ? "var(--rust)" : "rgba(168,61,43,0.5)";
+
+          // Segment renderer (DRY for the three).
+          const Segment = (seg: "paid" | "unpaid" | "cancelled", h: number, bg: string) => {
+            if (h <= 0) return null;
+            return (
+              <div
+                onMouseEnter={() => setHover({ weekIdx: i, seg })}
+                onMouseLeave={() => setHover(null)}
+                style={{
+                  height: h,
+                  background: bg,
+                  cursor: "default",
+                  position: "relative",
+                  outline: hover?.weekIdx === i && hover.seg === seg ? "1.5px solid rgba(255,255,255,0.85)" : "none",
+                  outlineOffset: -1,
+                }}
+              />
+            );
+          };
+
           return (
             <div
               key={i}
-              style={{ flex: 1, height: barH, alignSelf: "flex-end", position: "relative", borderRadius: "2px 2px 0 0", overflow: "hidden" }}
-              title={tooltip}
+              style={{
+                flex: 1,
+                height: barH,
+                alignSelf: "flex-end",
+                position: "relative",
+                borderRadius: "2px 2px 0 0",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column-reverse", // stack bottom-up: paid → unpaid → cancelled
+              }}
             >
-              {/* Unpaid segment fills the whole bar; the paid segment overlays
-                  the bottom portion. The visible top portion = unpaid. */}
-              <div style={{ position: "absolute", inset: 0, background: unpaidBg }} />
-              {paidH > 0 && (
-                <div style={{
-                  position: "absolute", bottom: 0, left: 0, right: 0,
-                  height: paidH,
-                  background: paidBg,
-                }} />
-              )}
+              {Segment("paid", paidH, paidBg)}
+              {Segment("unpaid", unpaidH, unpaidBg)}
+              {Segment("cancelled", cancelledH, cancelledBg)}
+
               {/* Future-days fade for current week — right portion is lighter */}
               {w.isCurrentWeek && (
                 <div style={{
@@ -211,6 +256,7 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
                   width: futureW,
                   background: "rgba(255,255,255,0.45)",
                   borderLeft: "1px dashed rgba(168,61,43,0.35)",
+                  pointerEvents: "none",
                 }} />
               )}
               {/* Dashed border on current week */}
@@ -225,6 +271,82 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
             </div>
           );
         })}
+
+        {/* Hover popover — rendered as a sibling so it isn't clipped by
+            the bar's overflow:hidden. Positioned absolutely over the chart
+            area, centered on the hovered column. */}
+        {hover && (() => {
+          const w = weeks[hover.weekIdx];
+          if (!w) return null;
+          const list =
+            hover.seg === "paid" ? w.paidSess
+            : hover.seg === "unpaid" ? w.unpaidSess
+            : w.cancelledSess;
+          const amt =
+            hover.seg === "paid" ? w.paidAmt
+            : hover.seg === "unpaid" ? w.unpaidAmt
+            : w.cancelledAmt;
+          const labelColor =
+            hover.seg === "paid" ? "var(--sage)"
+            : hover.seg === "unpaid" ? "var(--steel)"
+            : "var(--rust)";
+          const segTitle =
+            hover.seg === "paid" ? "Paid"
+            : hover.seg === "unpaid" ? "Unpaid (booked)"
+            : "Cancelled (fee charged)";
+          // Position above the hovered column. weekIdx / weeks.length gives
+          // its left fraction; add half a column width to center.
+          const colPct = 100 / weeks.length;
+          const leftPct = hover.weekIdx * colPct + colPct / 2;
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left: `${leftPct}%`,
+                bottom: "calc(100% + 6px)",
+                transform: "translateX(-50%)",
+                background: "var(--paper)",
+                border: "1px solid var(--line)",
+                borderRadius: 4,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+                padding: "0.5rem 0.7rem",
+                fontSize: "0.72rem",
+                minWidth: 180,
+                maxWidth: 260,
+                zIndex: 10,
+                pointerEvents: "none",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem", marginBottom: "0.3rem" }}>
+                <span style={{ color: labelColor, fontWeight: 700 }}>{segTitle}</span>
+                <span className="meta" style={{ fontSize: "0.66rem" }}>
+                  {list.length} {list.length === 1 ? "session" : "sessions"} · {fmtMoney(amt)}
+                </span>
+              </div>
+              {list.length === 0 ? (
+                <div className="meta" style={{ fontStyle: "italic" }}>None.</div>
+              ) : (
+                <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "0.18rem" }}>
+                  {list.slice(0, 8).map((a) => (
+                    <li key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {a.client_name ?? "—"}
+                      </span>
+                      <span className="meta" style={{ fontSize: "0.66rem", whiteSpace: "nowrap" }}>
+                        {fmtMoney(a.rate ?? 0)}
+                      </span>
+                    </li>
+                  ))}
+                  {list.length > 8 && (
+                    <li className="meta" style={{ fontStyle: "italic", fontSize: "0.66rem", marginTop: "0.18rem" }}>
+                      + {list.length - 8} more
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Baseline */}
@@ -251,8 +373,8 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
         ))}
       </div>
 
-      {/* Legend — bars are the dollar split (paid vs unpaid); counts in the
-          chip above use the same colors plus rust for cancelled. */}
+      {/* Legend — three bar segments (no overlap) + the current-week
+          progress wash. Hover a segment to see the client list. */}
       <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.65rem", flexWrap: "wrap", rowGap: "0.35rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "var(--sage)", borderRadius: 2 }} />
@@ -260,11 +382,15 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "var(--steel)", borderRadius: 2 }} />
-          <span className="meta" style={{ fontSize: "0.68rem" }}>Unpaid $ (booked, uncollected)</span>
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Unpaid $ (booked)</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <div style={{ width: 10, height: 10, background: "var(--rust)", borderRadius: 2 }} />
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Cancelled $ (fee charged)</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "rgba(255,255,255,0.45)", border: "1px dashed rgba(168,61,43,0.4)", borderRadius: 2 }} />
-          <span className="meta" style={{ fontSize: "0.68rem" }}>Days remaining (current week)</span>
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Days remaining</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginLeft: "auto" }}>
           <span className="meta" style={{ fontSize: "0.66rem", fontStyle: "italic" }}>
