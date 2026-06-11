@@ -1129,7 +1129,7 @@ export default function ScheduleView({
                         onDragStart={() => setDragId(e.id)}
                         onDragEnd={() => setDragId(null)}
                         onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}
-                        title={`${e.client_name ?? e.personal_label ?? "—"} — ${e.status}${e.change_count > 0 ? ` (Moved ${e.change_count}×)` : ""}`}
+                        title={`${e.client_name ?? e.personal_label ?? "—"} — ${e.status}${e.session_type === "session" ? ` · ${e.paid ? "paid" : "unpaid"}` : ""}${e.change_count > 0 ? ` (Moved ${e.change_count}×)` : ""}`}
                         style={{
                           position: "absolute",
                           top,
@@ -1138,10 +1138,18 @@ export default function ScheduleView({
                           height: heightPx - 2,
                           background: colors.bg,
                           color: colors.fg,
-                          padding: "0.25rem 0.4rem",
+                          padding: "0.25rem 0.4rem 0.25rem 0.55rem",
                           borderRadius: 3,
                           fontSize: "0.74rem",
-                          border: cancelled ? "1px dashed rgba(255,255,255,0.5)" : "none",
+                          // Left-edge paid/unpaid/cancelled accent — same colors
+                          // as the dashboard chart segments (sage/steel/rust).
+                          // Lets a coach scan paid vs unpaid at a glance.
+                          borderLeft:
+                            e.session_type !== "session" ? "none"
+                            : cancelled ? "3px solid var(--rust)"
+                            : e.paid ? "3px solid var(--sage)"
+                            : "3px solid var(--steel)",
+                          border: cancelled && e.session_type !== "session" ? "1px dashed rgba(255,255,255,0.5)" : undefined,
                           opacity: cancelled ? 0.85 : 1,
                           boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
                           cursor: "grab",
@@ -1160,7 +1168,18 @@ export default function ScheduleView({
                         </div>
                         <div style={{ opacity: 0.9, display: "flex", justifyContent: "space-between", gap: 4, fontSize: "0.7rem" }}>
                           <span>
-                            {e.session_type === "session" ? `$${e.rate ?? "—"}` : ""}
+                            {e.session_type === "session" ? (
+                              <>
+                                {`$${e.rate ?? "—"}`}
+                                {/* paid checkmark next to the rate; unpaid stays
+                                    blank so the bare $ implies "owed" */}
+                                {e.paid && (
+                                  <span style={{ marginLeft: 3, fontSize: "0.62rem", opacity: 0.95 }} title="Paid">
+                                    ✓
+                                  </span>
+                                )}
+                              </>
+                            ) : ""}
                             {e.change_count > 0 ? <span style={{ marginLeft: 6 }}>Moved {e.change_count}×</span> : null}
                           </span>
                           {e.session_type === "session" ? (
