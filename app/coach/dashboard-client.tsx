@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
 import { pastProgramsForClient } from "@/lib/programs";
-import { fetchWeekAppts, markApptPaid } from "@/app/coach/schedule/actions";
+import { fetchWeekAppts, fetchMonthAppts, markApptPaid } from "@/app/coach/schedule/actions";
 import WeekBanners from "./week-banners";
 import TodoBlock from "./todo-block";
 import type { WeekSessionItem, WeekProgramItem, NoSessionClient } from "./week-banners";
@@ -64,13 +64,13 @@ function weekRangeLabel(start: Date, endExcl: Date): string {
   return `${start.getDate()}–${last.getDate()}`;
 }
 
-function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
+function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; monthStart?: Date }) {
   const now = new Date();
+  const baseMonthStart = monthStart ?? new Date(now.getFullYear(), now.getMonth(), 1);
 
   const weeks = useMemo(() => {
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const firstWeek = startOfWeekLocal(monthStart);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const firstWeek = startOfWeekLocal(baseMonthStart);
+    const monthEnd = new Date(baseMonthStart.getFullYear(), baseMonthStart.getMonth() + 1, 1);
     const buckets: { rangeLabel: string; start: Date; end: Date }[] = [];
     for (let i = 0; i < 6; i++) {
       const s = new Date(firstWeek);
@@ -97,7 +97,7 @@ function WoWChart({ monthAppts }: { monthAppts: AppointmentRow[] }) {
         : isPast ? 1 : 0;
       return { ...b, bookings, earned, count: appts.length, isCurrentWeek, isPast, weekPct };
     });
-  }, [monthAppts]);
+  }, [monthAppts, baseMonthStart]);
 
   const maxVal = Math.max(...weeks.map((w) => w.bookings), 1);
   const chartH = 96;
@@ -297,6 +297,8 @@ export default function DashboardClient({
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [displayAppts, setDisplayAppts] = useState<AppointmentRow[]>(initialWeekAppts);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [displayMonthAppts, setDisplayMonthAppts] = useState<AppointmentRow[]>(monthAppts);
   const [fetching, startFetch] = useTransition();
 
   // Compute displayed week start
@@ -305,6 +307,13 @@ export default function DashboardClient({
     d.setDate(d.getDate() + weekOffset * 7);
     return d;
   }, [baseWeekStart, weekOffset]);
+
+  // Compute displayed month anchor (1st of the month, offset from today's month)
+  const monthStart = useMemo(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+  }, [monthOffset]);
+  const isCurrentMonth = monthOffset === 0;
 
   function navigate(delta: number) {
     const newOffset = weekOffset + delta;
@@ -315,6 +324,18 @@ export default function DashboardClient({
     startFetch(async () => {
       const data = await fetchWeekAppts(newWs.toISOString());
       setDisplayAppts(data);
+    });
+  }
+
+  function navigateMonth(delta: number) {
+    const newOffset = monthOffset + delta;
+    setMonthOffset(newOffset);
+    if (newOffset === 0) { setDisplayMonthAppts(monthAppts); return; }
+    const today = new Date();
+    const newMs = new Date(today.getFullYear(), today.getMonth() + newOffset, 1);
+    startFetch(async () => {
+      const data = await fetchMonthAppts(newMs.toISOString());
+      setDisplayMonthAppts(data);
     });
   }
 
@@ -389,7 +410,7 @@ export default function DashboardClient({
 
   // ── Derived month data ───────────────────────────────────────────────────
   const monthStats = useMemo(() => {
-    const sessions = monthAppts.filter(
+    const sessions = displayMonthAppts.filter(
       (a) => a.session_type === "session" && a.status !== "no_show"
     );
     return {
@@ -397,7 +418,7 @@ export default function DashboardClient({
       earned: sessions.filter((a) => a.paid).reduce((s, a) => s + (a.rate ?? 0), 0),
       count: sessions.length,
     };
-  }, [monthAppts]);
+  }, [displayMonthAppts]);
 
   const isCurrentWeek = weekOffset === 0;
 
@@ -600,9 +621,37 @@ export default function DashboardClient({
 
           {/* Month group */}
           <GroupShell
-            title={new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-            badge={<span style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600 }}>Month</span>}
+            title={monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            badge={
+              isCurrentMonth
+                ? <span style={{ fontSize: "0.65rem", background: "var(--rust)", color: "#fff", borderRadius: 99, padding: "0.1rem 0.45rem", fontWeight: 700 }}>This Month</span>
+                : <span style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600 }}>{monthOffset > 0 ? `+${monthOffset}mo` : `${monthOffset}mo`}</span>
+            }
             defaultOpen={false}
+            right={
+              <div style={{ display: "flex", gap: "0.25rem" }}>
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: "0.15rem 0.5rem", fontSize: "0.8rem" }}
+                  onClick={() => navigateMonth(-1)}
+                  disabled={fetching}
+                >←</button>
+                {!isCurrentMonth && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: "0.15rem 0.5rem", fontSize: "0.72rem" }}
+                    onClick={() => { setMonthOffset(0); setDisplayMonthAppts(monthAppts); }}
+                    disabled={fetching}
+                  >This Month</button>
+                )}
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: "0.15rem 0.5rem", fontSize: "0.8rem" }}
+                  onClick={() => navigateMonth(1)}
+                  disabled={fetching}
+                >→</button>
+              </div>
+            }
           >
             {/* Revenue stats */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
@@ -625,7 +674,7 @@ export default function DashboardClient({
             {/* Week-over-week chart */}
             <div style={{ marginTop: "1rem" }}>
               <div className="stat-label" style={{ marginBottom: "0" }}>Week by week</div>
-              <WoWChart monthAppts={monthAppts} />
+              <WoWChart monthAppts={displayMonthAppts} monthStart={monthStart} />
             </div>
           </GroupShell>
         </div>
