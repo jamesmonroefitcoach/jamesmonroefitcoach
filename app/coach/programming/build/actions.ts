@@ -4,7 +4,7 @@ import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForClient } from "@/lib/data";
 import type { Category, ProgramKind } from "@/lib/programs";
-import { syncProgramToSheet } from "@/lib/programs-sheets-bridge";
+import { syncProgramToSheet, getOrCreatePairedSheet } from "@/lib/programs-sheets-bridge";
 
 export type SaveProgramItem = {
   movement_id?: string;     // existing movement
@@ -483,4 +483,34 @@ export async function logMovementSet(input: {
   if (error) return { ok: false, error: error.message };
   revalidatePath("/client");
   return { ok: true };
+}
+
+// ─── New Way toggle helpers — paired sheet lookup ─────────────────────────
+// Used by the In App / Template toggle in the New Way workspace. Given a
+// programId, returns the paired workout_sheets row (creating one if it
+// doesn't exist yet) so the Template iframe can load it via ?sheet=...
+export async function getOrCreatePairedSheetAction(programId: string): Promise<{ ok: true; sheetId: string | null } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || (me.role !== "coach" && !me.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: true, sheetId: null };
+  try {
+    const sheetId = await getOrCreatePairedSheet(programId);
+    return { ok: true, sheetId };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+// Look up an appointment's session_program_id so the lobby can find the
+// program (and its paired sheet) for an existing session.
+export async function getSessionProgramId(apptId: string): Promise<string | null> {
+  const me = await getSessionUser();
+  if (!me) return null;
+  if (!hasSupabaseEnv()) return null;
+  const { data } = await createSupabaseAdmin()
+    .from("appointments")
+    .select("session_program_id")
+    .eq("id", apptId)
+    .maybeSingle<{ session_program_id: string | null }>();
+  return data?.session_program_id ?? null;
 }

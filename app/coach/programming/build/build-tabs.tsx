@@ -3,23 +3,32 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // Build Program sub-tabs:
-//   Template | In App Build | Old Way
-// Old Way is a legacy landing page that links to the four pre-merge entry
-// points (Build / Build Session / standalone Sessions Rework + Programs
-// Rework). Sub-tab highlights when on the merged In App Build OR on any of
-// the legacy routes it gathers.
+//   New Way | Old Way
+// New Way is the unified lobby + workspace at /new-way. Once the lobby
+// selection is made, the workspace exposes an In App | Template toggle
+// — the two views save through the program↔sheet bridge so editing in
+// one updates the other.
+// Old Way is the legacy holding pen for pre-merge entry points.
 const BASE = "/coach/programming/build";
 
 export default function BuildTabs() {
   const path = usePathname() ?? "";
   if (!path.startsWith(BASE)) return null;
 
-  const isTemplate = path.startsWith(`${BASE}/template`);
-  const isInApp = path.startsWith(`${BASE}/in-app`);
-  // The In App Build page has its own Session/Program toggle which is the
-  // only navigation it should offer — hide this build-level nav so there
-  // are no links back to Template or Old Way from inside it.
-  if (isInApp) return null;
+  // /in-app and /template are legacy paths that now redirect to /new-way —
+  // keep the tab highlighted while a redirect is in flight.
+  const isNewWay =
+    path.startsWith(`${BASE}/new-way`) ||
+    path.startsWith(`${BASE}/in-app`) ||
+    path.startsWith(`${BASE}/template`);
+
+  // The New Way workspace owns its own In App | Template toggle so the
+  // sub-tab nav stays out of the way once a selection is made. The lobby
+  // still shows it; the workspace hides it via the showTabs override
+  // controlled by the page (?started=1).
+  // For now we keep it always visible on /new-way — the workspace's own
+  // back bar sits below.
+
   // Old Way covers the landing page plus every legacy route it points at.
   const isOldWay =
     path.startsWith(`${BASE}/old-way`) ||
@@ -56,8 +65,7 @@ export default function BuildTabs() {
           overflowX: "auto",
         }}
       >
-        <Link href={`${BASE}/template`} style={tabStyle(isTemplate)}>Template</Link>
-        <Link href={`${BASE}/in-app`} style={tabStyle(isInApp)}>In App Build</Link>
+        <Link href={`${BASE}/new-way`} style={tabStyle(isNewWay)}>New Way</Link>
         <Link href={`${BASE}/old-way`} style={tabStyle(isOldWay)}>Old Way</Link>
       </nav>
     </div>

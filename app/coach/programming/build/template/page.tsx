@@ -1,34 +1,19 @@
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session";
-import { listClients } from "@/lib/data";
-import { listWorkoutSheets } from "@/lib/workout-sheets.server";
-import TemplateClient from "./template-client";
-import type { ClientLite } from "@/components/workout-sheet-embed";
 
-export default async function ProgrammingTemplatePage({
+// Legacy /template — folded into /new-way. Existing ?sheet=<id> deep
+// links still work: the new-way workspace receives the param and the
+// Template view inside it loads the matching sheet.
+export default async function TemplateLegacyRedirect({
   searchParams,
 }: {
-  searchParams: Promise<{ sheet?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
-  if (user.role !== "coach" && !user.is_admin) redirect("/");
-
-  const { sheet: sheetId } = await searchParams;
-  const [clients, sheets] = await Promise.all([
-    listClients(user.id),
-    listWorkoutSheets({ coachId: user.id, limit: 30 }),
-  ]);
-  const clientLite: ClientLite[] = clients
-    .filter((c) => c.full_name)
-    .map((c) => ({ id: c.id, name: c.full_name }));
-
-  return (
-    <TemplateClient
-      user={{ id: user.id, name: user.name, role: user.role }}
-      clients={clientLite}
-      sheets={sheets}
-      currentSheetId={sheetId ?? null}
-    />
-  );
+  const sp = await searchParams;
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (typeof v === "string") qs.set(k, v);
+    else if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string") qs.set(k, v[0]);
+  }
+  qs.set("view", "template");
+  redirect(`/coach/programming/build/new-way${qs.toString() ? `?${qs.toString()}` : ""}`);
 }
