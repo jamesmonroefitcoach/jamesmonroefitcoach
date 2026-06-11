@@ -451,7 +451,6 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
   const [query, setQuery] = useState("");
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [programsOpen, setProgramsOpen] = useState(true);
-  const [clientListOpen, setClientListOpen] = useState(false);
   const [upcomingOpen, setUpcomingOpen] = useState(true);
 
   const filtered = useMemo(() => {
@@ -524,19 +523,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
 
       <hr className="divider" />
 
-      {/* Client List View — the legacy per-client layout, collapsed by default */}
-      <section style={{ marginBottom: "1rem" }}>
-        <SectionHeader
-          title="Client list view"
-          count={blocks.length}
-          open={clientListOpen}
-          onToggle={() => setClientListOpen((v) => !v)}
-          subLabel="all clients · sessions + at-home programs"
-        />
-      </section>
-
-      {!clientListOpen ? null : (
-      <div>
+      {/* Filter strip — applies to both Sessions and Programs below */}
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap" }}>
         <input
           className="input"
@@ -548,9 +535,15 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
         <span className="meta" style={{ fontSize: "0.78rem" }}>{filtered.length} client{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
-      {/* Sessions section — unfiltered, every active client */}
+      {/* Sessions — top-level collapsible (was nested under 'Client list view') */}
       <section style={{ marginBottom: "1.25rem" }}>
-        <SectionHeader title="Sessions" count={sessionBlocks.length} open={sessionsOpen} onToggle={() => setSessionsOpen((v) => !v)} />
+        <SectionHeader
+          title="Sessions"
+          count={sessionBlocks.length}
+          open={sessionsOpen}
+          onToggle={() => setSessionsOpen((v) => !v)}
+          subLabel="all active clients"
+        />
         {sessionsOpen && (
           sessionBlocks.length === 0 ? (
             <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>No matching clients.</p>
@@ -564,9 +557,15 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
         )}
       </section>
 
-      {/* Programs section — only clients flagged via the + on the roster */}
-      <section>
-        <SectionHeader title="Programs" count={programBlocks.length} open={programsOpen} onToggle={() => setProgramsOpen((v) => !v)} />
+      {/* Programs — top-level collapsible (was nested under 'Client list view') */}
+      <section style={{ marginBottom: "1rem" }}>
+        <SectionHeader
+          title="Programs"
+          count={programBlocks.length}
+          open={programsOpen}
+          onToggle={() => setProgramsOpen((v) => !v)}
+          subLabel="clients flagged for at-home programming"
+        />
         {programsOpen && (
           programBlocks.length === 0 ? (
             <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>
@@ -581,8 +580,6 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
           )
         )}
       </section>
-      </div>
-      )}
     </div>
   );
 }
