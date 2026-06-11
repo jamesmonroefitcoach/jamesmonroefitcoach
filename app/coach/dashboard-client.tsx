@@ -325,25 +325,64 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
               </div>
               {list.length === 0 ? (
                 <div className="meta" style={{ fontStyle: "italic" }}>None.</div>
-              ) : (
+              ) : (() => {
+                // Group sessions by client so multi-session clients collapse
+                // to one row with a count. Then sort: clients with >1 session
+                // float to the top (ordered by their total $ desc), followed
+                // by single-session clients (ordered by $ desc).
+                const groups = new Map<string, { name: string; count: number; total: number }>();
+                for (const a of list) {
+                  const key = a.client_id ?? `:${a.client_name ?? "—"}`;
+                  const g = groups.get(key);
+                  if (g) {
+                    g.count += 1;
+                    g.total += a.rate ?? 0;
+                  } else {
+                    groups.set(key, {
+                      name: a.client_name ?? "—",
+                      count: 1,
+                      total: a.rate ?? 0,
+                    });
+                  }
+                }
+                const rows = Array.from(groups.values()).sort((x, y) => {
+                  // multi-session clients first
+                  if ((x.count > 1) !== (y.count > 1)) return x.count > 1 ? -1 : 1;
+                  // then by total $ desc within each tier
+                  return y.total - x.total;
+                });
+                return (
                 <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "0.18rem" }}>
-                  {list.slice(0, 8).map((a) => (
-                    <li key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+                  {rows.slice(0, 8).map((g, idx) => (
+                    <li key={`${g.name}-${idx}`} style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {a.client_name ?? "—"}
+                        {g.name}
+                        {g.count > 1 && (
+                          <span
+                            style={{
+                              marginLeft: "0.3rem",
+                              fontSize: "0.62rem",
+                              color: labelColor,
+                              fontWeight: 700,
+                            }}
+                          >
+                            ×{g.count}
+                          </span>
+                        )}
                       </span>
                       <span className="meta" style={{ fontSize: "0.66rem", whiteSpace: "nowrap" }}>
-                        {fmtMoney(a.rate ?? 0)}
+                        {fmtMoney(g.total)}
                       </span>
                     </li>
                   ))}
-                  {list.length > 8 && (
+                  {rows.length > 8 && (
                     <li className="meta" style={{ fontStyle: "italic", fontSize: "0.66rem", marginTop: "0.18rem" }}>
-                      + {list.length - 8} more
+                      + {rows.length - 8} more
                     </li>
                   )}
                 </ul>
-              )}
+                );
+              })()}
             </div>
           );
         })()}
