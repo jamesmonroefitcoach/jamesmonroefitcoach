@@ -1,39 +1,55 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
+import { getProgramForLogging } from "@/lib/program-logger";
+import PerSetLogger from "./per-set-logger";
 
-// Sessions Rework / live per-set logger — client side.
-// Stub for now; the full Perform-mode port (Phase 4) lands here.
-export default async function ClientSessionsReworkPage() {
+// Live in-app per-set logger for clients. Ported from the coach Sessions
+// Rework "Perform" mode and adapted for the client side.
+//
+//   /client/programming/build/rework?program=<id>
+//
+// Without a ?program= we fall back to a friendly "pick something from View"
+// landing page.
+export default async function ClientPerSetLoggerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ program?: string }>;
+}) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== "client") redirect("/");
 
-  return (
-    <main className="shell" style={{ paddingTop: "1.25rem" }}>
-      <header>
-        <span className="badge">My Portal</span>
-        <h1 style={{ marginTop: "0.5rem" }}>Sessions Rework</h1>
-        <p className="meta">
-          Live in-app workout logger — coming soon. For now use the Sheets tab to fill out a workout
-          sheet, or have James upload a filled PDF on your behalf.
-        </p>
-      </header>
-      <hr className="divider" />
-      <section
-        style={{
-          border: "1px dashed var(--line)",
-          borderRadius: 6,
-          padding: "1.5rem",
-          textAlign: "center",
-          color: "var(--muted)",
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "0.92rem" }}>
-          A structured per-set logger (weight + reps + notes for every set) is being built here.
-          It&rsquo;ll write directly to the same program your coach sees, so anything you log shows
-          up on his side in real time.
-        </p>
-      </section>
-    </main>
-  );
+  const sp = await searchParams;
+  const programId = sp.program;
+
+  if (!programId) {
+    return (
+      <main className="shell" style={{ paddingTop: "1.25rem" }}>
+        <header>
+          <span className="badge">My Portal</span>
+          <h1 style={{ marginTop: "0.5rem" }}>Per-set Logger</h1>
+          <p className="meta">
+            Open this from a current program in <Link href="/client/programming">View</Link> — tap
+            <strong> Complete </strong>and pick <strong>Use In-App Inputs</strong>.
+          </p>
+        </header>
+      </main>
+    );
+  }
+
+  const program = await getProgramForLogging(programId, user.id);
+  if (!program) {
+    return (
+      <main className="shell" style={{ paddingTop: "1.25rem" }}>
+        <header>
+          <span className="badge">My Portal</span>
+          <h1 style={{ marginTop: "0.5rem" }}>Per-set Logger</h1>
+          <p className="meta">Program not found. <Link href="/client/programming">Back to View</Link></p>
+        </header>
+      </main>
+    );
+  }
+
+  return <PerSetLogger program={program} />;
 }
