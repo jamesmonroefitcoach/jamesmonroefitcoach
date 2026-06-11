@@ -164,7 +164,7 @@ function newExerciseSlot(leafId: string, movement: Movement): ExerciseSlot {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ReworkClient({
-  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements,
+  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements, hideTabs = false,
 }: {
   clients: ClientRow[];
   initialClientId: string;
@@ -172,6 +172,10 @@ export default function ReworkClient({
   initialApptId: string;
   initialStartsAt: string;
   libraryMovements: MovementRow[];
+  /** When embedded in the In App Build page, the WIP-cross-link tabs are
+   *  redundant with the Session/Program toggle and link back to the
+   *  Old Way — skip them. */
+  hideTabs?: boolean;
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(initialClientId);
@@ -409,7 +413,7 @@ export default function ReworkClient({
   if (step === "picker") {
     return (
       <>
-        <TabsHeader />
+        {!hideTabs && <TabsHeader />}
         <PickerView
           clients={clients}
           appts={initialAppts}
@@ -427,7 +431,7 @@ export default function ReworkClient({
   // ─── BUILDER STEP ───────────────────────────────────────────────────────
   return (
     <LibraryMovementsContext.Provider value={libraryMovements}>
-      <TabsHeader />
+      {!hideTabs && <TabsHeader />}
 
       {/* Top action bar */}
       <div className="no-print" style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginBottom: "0.85rem", flexWrap: "wrap" }}>

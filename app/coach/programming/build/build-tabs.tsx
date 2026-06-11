@@ -16,6 +16,10 @@ export default function BuildTabs() {
 
   const isTemplate = path.startsWith(`${BASE}/template`);
   const isInApp = path.startsWith(`${BASE}/in-app`);
+  // The In App Build page has its own Session/Program toggle which is the
+  // only navigation it should offer — hide this build-level nav so there
+  // are no links back to Template or Old Way from inside it.
+  if (isInApp) return null;
   // Old Way covers the landing page plus every legacy route it points at.
   const isOldWay =
     path.startsWith(`${BASE}/old-way`) ||

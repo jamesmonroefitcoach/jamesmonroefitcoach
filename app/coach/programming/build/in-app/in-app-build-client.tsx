@@ -89,6 +89,7 @@ export default function InAppBuildClient({
           initialApptId={initialApptId}
           initialStartsAt={initialStartsAt}
           libraryMovements={libraryMovements}
+          hideTabs
         />
       ) : (
         <ProgramsReworkClient
@@ -96,6 +97,7 @@ export default function InAppBuildClient({
           initialClientId={initialClientId}
           libraryMovements={libraryMovements}
           clientProgramSummary={clientProgramSummary}
+          hideTabs
         />
       )}
     </>

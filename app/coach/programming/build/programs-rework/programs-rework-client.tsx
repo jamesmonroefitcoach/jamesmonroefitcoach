@@ -119,12 +119,15 @@ function defaultProgram(): ProgramState {
 // Main component
 // ───────────────────────────────────────────────────────────────────────────
 export default function ProgramsReworkClient({
-  clients, initialClientId, libraryMovements, clientProgramSummary,
+  clients, initialClientId, libraryMovements, clientProgramSummary, hideTabs = false,
 }: {
   clients: ClientRow[];
   initialClientId: string;
   libraryMovements: MovementRow[];
   clientProgramSummary: ClientProgramItem[];
+  /** When embedded in the In App Build page, the WIP-cross-link tabs are
+   *  redundant with the Session/Program toggle. */
+  hideTabs?: boolean;
 }) {
   const [clientId, setClientId] = useState(initialClientId);
   const selectedClient = useMemo(() => clients.find((c) => c.id === clientId) ?? null, [clients, clientId]);
@@ -274,7 +277,7 @@ export default function ProgramsReworkClient({
   if (!clientId) {
     return (
       <>
-        <TabsHeader />
+        {!hideTabs && <TabsHeader />}
         <div className="card" style={{ maxWidth: 480 }}>
           <h2 style={{ margin: 0 }}>Pick a client</h2>
           <hr className="divider" />
@@ -291,7 +294,7 @@ export default function ProgramsReworkClient({
 
   return (
     <>
-      <TabsHeader />
+      {!hideTabs && <TabsHeader />}
 
       {/* Client picker + ClientProgramsBanner (flagged clients only) */}
       <div className="card" style={{ marginBottom: "1rem" }}>
