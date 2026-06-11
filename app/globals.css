@@ -20,6 +20,7 @@
   --sage: #5a6b4a;        /* "ok" / paid */
   --red: #c0392b;
   --amber: #d97706;
+  --steel: #3e6079;       /* booked / unpaid */
 }
 
 * { box-sizing: border-box; }

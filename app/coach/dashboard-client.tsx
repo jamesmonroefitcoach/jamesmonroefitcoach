@@ -83,19 +83,43 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
     return buckets.map((b) => {
       const isCurrentWeek = b.start <= now && now < b.end;
       const isPast = b.end <= now;
-      const appts = monthAppts.filter((a) => {
+      // All sessions for the week, excluding no-shows (those produce no
+      // signal on this chart). Cancelled sessions still appear in the
+      // count so the coach can see them, but they don't add to the bar
+      // height because they aren't expected revenue.
+      const sessions = monthAppts.filter((a) => {
         const t = new Date(a.starts_at).getTime();
         return t >= b.start.getTime() && t < b.end.getTime()
           && a.session_type === "session"
           && a.status !== "no_show";
       });
-      const bookings = appts.reduce((s, a) => s + (a.rate ?? 0), 0);
-      const earned = appts.filter((a) => a.paid).reduce((s, a) => s + (a.rate ?? 0), 0);
+      const cancelled = sessions.filter((a) => a.status === "cancelled");
+      const active = sessions.filter((a) => a.status !== "cancelled");
+      const paidSess = active.filter((a) => a.paid);
+      const unpaidSess = active.filter((a) => !a.paid);
+      const completedSess = active.filter((a) => a.status === "completed");
+
+      const paidAmt = paidSess.reduce((s, a) => s + (a.rate ?? 0), 0);
+      const unpaidAmt = unpaidSess.reduce((s, a) => s + (a.rate ?? 0), 0);
+      const bookings = paidAmt + unpaidAmt; // = active total (cancelled excluded)
+
       // How far through this week is "today" (0–1), used to draw the progress split
       const weekPct = isCurrentWeek
         ? Math.min(1, (now.getTime() - b.start.getTime()) / (b.end.getTime() - b.start.getTime()))
         : isPast ? 1 : 0;
-      return { ...b, bookings, earned, count: appts.length, isCurrentWeek, isPast, weekPct };
+      return {
+        ...b,
+        bookings,
+        paidAmt,
+        unpaidAmt,
+        countAll: sessions.length,
+        countCompleted: completedSess.length,
+        countPaid: paidSess.length,
+        countCancelled: cancelled.length,
+        isCurrentWeek,
+        isPast,
+        weekPct,
+      };
     });
   }, [monthAppts, baseMonthStart]);
 
@@ -104,7 +128,9 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
 
   return (
     <div style={{ marginTop: "0.75rem" }}>
-      {/* Per-week summary chips above each bar column */}
+      {/* Per-week summary chips above each bar column.
+          Top line is the $ booked total (paid + unpaid, cancelled excluded).
+          Bottom line breaks the session counts out by status. */}
       <div style={{ display: "flex", gap: "0.35rem", marginBottom: "0.4rem" }}>
         {weeks.map((w, i) => (
           <div key={i} style={{
@@ -114,13 +140,29 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
             background: w.isCurrentWeek ? "rgba(168,61,43,0.07)" : "transparent",
             border: w.isCurrentWeek ? "1px solid rgba(168,61,43,0.18)" : "1px solid transparent",
           }}>
-            {w.count > 0 ? (
+            {w.countAll > 0 ? (
               <>
                 <div style={{ fontSize: "0.64rem", fontWeight: 700, color: w.isCurrentWeek ? "var(--rust)" : "var(--ink)", lineHeight: 1.2 }}>
                   {fmtMoney(w.bookings)}
                 </div>
-                <div style={{ fontSize: "0.58rem", color: "var(--muted)", lineHeight: 1.1 }}>
-                  {w.count} {w.count === 1 ? "session" : "sessions"}
+                {/* Counts shown side-by-side, color-coded.
+                    ✓ completed  $ paid  ✗ cancelled — overlapping by design
+                    (a completed+paid session shows in both totals). */}
+                <div
+                  style={{ fontSize: "0.56rem", lineHeight: 1.15, display: "flex", justifyContent: "center", gap: "0.4rem" }}
+                  title={`${w.countCompleted} completed · ${w.countPaid} paid · ${w.countCancelled} cancelled`}
+                >
+                  <span style={{ color: "var(--ink)", fontWeight: 600 }} title="Completed">
+                    ✓{w.countCompleted}
+                  </span>
+                  <span style={{ color: "var(--sage)", fontWeight: 600 }} title="Paid">
+                    ${w.countPaid}
+                  </span>
+                  {w.countCancelled > 0 && (
+                    <span style={{ color: "var(--red)", fontWeight: 600 }} title="Cancelled">
+                      ✗{w.countCancelled}
+                    </span>
+                  )}
                 </div>
               </>
             ) : (
@@ -130,33 +172,36 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
         ))}
       </div>
 
-      {/* Bars */}
+      {/* Bars — stacked: green (paid $) on the bottom, steel-blue (unpaid $)
+          above it. Cancelled $ never enters the bar height since it isn't
+          expected revenue. Bar TOTAL height = paidAmt + unpaidAmt. */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem", height: chartH }}>
         {weeks.map((w, i) => {
           const barH = Math.max(3, Math.round((w.bookings / maxVal) * chartH));
-          const earnedH = Math.max(0, Math.round((w.earned / maxVal) * chartH));
+          const paidH = Math.max(0, Math.round((w.paidAmt / maxVal) * chartH));
+          const unpaidH = Math.max(0, barH - paidH);
           const futureW = w.isCurrentWeek ? `${Math.round((1 - w.weekPct) * 100)}%` : "0%";
+          const tooltip = w.countAll > 0
+            ? `${fmtMoney(w.paidAmt)} paid · ${fmtMoney(w.unpaidAmt)} unpaid · ${w.countCancelled} cancelled (${fmtMoney(w.bookings)} expected total)`
+            : "No sessions";
+          // Past weeks get full saturation; future weeks get a subtle
+          // wash so it reads as "not yet realised."
+          const paidBg = w.isPast || w.isCurrentWeek ? "var(--sage)" : "rgba(90,107,74,0.55)";
+          const unpaidBg = w.isPast || w.isCurrentWeek ? "var(--steel)" : "rgba(62,96,121,0.55)";
           return (
             <div
               key={i}
               style={{ flex: 1, height: barH, alignSelf: "flex-end", position: "relative", borderRadius: "2px 2px 0 0", overflow: "hidden" }}
-              title={w.count > 0 ? `${w.count} sessions · ${fmtMoney(w.bookings)} booked · ${fmtMoney(w.earned)} earned` : "No sessions"}
+              title={tooltip}
             >
-              {/* Base bar (bookings) */}
-              <div style={{
-                position: "absolute", inset: 0,
-                background: w.isCurrentWeek
-                  ? "var(--rust)"
-                  : w.isPast
-                    ? "rgba(168,61,43,0.28)"
-                    : "rgba(168,61,43,0.08)",
-              }} />
-              {/* Earned overlay (green, bottom-up) */}
-              {earnedH > 0 && (
+              {/* Unpaid segment fills the whole bar; the paid segment overlays
+                  the bottom portion. The visible top portion = unpaid. */}
+              <div style={{ position: "absolute", inset: 0, background: unpaidBg }} />
+              {paidH > 0 && (
                 <div style={{
                   position: "absolute", bottom: 0, left: 0, right: 0,
-                  height: earnedH,
-                  background: w.isCurrentWeek ? "var(--sage)" : "rgba(90,107,74,0.45)",
+                  height: paidH,
+                  background: paidBg,
                 }} />
               )}
               {/* Future-days fade for current week — right portion is lighter */}
@@ -167,19 +212,6 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
                   background: "rgba(255,255,255,0.45)",
                   borderLeft: "1px dashed rgba(168,61,43,0.35)",
                 }} />
-              )}
-              {/* Session count centred */}
-              {w.count > 0 && barH >= 18 && (
-                <span style={{
-                  position: "absolute", top: "50%", left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  zIndex: 2,
-                  fontSize: "0.6rem", fontWeight: 700,
-                  color: w.isCurrentWeek ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.48)",
-                  lineHeight: 1, userSelect: "none",
-                }}>
-                  {w.count}
-                </span>
               )}
               {/* Dashed border on current week */}
               {w.isCurrentWeek && (
@@ -219,19 +251,25 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
         ))}
       </div>
 
-      {/* Legend */}
-      <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.65rem", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-          <div style={{ width: 10, height: 10, background: "var(--rust)", borderRadius: 2 }} />
-          <span className="meta" style={{ fontSize: "0.68rem" }}>Bookings</span>
-        </div>
+      {/* Legend — bars are the dollar split (paid vs unpaid); counts in the
+          chip above use the same colors plus rust for cancelled. */}
+      <div style={{ display: "flex", gap: "0.85rem", marginTop: "0.65rem", flexWrap: "wrap", rowGap: "0.35rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "var(--sage)", borderRadius: 2 }} />
-          <span className="meta" style={{ fontSize: "0.68rem" }}>Earned (paid)</span>
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Paid $</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+          <div style={{ width: 10, height: 10, background: "var(--steel)", borderRadius: 2 }} />
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Unpaid $ (booked, uncollected)</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <div style={{ width: 10, height: 10, background: "rgba(255,255,255,0.45)", border: "1px dashed rgba(168,61,43,0.4)", borderRadius: 2 }} />
-          <span className="meta" style={{ fontSize: "0.68rem" }}>Days remaining</span>
+          <span className="meta" style={{ fontSize: "0.68rem" }}>Days remaining (current week)</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", marginLeft: "auto" }}>
+          <span className="meta" style={{ fontSize: "0.66rem", fontStyle: "italic" }}>
+            chip: <span style={{ color: "var(--ink)", fontWeight: 600 }}>✓ completed</span> · <span style={{ color: "var(--sage)", fontWeight: 600 }}>$ paid</span> · <span style={{ color: "var(--red)", fontWeight: 600 }}>✗ cancelled</span>
+          </span>
         </div>
       </div>
     </div>
