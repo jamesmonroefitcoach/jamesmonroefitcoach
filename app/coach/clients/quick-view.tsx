@@ -138,6 +138,10 @@ function PreviewCard({ client: c }: { client: ClientRow }) {
     c.current_weight_lb != null && c.goal_weight_lb != null
       ? c.current_weight_lb - c.goal_weight_lb
       : null;
+  const weightFromStart =
+    c.current_weight_lb != null && c.starting_weight_lb != null
+      ? c.current_weight_lb - c.starting_weight_lb
+      : null;
 
   const statusColor =
     c.lifecycle === "active" || c.lifecycle === "online"
@@ -158,7 +162,7 @@ function PreviewCard({ client: c }: { client: ClientRow }) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.75rem", flexWrap: "wrap" }}>
         <h3 style={{ margin: 0, fontSize: "1.05rem" }}>{c.full_name}</h3>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           {c.tier && (
             <span style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--rust)", fontWeight: 600 }}>
               {TIER_LABEL[c.tier] ?? c.tier}
@@ -167,20 +171,45 @@ function PreviewCard({ client: c }: { client: ClientRow }) {
           <span style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.08em", color: statusColor, fontWeight: 600 }}>
             {c.lifecycle ?? "—"}
           </span>
+          {c.needs_at_home_programming && (
+            <span style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--amber)", fontWeight: 600 }}>
+              needs @home
+            </span>
+          )}
+          {c.requires_confirmation && (
+            <span style={{ fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--clay)", fontWeight: 600 }}>
+              confirms
+            </span>
+          )}
         </div>
+      </div>
+
+      {/* Contact strip */}
+      <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.76rem", display: "flex", gap: "0.85rem", flexWrap: "wrap" }}>
+        {c.email && <span>{c.email}</span>}
+        {(c as { phone?: string | null }).phone && <span>{(c as { phone?: string | null }).phone}</span>}
+        {c.age_category && <span>{c.age_category}</span>}
+        {c.gender && <span>{c.gender}</span>}
+        {c.member_since && <span>since {fmtDate(c.member_since)}</span>}
       </div>
 
       <dl
         style={{
           marginTop: "0.7rem",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
           gap: "0.6rem 1rem",
           fontSize: "0.85rem",
         }}
       >
-        <Stat label="Weight" value={c.current_weight_lb != null ? `${c.current_weight_lb} lb` : "—"} sub={c.goal_weight_lb != null ? `goal ${c.goal_weight_lb}` : null} />
+        {/* ─ Body ─ */}
+        <Stat label="Current" value={c.current_weight_lb != null ? `${c.current_weight_lb} lb` : "—"} />
+        <Stat label="Goal" value={c.goal_weight_lb != null ? `${c.goal_weight_lb} lb` : "—"} />
+        <Stat label="Starting" value={c.starting_weight_lb != null ? `${c.starting_weight_lb} lb` : "—"} />
         <Stat label="Δ to goal" value={weightDelta != null ? `${weightDelta > 0 ? "+" : ""}${weightDelta} lb` : "—"} />
+        <Stat label="Δ from start" value={weightFromStart != null ? `${weightFromStart > 0 ? "+" : ""}${weightFromStart} lb` : "—"} />
+
+        {/* ─ Sessions ─ */}
         <Stat
           label="Last session"
           value={last == null ? "—" : last === 0 ? "today" : `${last}d ago`}
@@ -191,8 +220,22 @@ function PreviewCard({ client: c }: { client: ClientRow }) {
           value={next == null ? "—" : next <= 0 ? "today" : `in ${next}d`}
           sub={c.next_session_at ? fmtDate(c.next_session_at) : null}
         />
-        <Stat label="Sessions" value={`${c.total_sessions}`} sub={`${c.sessions_this_month_completed} this month`} />
-        <Stat label="Balance" value={c.balance_owed > 0 ? fmtMoney(c.balance_owed) : "$0"} sub={c.balance_owed > 0 ? "owed" : null} />
+        <Stat label="Total" value={`${c.total_sessions}`} sub="sessions completed" />
+        <Stat label="This month" value={`${c.sessions_this_month_completed}`} sub="completed" />
+        <Stat label="Cadence" value={c.regular_frequency ?? "—"} sub="per week" />
+
+        {/* ─ Billing ─ */}
+        <Stat label="Rate" value={fmtMoney(c.session_rate)} sub="per session" />
+        <Stat
+          label="Balance"
+          value={c.balance_owed > 0 ? fmtMoney(c.balance_owed) : "$0"}
+          sub={c.balance_owed > 0 ? "owed" : "settled"}
+        />
+        <Stat
+          label="Monthly"
+          value={c.monthly_revenue ? fmtMoney(c.monthly_revenue) : "—"}
+          sub="revenue"
+        />
       </dl>
 
       {c.goals && (
