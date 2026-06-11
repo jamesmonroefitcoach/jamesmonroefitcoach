@@ -18,7 +18,7 @@ export default function SheetsClient({
 }) {
   const router = useRouter();
   function openSheet(id: string) {
-    router.push(`/client/programming/sheets?sheet=${id}`);
+    router.push(`/client/programming/build/sheets?sheet=${id}`);
   }
   const current = currentSheetId ? sheets.find((s) => s.id === currentSheetId) ?? null : null;
 

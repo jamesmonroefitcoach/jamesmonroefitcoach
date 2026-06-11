@@ -4,11 +4,9 @@ import { usePathname } from "next/navigation";
 
 export default function ClientProgrammingTabs() {
   const path = usePathname() ?? "";
-  const isBuild    = path.startsWith("/client/programming/build");
-  const isLibrary  = path.startsWith("/client/programming/exercise-library");
-  const isMaterials = path.startsWith("/client/programming/materials");
-  const isSheets   = path.startsWith("/client/programming/sheets");
-  const isView     = !isBuild && !isLibrary && !isMaterials && !isSheets;
+  const isBuild   = path.startsWith("/client/programming/build");
+  const isLibrary = path.startsWith("/client/programming/library");
+  const isView    = !isBuild && !isLibrary;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -27,12 +25,19 @@ export default function ClientProgrammingTabs() {
 
   return (
     <div className="no-print" style={{ width: "min(1180px, 100% - 2rem)", margin: "1rem auto 0" }}>
-      <nav style={{ borderBottom: "2px solid var(--line)", display: "flex", alignItems: "flex-end", gap: "0.25rem" }}>
+      <nav
+        style={{
+          borderBottom: "2px solid var(--line)",
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "0.25rem",
+          overflowX: "auto",
+        }}
+      >
+        {/* Build Program first — its default sub-tab is Sheets */}
+        <Link href="/client/programming/build/sheets" style={tabStyle(isBuild)}>Build Program</Link>
         <Link href="/client/programming" style={tabStyle(isView)}>View Program</Link>
-        <Link href="/client/programming/build" style={tabStyle(isBuild)}>Build Program</Link>
-        <Link href="/client/programming/exercise-library" style={tabStyle(isLibrary)}>Exercise Library</Link>
-        <Link href="/client/programming/sheets" style={tabStyle(isSheets)}>Workout Sheets</Link>
-        <Link href="/client/programming/materials" style={tabStyle(isMaterials)}>Materials</Link>
+        <Link href="/client/programming/library/exercise-library" style={tabStyle(isLibrary)}>Library</Link>
       </nav>
     </div>
   );
