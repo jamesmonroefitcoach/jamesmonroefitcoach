@@ -436,6 +436,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [programsOpen, setProgramsOpen] = useState(true);
   const [clientListOpen, setClientListOpen] = useState(false);
+  const [upcomingOpen, setUpcomingOpen] = useState(true);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -490,11 +491,11 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
         <SectionHeader
           title="Upcoming this week"
           count={weekSessions.length}
-          open={true}
-          onToggle={() => {}}
+          open={upcomingOpen}
+          onToggle={() => setUpcomingOpen((v) => !v)}
           subLabel="next 7 days · sorted by time"
         />
-        {weekSessions.length === 0 ? (
+        {!upcomingOpen ? null : weekSessions.length === 0 ? (
           <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>Nothing scheduled in the next 7 days.</p>
         ) : (
           <div className="card" style={{ padding: 0, marginTop: "0.4rem", overflow: "hidden" }}>
