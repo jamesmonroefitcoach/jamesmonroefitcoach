@@ -2,7 +2,16 @@
 import { useState, useTransition } from "react";
 import { submitCheckIn, uploadProgressPhoto } from "./actions";
 
-export default function CheckInForm() {
+// When `forClientId` is set the form posts on that client's behalf (coach
+// surface). When `allowBackdate` is true a date picker shows so the user
+// can pin the check-in to a past day they forgot.
+export default function CheckInForm({
+  forClientId,
+  allowBackdate = false,
+}: {
+  forClientId?: string;
+  allowBackdate?: boolean;
+} = {}) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -11,6 +20,8 @@ export default function CheckInForm() {
     setMsg(null);
     setErr(null);
     start(async () => {
+      const submittedAtStr = strOrNull(formData.get("submitted_at"));
+      const submittedAtISO = submittedAtStr ? new Date(submittedAtStr).toISOString() : null;
       const res = await submitCheckIn({
         weight_lb: numOrNull(formData.get("weight_lb")),
         sleep_recovery: numOrNull(formData.get("sleep_recovery")),
@@ -20,7 +31,9 @@ export default function CheckInForm() {
         injuries: strOrNull(formData.get("injuries")),
         challenges: strOrNull(formData.get("challenges")),
         improvement_text: strOrNull(formData.get("improvement_text")),
-        goals_text: strOrNull(formData.get("goals_text"))
+        goals_text: strOrNull(formData.get("goals_text")),
+        submitted_at: submittedAtISO,
+        client_id: forClientId,
       });
       if (!res.ok) {
         if (res.error.startsWith("Supabase not configured")) {
@@ -48,6 +61,18 @@ export default function CheckInForm() {
 
   return (
     <form action={onSubmit} className="card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {allowBackdate && (
+        <div>
+          <label className="stat-label">Date (optional — leave blank for now)</label>
+          <input
+            className="input"
+            name="submitted_at"
+            type="date"
+            style={{ marginTop: "0.3rem" }}
+            title="Back-date a check-in you forgot to submit"
+          />
+        </div>
+      )}
       <div>
         <label className="stat-label">Current weight (lb)</label>
         <input className="input" name="weight_lb" type="number" inputMode="decimal" placeholder="e.g. 178" style={{ marginTop: "0.3rem" }} />
