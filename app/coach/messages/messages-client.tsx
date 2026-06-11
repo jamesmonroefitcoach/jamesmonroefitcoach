@@ -160,6 +160,52 @@ export default function MessagesClient({
               <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: "0.35rem", paddingRight: 4 }}>
                 {messages.length === 0 ? <p className="meta" style={{ fontSize: "0.78rem" }}>No messages yet.</p> : messages.map((m) => {
                   const mine = m.sender_id === myId;
+                  if (m.is_system) {
+                    return (
+                      <div key={m.id} style={{ alignSelf: "center", maxWidth: "92%" }}>
+                        <div style={{
+                          background: "#fbf7ef",
+                          border: "1px dashed var(--line)",
+                          borderRadius: 5,
+                          padding: "0.36rem 0.55rem",
+                          fontSize: "0.78rem",
+                          lineHeight: 1.35,
+                          fontStyle: "italic",
+                          color: "var(--muted)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "0.6rem",
+                        }}>
+                          <span>{m.body}</span>
+                          {m.link_url && (
+                            <Link
+                              href={m.link_url}
+                              style={{
+                                fontStyle: "normal",
+                                fontFamily: "Oswald, sans-serif",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.08em",
+                                fontSize: "0.62rem",
+                                fontWeight: 600,
+                                color: "var(--rust)",
+                                border: "1px solid var(--rust)",
+                                padding: "0.18rem 0.55rem",
+                                borderRadius: 3,
+                                textDecoration: "none",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {m.link_label ?? "View"} →
+                            </Link>
+                          )}
+                        </div>
+                        <div className="meta" style={{ fontSize: "0.6rem", marginTop: 1, textAlign: "center", fontStyle: "italic" }}>
+                          {new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={m.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "70%" }}>
                       <div style={{
