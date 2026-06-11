@@ -826,6 +826,10 @@ export type ClientProgramRow = {
   created_by_client: boolean;
   builder_state: any | null;     // raw JSON; renderer normalizes
   created_at: string;
+  /** When set, this program is paired with a workout_sheets row (bridge). */
+  workout_sheet_id: string | null;
+  /** "pdf" when the program was stub-created from a PDF upload. */
+  workout_sheet_kind: "app" | "pdf" | null;
 };
 
 export async function listProgramsForClient(clientId: string): Promise<ClientProgramRow[]> {
@@ -833,11 +837,24 @@ export async function listProgramsForClient(clientId: string): Promise<ClientPro
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("programs")
-    .select("id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, is_current, is_published, created_by_client, builder_state, created_at")
+    .select(
+      "id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, is_current, is_published, created_by_client, builder_state, created_at, workout_sheet_id, workout_sheets:workout_sheet_id ( kind )"
+    )
     .eq("client_id", clientId)
     .order("starts_on", { ascending: false, nullsFirst: false });
   if (error || !data) return [];
-  return data as ClientProgramRow[];
+  return (data as unknown as Array<{
+    [k: string]: unknown;
+    workout_sheets?: { kind: "app" | "pdf" } | { kind: "app" | "pdf" }[] | null;
+  }>).map((r) => ({
+    ...(r as unknown as ClientProgramRow),
+    workout_sheet_kind:
+      r.workout_sheets == null
+        ? null
+        : Array.isArray(r.workout_sheets)
+        ? r.workout_sheets[0]?.kind ?? null
+        : r.workout_sheets.kind ?? null,
+  })) as ClientProgramRow[];
 }
 
 // Load a single program by id — only returns it when the requested client

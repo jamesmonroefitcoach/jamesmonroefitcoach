@@ -139,6 +139,15 @@ function ProgramCard({ p, isCurrent }: { p: ClientProgramRow; isCurrent: boolean
         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
           <strong style={{ fontSize: "0.95rem" }}>{p.name}</strong>
           <span className="badge" style={{ fontSize: "0.6rem" }}>{kindLabel}</span>
+          {p.workout_sheet_kind === "pdf" && (
+            <span
+              className="badge"
+              style={{ fontSize: "0.58rem", color: "var(--rust)", borderColor: "var(--rust)" }}
+              title="Uploaded PDF on file"
+            >
+              PDF
+            </span>
+          )}
           {p.created_by_client && (
             <span className="badge" style={{ fontSize: "0.6rem", color: "var(--muted)" }}>self-built</span>
           )}
