@@ -2,10 +2,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Client Programming top tabs: View / Build / Library
+// View has Current + Completed collapsibles. Tap a Current row → program
+// detail → choose Sheet or In-App Inputs to complete. The Build tab is the
+// client's own structured builder. Library still groups Exercise Library +
+// Materials behind its own sub-tab nav.
 export default function ClientProgrammingTabs() {
   const path = usePathname() ?? "";
-  const isBuild   = path.startsWith("/client/programming/build");
+  const isBuild   = path === "/client/programming/build" || path.startsWith("/client/programming/build/");
   const isLibrary = path.startsWith("/client/programming/library");
+  // View is the catch-all (covers /client/programming, /programs/[id], /view/[id])
   const isView    = !isBuild && !isLibrary;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -34,9 +40,8 @@ export default function ClientProgrammingTabs() {
           overflowX: "auto",
         }}
       >
-        {/* Build Program first — its default sub-tab is Sheets */}
-        <Link href="/client/programming/build/sheets" style={tabStyle(isBuild)}>Build Program</Link>
-        <Link href="/client/programming" style={tabStyle(isView)}>View Program</Link>
+        <Link href="/client/programming" style={tabStyle(isView)}>View</Link>
+        <Link href="/client/programming/build" style={tabStyle(isBuild)}>Build</Link>
         <Link href="/client/programming/library/exercise-library" style={tabStyle(isLibrary)}>Library</Link>
       </nav>
     </div>
