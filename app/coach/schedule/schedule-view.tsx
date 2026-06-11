@@ -689,9 +689,33 @@ export default function ScheduleView({
             }} style={{ padding: "0.35rem 0.65rem" }}>Today</button>
             <button className="btn btn-ghost" onClick={() => shiftWeek(7)} style={{ padding: "0.35rem 0.65rem" }}>next ›</button>
             <input type="date" className="input" style={{ width: 170 }} value={`${ws.getFullYear()}-${String(ws.getMonth()+1).padStart(2,"0")}-${String(ws.getDate()).padStart(2,"0")}`} onChange={(e) => jumpToDate(e.target.value)} />
-            <span className="meta" style={{ marginLeft: "0.5rem" }}>
-              Week of {ws.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              {fetching && <span style={{ marginLeft: "0.5rem", opacity: 0.6 }}>loading…</span>}
+            <span className="meta" style={{ marginLeft: "0.5rem", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+              <strong style={{ color: "var(--ink)" }}>
+                Week of {ws.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </strong>
+              {(() => {
+                const thisWeekStart = startOfWeekLocal(new Date());
+                const same = ws.getTime() === thisWeekStart.getTime();
+                return same ? (
+                  <span
+                    style={{
+                      fontFamily: "Oswald, sans-serif",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      fontSize: "0.6rem",
+                      fontWeight: 600,
+                      color: "var(--rust)",
+                      border: "1px solid var(--rust)",
+                      padding: "0.1rem 0.45rem",
+                      borderRadius: 999,
+                    }}
+                    title="You're viewing this week"
+                  >
+                    this week
+                  </span>
+                ) : null;
+              })()}
+              {fetching && <span style={{ marginLeft: "0.25rem", opacity: 0.6 }}>loading…</span>}
             </span>
             <span className="meta" style={{ marginLeft: "auto" }}>
               {dayTotals.reduce((a, d) => a + d.count, 0)} sessions · <strong style={{ color: "var(--ink)" }}>{fmtMoney(weekRevenue)}</strong>
@@ -699,7 +723,7 @@ export default function ScheduleView({
           </>
         ) : (
           <>
-            <button className="btn btn-ghost" onClick={() => shiftMonth(-1)} style={{ padding: "0.35rem 0.65rem" }}>‹ prev</button>
+            <button className="btn btn-ghost" onClick={() => shiftMonth(-1)} style={{ padding: "0.35rem 0.65rem" }} title="Previous month">‹ prev</button>
             <button className="btn btn-ghost" onClick={() => {
               const next = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
               setMs(next);
@@ -707,11 +731,31 @@ export default function ScheduleView({
                 const data = await fetchMonthAppts(next.toISOString());
                 setMonthCache(data);
               });
-            }} style={{ padding: "0.35rem 0.65rem" }}>This month</button>
-            <button className="btn btn-ghost" onClick={() => shiftMonth(1)} style={{ padding: "0.35rem 0.65rem" }}>next ›</button>
-            <span className="meta" style={{ marginLeft: "0.5rem" }}>
-              {ms.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-              {fetching && <span style={{ marginLeft: "0.5rem", opacity: 0.6 }}>loading…</span>}
+            }} style={{ padding: "0.35rem 0.65rem" }} title="Jump to current month">This month</button>
+            <button className="btn btn-ghost" onClick={() => shiftMonth(1)} style={{ padding: "0.35rem 0.65rem" }} title="Next month">next ›</button>
+            <span className="meta" style={{ marginLeft: "0.5rem", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+              <strong style={{ color: "var(--ink)" }}>
+                {ms.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              </strong>
+              {(ms.getFullYear() === today.getFullYear() && ms.getMonth() === today.getMonth()) && (
+                <span
+                  style={{
+                    fontFamily: "Oswald, sans-serif",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    fontSize: "0.6rem",
+                    fontWeight: 600,
+                    color: "var(--rust)",
+                    border: "1px solid var(--rust)",
+                    padding: "0.1rem 0.45rem",
+                    borderRadius: 999,
+                  }}
+                  title="You're viewing the current month"
+                >
+                  this month
+                </span>
+              )}
+              {fetching && <span style={{ marginLeft: "0.25rem", opacity: 0.6 }}>loading…</span>}
             </span>
             <span className="meta" style={{ marginLeft: "auto" }}>
               completed <strong style={{ color: "var(--sage)" }}>{fmtMoney(monthTotals.completed)}</strong> · scheduled <strong style={{ color: "var(--ink)" }}>{fmtMoney(monthTotals.scheduled)}</strong> · unpaid <strong style={{ color: "var(--red)" }}>{fmtMoney(monthTotals.unpaid)}</strong>
