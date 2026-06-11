@@ -149,7 +149,13 @@ function ProgramCard({ p, isCurrent }: { p: ClientProgramRow; isCurrent: boolean
             </span>
           )}
           {p.created_by_client && (
-            <span className="badge" style={{ fontSize: "0.6rem", color: "var(--muted)" }}>self-built</span>
+            <span
+              className="badge"
+              style={{ fontSize: "0.58rem", color: "var(--clay)", borderColor: "var(--clay)" }}
+              title="Built by you in the in-app builder"
+            >
+              Client made
+            </span>
           )}
         </div>
         <div className="meta" style={{ fontSize: "0.74rem", marginTop: "0.2rem" }}>

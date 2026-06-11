@@ -31,6 +31,8 @@ export type ClientProgramBlock = {
     session_program_id: string | null;
     /** True when the linked program is paired with a PDF-kind workout_sheet. */
     is_pdf?: boolean;
+    /** True when the linked program was built by the client themselves. */
+    is_client_made?: boolean;
   }[];
   historicalPrograms: PastProgramFull[];    // past at_home programs
   historicalSessions: {                      // past in_gym sessions (appointments) — grouped by month
@@ -125,21 +127,27 @@ export default async function ProgrammingLandingPage() {
     if (programIds.length) {
       const { data: progs } = await createSupabaseAdmin()
         .from("programs")
-        .select("id, workout_sheets:workout_sheet_id ( kind )")
+        .select("id, created_by_client, workout_sheets:workout_sheet_id ( kind )")
         .in("id", programIds);
       const pdfProgramIds = new Set<string>();
+      const clientMadeProgramIds = new Set<string>();
       (progs ?? []).forEach((p: unknown) => {
-        const r = p as { id?: string; workout_sheets?: { kind: "app" | "pdf" } | { kind: "app" | "pdf" }[] | null };
+        const r = p as {
+          id?: string;
+          created_by_client?: boolean | null;
+          workout_sheets?: { kind: "app" | "pdf" } | { kind: "app" | "pdf" }[] | null;
+        };
         if (!r.id) return;
         const ws = r.workout_sheets;
         const kind = Array.isArray(ws) ? ws[0]?.kind : ws?.kind;
         if (kind === "pdf") pdfProgramIds.add(r.id);
+        if (r.created_by_client) clientMadeProgramIds.add(r.id);
       });
       for (const b of blocks) {
         for (const s of b.upcomingSessions) {
-          if (s.session_program_id && pdfProgramIds.has(s.session_program_id)) {
-            s.is_pdf = true;
-          }
+          if (!s.session_program_id) continue;
+          if (pdfProgramIds.has(s.session_program_id)) s.is_pdf = true;
+          if (clientMadeProgramIds.has(s.session_program_id)) s.is_client_made = true;
         }
       }
     }

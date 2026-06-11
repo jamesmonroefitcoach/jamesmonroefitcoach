@@ -364,6 +364,7 @@ function WeekSessionRow({
     program_status: "programmed" | "draft" | "needs_programming" | "n/a";
     session_program_id: string | null;
     is_pdf: boolean;
+    is_client_made: boolean;
   };
 }) {
   const verb =
@@ -418,6 +419,21 @@ function WeekSessionRow({
             PDF
           </span>
         )}
+        {s.is_client_made && (
+          <span
+            className="badge"
+            style={{
+              marginLeft: "0.45rem",
+              fontSize: "0.56rem",
+              color: "var(--clay)",
+              borderColor: "var(--clay)",
+              verticalAlign: "middle",
+            }}
+            title="Linked program was built by the client in the in-app builder"
+          >
+            Client made
+          </span>
+        )}
       </Link>
       <StatusBadge status={s.program_status} />
       <Link
@@ -462,6 +478,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
       program_status: "programmed" | "draft" | "needs_programming" | "n/a";
       session_program_id: string | null;
       is_pdf: boolean;
+      is_client_made: boolean;
     };
     const out: WeekSession[] = [];
     for (const b of blocks) {
@@ -477,6 +494,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
           program_status: s.program_status,
           session_program_id: s.session_program_id,
           is_pdf: !!s.is_pdf,
+          is_client_made: !!s.is_client_made,
         });
       }
     }
