@@ -363,6 +363,7 @@ function WeekSessionRow({
     starts_at: string;
     program_status: "programmed" | "draft" | "needs_programming" | "n/a";
     session_program_id: string | null;
+    is_pdf: boolean;
   };
 }) {
   const verb =
@@ -402,6 +403,21 @@ function WeekSessionRow({
         style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 500 }}
       >
         {s.clientName}
+        {s.is_pdf && (
+          <span
+            className="badge"
+            style={{
+              marginLeft: "0.45rem",
+              fontSize: "0.56rem",
+              color: "var(--rust)",
+              borderColor: "var(--rust)",
+              verticalAlign: "middle",
+            }}
+            title="Linked program came from an uploaded PDF sheet"
+          >
+            PDF
+          </span>
+        )}
       </Link>
       <StatusBadge status={s.program_status} />
       <Link
@@ -444,6 +460,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
       starts_at: string;
       program_status: "programmed" | "draft" | "needs_programming" | "n/a";
       session_program_id: string | null;
+      is_pdf: boolean;
     };
     const out: WeekSession[] = [];
     for (const b of blocks) {
@@ -458,6 +475,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
           starts_at: s.starts_at,
           program_status: s.program_status,
           session_program_id: s.session_program_id,
+          is_pdf: !!s.is_pdf,
         });
       }
     }

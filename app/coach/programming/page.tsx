@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/session";
 import { listClients, listAppointmentsForWeek, listAppointmentsForClient, startOfWeek } from "@/lib/data";
 import { pastProgramsForClient, type PastProgramFull, PROGRAM_KIND_LABEL, CATEGORY_LABELS, type Category } from "@/lib/programs";
 import { fmtDate } from "@/lib/format";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import ViewProgramsClient from "./view-programs-client";
 
 export type ClientProgramBlock = {
@@ -28,6 +29,8 @@ export type ClientProgramBlock = {
     starts_at: string;
     program_status: "programmed" | "draft" | "needs_programming" | "n/a";
     session_program_id: string | null;
+    /** True when the linked program is paired with a PDF-kind workout_sheet. */
+    is_pdf?: boolean;
   }[];
   historicalPrograms: PastProgramFull[];    // past at_home programs
   historicalSessions: {                      // past in_gym sessions (appointments) — grouped by month
@@ -108,6 +111,39 @@ export default async function ProgrammingLandingPage() {
       historicalSessions,
     };
   }));
+
+  // Tag upcoming sessions whose linked program is paired with a PDF sheet, so
+  // the Upcoming-this-week list can show a "PDF" pill next to the row.
+  if (hasSupabaseEnv()) {
+    const programIds = Array.from(
+      new Set(
+        blocks
+          .flatMap((b) => b.upcomingSessions.map((s) => s.session_program_id))
+          .filter((x): x is string => !!x)
+      )
+    );
+    if (programIds.length) {
+      const { data: progs } = await createSupabaseAdmin()
+        .from("programs")
+        .select("id, workout_sheets:workout_sheet_id ( kind )")
+        .in("id", programIds);
+      const pdfProgramIds = new Set<string>();
+      (progs ?? []).forEach((p: unknown) => {
+        const r = p as { id?: string; workout_sheets?: { kind: "app" | "pdf" } | { kind: "app" | "pdf" }[] | null };
+        if (!r.id) return;
+        const ws = r.workout_sheets;
+        const kind = Array.isArray(ws) ? ws[0]?.kind : ws?.kind;
+        if (kind === "pdf") pdfProgramIds.add(r.id);
+      });
+      for (const b of blocks) {
+        for (const s of b.upcomingSessions) {
+          if (s.session_program_id && pdfProgramIds.has(s.session_program_id)) {
+            s.is_pdf = true;
+          }
+        }
+      }
+    }
+  }
 
   return (
     <main className="shell" style={{ paddingTop: "0.75rem" }}>

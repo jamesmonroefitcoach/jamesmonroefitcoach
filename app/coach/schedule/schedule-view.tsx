@@ -875,8 +875,18 @@ export default function ScheduleView({
       {view === "week" ? (
         <div className="card" style={{ marginTop: "1rem", padding: 0, overflow: "auto" }}>
           <div style={{ minWidth: 980, display: "grid", gridTemplateColumns: "70px repeat(7, 1fr)" }}>
-            {/* header row */}
-            <div style={{ borderBottom: "1px solid var(--line)" }}></div>
+            {/* header row — corner cell sticks to top-left so the gutter
+                header doesn't pull off-screen when scrolling horizontally */}
+            <div
+              style={{
+                borderBottom: "1px solid var(--line)",
+                borderRight: "1px solid var(--line)",
+                background: "var(--paper)",
+                position: "sticky",
+                left: 0,
+                zIndex: 3,
+              }}
+            ></div>
             {DAYS.map((d, i) => {
               const date = new Date(ws);
               date.setDate(ws.getDate() + i);
@@ -900,8 +910,20 @@ export default function ScheduleView({
               );
             })}
 
-            {/* time gutter */}
-            <div style={{ display: "grid", gridTemplateRows: `repeat(${HOURS.length}, ${HOUR_HEIGHT}px)` }}>
+            {/* time gutter — sticky-left so the hour labels stay visible
+                while horizontally scrolling through the week */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateRows: `repeat(${HOURS.length}, ${HOUR_HEIGHT}px)`,
+                position: "sticky",
+                left: 0,
+                zIndex: 2,
+                background: "var(--paper)",
+                borderRight: "1px solid var(--line)",
+                boxShadow: "2px 0 4px rgba(0,0,0,0.06)",
+              }}
+            >
               {HOURS.map((h) => (
                 <div key={h} className="meta" style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", textAlign: "right", borderBottom: "1px solid var(--line)" }}>
                   {h % 12 === 0 ? 12 : h % 12}{h < 12 ? "a" : "p"}
