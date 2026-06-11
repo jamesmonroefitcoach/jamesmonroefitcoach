@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { getClient } from "@/lib/data";
 import { fmtMoney, fmtDate } from "@/lib/format";
+import IntakeFormDisplay from "@/components/intake-form-display";
 
 // Client's view of their own profile. Mirrors what James sees on his side
 // EXCEPT for coach-internal classification: tier, test_rate, monthly
@@ -89,7 +90,7 @@ export default async function ClientProfilePage() {
       </div>
 
       {/* Contact + identity */}
-      <div className="card">
+      <div className="card" style={{ marginBottom: "1rem" }}>
         <h2>Contact</h2>
         <hr className="divider" />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem" }}>
@@ -98,6 +99,23 @@ export default async function ClientProfilePage() {
           {me?.age_category && <Stat label="Age range" value={me.age_category} />}
           {me?.gender && <Stat label="Gender" value={me.gender} />}
         </div>
+      </div>
+
+      {/* Intake form responses — same render James sees on his side */}
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2>Intake Form</h2>
+          {me?.form_received_at && (
+            <span className="meta" style={{ fontSize: "0.75rem" }}>
+              Submitted {fmtDate(me.form_received_at)}
+            </span>
+          )}
+        </div>
+        <hr className="divider" />
+        <IntakeFormDisplay
+          formData={me?.form_data ?? null}
+          emptyText="No intake form on file yet."
+        />
       </div>
     </main>
   );

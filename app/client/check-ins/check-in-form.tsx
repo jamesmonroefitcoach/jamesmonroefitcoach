@@ -63,13 +63,14 @@ export default function CheckInForm({
     <form action={onSubmit} className="card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       {allowBackdate && (
         <div>
-          <label className="stat-label">Date (optional — leave blank for now)</label>
+          <label className="stat-label">Date</label>
           <input
             className="input"
             name="submitted_at"
             type="date"
+            defaultValue={new Date().toISOString().slice(0, 10)}
             style={{ marginTop: "0.3rem" }}
-            title="Back-date a check-in you forgot to submit"
+            title="Defaults to today — pick an earlier day to back-date a forgotten check-in"
           />
         </div>
       )}

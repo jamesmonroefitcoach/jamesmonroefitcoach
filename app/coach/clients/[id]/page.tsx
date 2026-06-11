@@ -12,55 +12,7 @@ import ExercisesLearnedSection from "./exercises-learned-section";
 import WorkoutSheetsSection from "./workout-sheets-section";
 import { listWorkoutSheets } from "@/lib/workout-sheets.server";
 import LogPaymentButton, { type PaymentApptRow } from "./log-payment-modal";
-
-const FORM_SECTIONS: { title: string; keys: string[] }[] = [
-  {
-    title: "General Info",
-    keys: ["Phone", "Birthday"],
-  },
-  {
-    title: "Goals & Progress",
-    keys: [
-      "Training goals",
-      "Primary goal / motivation",
-      "Strengths / most improved",
-      "Needs most improvement",
-      "Satisfaction with training (1-5)",
-      "Exercises to learn / work on",
-      "Commitment (1-10)",
-    ],
-  },
-  {
-    title: "Nutrition, Injuries & Weight",
-    keys: [
-      "Nutrition confidence (1-5)",
-      "Nutrition tracking",
-      "Activity level outside training (1-5)",
-      "Self-exercise days per week",
-      "Sleep / recovery (1-5)",
-      "Injuries / limitations",
-      "Height",
-      "Starting weight (lbs)",
-      "Current weight (lbs)",
-    ],
-  },
-  {
-    title: "Scheduling",
-    keys: [
-      "Sessions per month (preferred)",
-      "Available days",
-      "Available times",
-      "Ideal session times",
-      "Preferred coaching style",
-      "Past consistency barriers",
-      "Time frame",
-    ],
-  },
-  {
-    title: "Additional Feedback",
-    keys: ["Additional requests / notes", "Questions / feedback"],
-  },
-];
+import IntakeFormDisplay from "@/components/intake-form-display";
 
 function ProgramCard({ label, prog, clientId, status }: {
   label: string;
@@ -252,68 +204,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           ) : null}
         </div>
         <hr className="divider" />
-        {!client.form_data ? (
-          <p className="meta" style={{ fontStyle: "italic" }}>No form received yet.</p>
-        ) : (
-          <details open>
-            <summary style={{ cursor: "pointer", fontSize: "0.82rem", fontWeight: 600, color: "var(--rust)", userSelect: "none" }}>
-              View full response ▾
-            </summary>
-            <div style={{ margin: "0.85rem 0 0", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              {FORM_SECTIONS.map(({ title, keys }) => {
-                const entries = keys
-                  .filter((k) => (client.form_data as Record<string, string>)[k] != null && (client.form_data as Record<string, string>)[k] !== "")
-                  .map((k) => [k, (client.form_data as Record<string, string>)[k]] as [string, string]);
-                if (entries.length === 0) return null;
-                return (
-                  <div key={title}>
-                    <div style={{
-                      fontSize: "0.69rem", fontWeight: 700, textTransform: "uppercase",
-                      letterSpacing: "0.08em", color: "var(--rust)", marginBottom: "0.5rem",
-                      paddingBottom: "0.25rem", borderBottom: "1px solid var(--line)",
-                    }}>
-                      {title}
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "0.35rem 2rem" }}>
-                      {entries.map(([q, a]) => (
-                        <div key={q} style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.2rem 0.65rem", alignItems: "baseline" }}>
-                          <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>{q}</span>
-                          <span style={{ fontSize: "0.84rem" }}>{a}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Catch-all: any keys not covered by a defined section */}
-              {(() => {
-                const covered = new Set(FORM_SECTIONS.flatMap((s) => s.keys));
-                const extra = Object.entries(client.form_data as Record<string, string>)
-                  .filter(([k]) => !covered.has(k) && k !== "Phone" && k !== "Birthday");
-                if (extra.length === 0) return null;
-                return (
-                  <div key="other">
-                    <div style={{
-                      fontSize: "0.69rem", fontWeight: 700, textTransform: "uppercase",
-                      letterSpacing: "0.08em", color: "var(--rust)", marginBottom: "0.5rem",
-                      paddingBottom: "0.25rem", borderBottom: "1px solid var(--line)",
-                    }}>
-                      Other
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "0.35rem 2rem" }}>
-                      {extra.map(([q, a]) => (
-                        <div key={q} style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "0.2rem 0.65rem", alignItems: "baseline" }}>
-                          <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>{q}</span>
-                          <span style={{ fontSize: "0.84rem" }}>{a}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          </details>
-        )}
+        <IntakeFormDisplay formData={client.form_data as Record<string, string> | null} />
       </div>
 
       <hr className="divider" />
