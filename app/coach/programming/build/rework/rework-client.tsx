@@ -164,7 +164,7 @@ function newExerciseSlot(leafId: string, movement: Movement): ExerciseSlot {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ReworkClient({
-  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements, hideTabs = false,
+  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements, hideTabs = false, autoStart = false,
 }: {
   clients: ClientRow[];
   initialClientId: string;
@@ -176,6 +176,10 @@ export default function ReworkClient({
    *  redundant with the Session/Program toggle and link back to the
    *  Old Way — skip them. */
   hideTabs?: boolean;
+  /** When the parent lobby has already chosen the client+session, skip the
+   *  internal PickerView and drop straight into the builder. The internal
+   *  '← Back' button still returns to the picker for quick switching. */
+  autoStart?: boolean;
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(initialClientId);
@@ -193,7 +197,9 @@ export default function ReworkClient({
       : "New session";
 
   // Show picker until both client + session-or-fresh are chosen
-  const [step, setStep] = useState<"picker" | "builder">(clientId && (apptId || initialStartsAt) ? "builder" : "picker");
+  const [step, setStep] = useState<"picker" | "builder">(
+    autoStart || (clientId && (apptId || initialStartsAt)) ? "builder" : "picker"
+  );
 
   const dKey = draftKey(clientId, apptId);
   const [slots, setSlots] = useState<Slot[]>([]);
