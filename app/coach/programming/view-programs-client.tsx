@@ -322,11 +322,12 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
 }
 
 // ─── Section header — collapsible wrapper for Sessions / Programs ─────────
-function SectionHeader({ title, count, open, onToggle }: {
+function SectionHeader({ title, count, open, onToggle, subLabel }: {
   title: string;
   count: number;
   open: boolean;
   onToggle: () => void;
+  subLabel?: string;
 }) {
   return (
     <button
@@ -344,7 +345,73 @@ function SectionHeader({ title, count, open, onToggle }: {
         <span style={{ fontWeight: 700, fontSize: "1.02rem" }}>{title}</span>
         <span className="badge" style={{ fontSize: "0.62rem" }}>{count}</span>
       </span>
+      {subLabel && (
+        <span className="meta" style={{ fontSize: "0.72rem" }}>{subLabel}</span>
+      )}
     </button>
+  );
+}
+
+// ─── Single row in the "Upcoming this week" flat list ─────────────────────
+function WeekSessionRow({
+  s,
+}: {
+  s: {
+    clientId: string;
+    clientName: string;
+    apptId: string;
+    starts_at: string;
+    program_status: "programmed" | "draft" | "needs_programming" | "n/a";
+    session_program_id: string | null;
+  };
+}) {
+  const verb =
+    s.program_status === "programmed"
+      ? "View"
+      : s.program_status === "draft"
+      ? "Edit"
+      : "Program";
+  const startsParam = encodeURIComponent(s.starts_at);
+  const viewParam = s.program_status === "programmed" ? "&view=plan" : "";
+  const href = `/coach/programming/build?tab=session&appt=${s.apptId}&client=${s.clientId}&starts=${startsParam}${viewParam}`;
+  const when = new Date(s.starts_at);
+  const dayLabel = when.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const timeLabel = when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "120px 1fr auto auto auto",
+        gap: "0.6rem",
+        alignItems: "center",
+        padding: "0.55rem 0.8rem",
+        borderBottom: "1px solid var(--line)",
+        fontSize: "0.86rem",
+      }}
+    >
+      <span style={{ fontWeight: 600 }}>
+        {dayLabel}
+        <span className="meta" style={{ marginLeft: "0.4rem", fontWeight: 400 }}>{timeLabel}</span>
+      </span>
+      <Link
+        href={`/coach/clients/${s.clientId}`}
+        style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 500 }}
+      >
+        {s.clientName}
+      </Link>
+      <StatusBadge status={s.program_status} />
+      <Link
+        href={href}
+        className="btn btn-ghost"
+        style={{ padding: "0.22rem 0.6rem", fontSize: "0.74rem" }}
+      >
+        {verb}
+      </Link>
+    </div>
   );
 }
 
@@ -352,6 +419,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
   const [query, setQuery] = useState("");
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [programsOpen, setProgramsOpen] = useState(true);
+  const [clientListOpen, setClientListOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -364,8 +432,74 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
   const sessionBlocks = filtered;
   const programBlocks = filtered.filter((b) => b.needsAtHomeProgramming);
 
+  // Upcoming sessions across all clients for the next 7 days, sorted by time.
+  const weekSessions = useMemo(() => {
+    const now = Date.now();
+    const cutoff = now + 7 * 86_400_000;
+    type WeekSession = {
+      key: string;
+      clientId: string;
+      clientName: string;
+      apptId: string;
+      starts_at: string;
+      program_status: "programmed" | "draft" | "needs_programming" | "n/a";
+      session_program_id: string | null;
+    };
+    const out: WeekSession[] = [];
+    for (const b of blocks) {
+      for (const s of b.upcomingSessions) {
+        const t = new Date(s.starts_at).getTime();
+        if (t < now || t > cutoff) continue;
+        out.push({
+          key: `${b.clientId}-${s.id}`,
+          clientId: b.clientId,
+          clientName: b.clientName,
+          apptId: s.id,
+          starts_at: s.starts_at,
+          program_status: s.program_status,
+          session_program_id: s.session_program_id,
+        });
+      }
+    }
+    out.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    return out;
+  }, [blocks]);
+
   return (
     <div>
+      {/* Upcoming this week — flat session list across all clients */}
+      <section style={{ marginBottom: "1.25rem" }}>
+        <SectionHeader
+          title="Upcoming this week"
+          count={weekSessions.length}
+          open={true}
+          onToggle={() => {}}
+          subLabel="next 7 days · sorted by time"
+        />
+        {weekSessions.length === 0 ? (
+          <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>Nothing scheduled in the next 7 days.</p>
+        ) : (
+          <div className="card" style={{ padding: 0, marginTop: "0.4rem", overflow: "hidden" }}>
+            {weekSessions.map((s) => <WeekSessionRow key={s.key} s={s} />)}
+          </div>
+        )}
+      </section>
+
+      <hr className="divider" />
+
+      {/* Client List View — the legacy per-client layout, collapsed by default */}
+      <section style={{ marginBottom: "1rem" }}>
+        <SectionHeader
+          title="Client list view"
+          count={blocks.length}
+          open={clientListOpen}
+          onToggle={() => setClientListOpen((v) => !v)}
+          subLabel="all clients · sessions + at-home programs"
+        />
+      </section>
+
+      {!clientListOpen ? null : (
+      <div>
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap" }}>
         <input
           className="input"
@@ -410,6 +544,8 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
           )
         )}
       </section>
+      </div>
+      )}
     </div>
   );
 }
