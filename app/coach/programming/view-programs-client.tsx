@@ -465,6 +465,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
   const programBlocks = filtered.filter((b) => b.needsAtHomeProgramming);
 
   // Upcoming sessions across all clients for the next 7 days, sorted by time.
+  // Uses 'filtered' so the top-level client search narrows this list too.
   const weekSessions = useMemo(() => {
     const now = Date.now();
     const cutoff = now + 7 * 86_400_000;
@@ -480,7 +481,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
       is_client_made: boolean;
     };
     const out: WeekSession[] = [];
-    for (const b of blocks) {
+    for (const b of filtered) {
       for (const s of b.upcomingSessions) {
         const t = new Date(s.starts_at).getTime();
         if (t < now || t > cutoff) continue;
@@ -499,10 +500,35 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
     }
     out.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     return out;
-  }, [blocks]);
+  }, [filtered]);
 
   return (
     <div>
+      {/* Page-level filter — narrows Upcoming this week, Sessions, and
+          Programs all at once. Lives above every collapsible section. */}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "center",
+          marginBottom: "1rem",
+          flexWrap: "wrap",
+        }}
+      >
+        <input
+          className="input"
+          placeholder="Filter by client…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ maxWidth: 320, fontSize: "0.86rem" }}
+        />
+        {query.trim() && (
+          <span className="meta" style={{ fontSize: "0.78rem" }}>
+            {filtered.length} client{filtered.length !== 1 ? "s" : ""} match
+          </span>
+        )}
+      </div>
+
       {/* Upcoming this week — flat session list across all clients */}
       <section style={{ marginBottom: "1.25rem" }}>
         <SectionHeader
@@ -522,18 +548,6 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
       </section>
 
       <hr className="divider" />
-
-      {/* Filter strip — applies to both Sessions and Programs below */}
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.85rem", flexWrap: "wrap" }}>
-        <input
-          className="input"
-          placeholder="Filter by client…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          style={{ maxWidth: 280, fontSize: "0.82rem" }}
-        />
-        <span className="meta" style={{ fontSize: "0.78rem" }}>{filtered.length} client{filtered.length !== 1 ? "s" : ""}</span>
-      </div>
 
       {/* Sessions — top-level collapsible (was nested under 'Client list view') */}
       <section style={{ marginBottom: "1.25rem" }}>
