@@ -620,18 +620,29 @@ export default function ScheduleView({
     return cells;
   }, [ms]);
 
+  // Same convention as the dashboard chart segments:
+  //   paid      = $ paid (any non-cancelled session)
+  //   unpaid    = $ booked but uncollected (non-cancelled, non-no-show)
+  //   cancelled = $ from cancelled sessions (fee charged)
+  // Replaces the prior 'completed / scheduled / unpaid' which silently
+  // excluded scheduled-unpaid from the 'unpaid' total and ignored
+  // cancellation fees entirely.
   const monthTotals = useMemo(() => {
-    let completed = 0, scheduled = 0, unpaid = 0;
+    let paid = 0, unpaid = 0, cancelled = 0;
+    let paidN = 0, unpaidN = 0, cancelledN = 0;
     monthCache.forEach((a) => {
       if (a.session_type !== "session") return;
-      if (a.status === "completed") {
-        completed += a.rate ?? 0;
-        if (!a.paid) unpaid += a.rate ?? 0;
-      } else if (a.status === "scheduled") {
-        scheduled += a.rate ?? 0;
+      if (a.status === "no_show") return;
+      const rate = a.rate ?? 0;
+      if (a.status === "cancelled") {
+        cancelled += rate; cancelledN += 1;
+      } else if (a.paid) {
+        paid += rate; paidN += 1;
+      } else {
+        unpaid += rate; unpaidN += 1;
       }
     });
-    return { completed, scheduled, unpaid };
+    return { paid, unpaid, cancelled, paidN, unpaidN, cancelledN };
   }, [monthCache]);
 
   // Which clients have at least one non-cancelled session this week
@@ -764,8 +775,14 @@ export default function ScheduleView({
               )}
               {fetching && <span style={{ marginLeft: "0.25rem", opacity: 0.6 }}>loading…</span>}
             </span>
-            <span className="meta" style={{ marginLeft: "auto" }}>
-              completed <strong style={{ color: "var(--sage)" }}>{fmtMoney(monthTotals.completed)}</strong> · scheduled <strong style={{ color: "var(--ink)" }}>{fmtMoney(monthTotals.scheduled)}</strong> · unpaid <strong style={{ color: "var(--red)" }}>{fmtMoney(monthTotals.unpaid)}</strong>
+            <span className="meta" style={{ marginLeft: "auto" }} title={`paid ${monthTotals.paidN} · unpaid ${monthTotals.unpaidN} · cancelled ${monthTotals.cancelledN}`}>
+              paid <strong style={{ color: "var(--sage)" }}>{fmtMoney(monthTotals.paid)}</strong>
+              {" · "}unpaid <strong style={{ color: "var(--steel)" }}>{fmtMoney(monthTotals.unpaid)}</strong>
+              {monthTotals.cancelled > 0 && (
+                <>
+                  {" · "}cancelled <strong style={{ color: "var(--rust)" }}>{fmtMoney(monthTotals.cancelled)}</strong>
+                </>
+              )}
             </span>
           </>
         )}
@@ -1208,7 +1225,28 @@ export default function ScheduleView({
 
       {/* ─── MONTH VIEW ─── */}
       {view === "month" ? (
-        <div className="card" style={{ marginTop: "1rem", padding: 0, overflow: "auto" }}>
+        <>
+        {/* Color key for the day-cell tints — same language as the dashboard
+            chart: sage = paid, steel = unpaid, rust = owed/cancelled. */}
+        <div className="meta" style={{ display: "flex", gap: "0.85rem", marginTop: "0.85rem", fontSize: "0.7rem", flexWrap: "wrap" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{ width: 10, height: 10, background: "rgba(168,61,43,0.14)", border: "1px solid var(--rust)", borderRadius: 2 }} />
+            owed (completed unpaid)
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{ width: 10, height: 10, background: "rgba(62,96,121,0.14)", border: "1px solid var(--steel)", borderRadius: 2 }} />
+            booked (unpaid future)
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{ width: 10, height: 10, background: "rgba(90,107,74,0.14)", border: "1px solid var(--sage)", borderRadius: 2 }} />
+            paid
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{ width: 10, height: 10, background: "rgba(168,61,43,0.06)", border: "1px solid var(--rust)", borderRadius: 2 }} />
+            cancelled only
+          </span>
+        </div>
+        <div className="card" style={{ marginTop: "0.55rem", padding: 0, overflow: "auto" }}>
           <div style={{ minWidth: 760, display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
             {DAYS.map((d) => (
               <div key={d} style={{ textAlign: "center", padding: "0.5rem 0", borderBottom: "1px solid var(--line)", borderLeft: "1px solid var(--line)", background: "rgba(0,0,0,0.02)", fontWeight: 700, fontSize: "0.8rem" }}>{d}</div>
@@ -1216,18 +1254,31 @@ export default function ScheduleView({
             {monthDays.map((date, i) => {
               if (!date) return <div key={`pad-${i}`} style={{ minHeight: 116, borderLeft: "1px solid var(--line)", borderBottom: "1px solid var(--line)", background: "rgba(0,0,0,0.015)" }} />;
               const k = date.toISOString().slice(0, 10);
-              const list = (monthBlocks[k] ?? []).filter((a) => a.session_type === "session");
+              const list = (monthBlocks[k] ?? []).filter((a) => a.session_type === "session" && a.status !== "no_show");
               const completed = list.filter((a) => a.status === "completed");
-              const upcoming = list.filter((a) => a.status === "scheduled" && date >= new Date(today.toISOString().slice(0, 10)));
               const unpaidCompleted = completed.filter((a) => !a.paid);
+              const cancelledList = list.filter((a) => a.status === "cancelled");
+              const unpaidAny = list.filter((a) => a.status !== "cancelled" && !a.paid);
+              const allPaid = list.length > 0 && list.every((a) => a.paid || a.status === "cancelled");
               const totalDollars = list.reduce((acc, a) => acc + (a.rate ?? 0), 0);
               const isToday = sameDay(date, today);
 
+              // Color priority matches the chart's language:
+              //   rust  — money owed for completed work (urgent)
+              //   steel — booked but uncollected (future bookings)
+              //   sage  — everything settled / paid
+              //   faint rust — cancelled only (fee paid or owed, no live work)
               let bg: string | undefined = undefined;
               let fg: string | undefined = undefined;
-              if (unpaidCompleted.length > 0) { bg = "rgba(192,57,43,0.12)"; fg = "var(--red)"; }
-              else if (completed.length > 0 && completed.length === list.length) { bg = "rgba(90,107,74,0.14)"; fg = "var(--sage)"; }
-              else if (upcoming.length > 0) { bg = "rgba(91,109,122,0.14)"; fg = "#3d5a73"; }
+              if (unpaidCompleted.length > 0) {
+                bg = "rgba(168,61,43,0.14)"; fg = "var(--rust)";   // completed but not paid → owed
+              } else if (allPaid) {
+                bg = "rgba(90,107,74,0.14)"; fg = "var(--sage)";   // everything paid
+              } else if (unpaidAny.length > 0) {
+                bg = "rgba(62,96,121,0.14)"; fg = "var(--steel)";  // future bookings outstanding
+              } else if (cancelledList.length > 0) {
+                bg = "rgba(168,61,43,0.06)"; fg = "var(--rust)";   // only cancelled today
+              }
 
               return (
                 <div key={k} style={{
@@ -1260,6 +1311,7 @@ export default function ScheduleView({
             })}
           </div>
         </div>
+        </>
       ) : null}
 
       {/* ─── side panel ─── */}
