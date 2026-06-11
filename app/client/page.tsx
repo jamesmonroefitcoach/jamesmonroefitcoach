@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForClient, getClient } from "@/lib/data";
+import { listClientPersonalEvents } from "@/lib/client-personal-events";
 import { fmtMoney } from "@/lib/format";
 import ClientUpcoming from "./client-upcoming";
+import ClientSchedule from "./client-schedule";
 
 export default async function ClientHome() {
   const user = await getSessionUser();
@@ -13,6 +15,7 @@ export default async function ClientHome() {
   const me = await getClient(user.id);
   const appts = await listAppointmentsForClient(user.id);
   const upcoming = appts.filter((a) => new Date(a.starts_at) >= new Date());
+  const personalEvents = await listClientPersonalEvents(user.id);
 
   return (
     <main className="shell">
@@ -46,6 +49,8 @@ export default async function ClientHome() {
       </section>
 
       <hr className="divider" />
+
+      <ClientSchedule appointments={appts} events={personalEvents} />
 
       <ClientUpcoming initial={upcoming} />
     </main>
