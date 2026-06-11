@@ -24,7 +24,7 @@ export async function addMovement(
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
 
   if (!hasSupabaseEnv()) {
-    revalidatePath("/coach/programming/exercise-library");
+    revalidatePath("/coach/programming/library/exercise-library");
     return { ok: true, id: `static-${Date.now()}` };
   }
 
@@ -48,7 +48,7 @@ export async function addMovement(
     .single();
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/coach/programming/exercise-library");
+  revalidatePath("/coach/programming/library/exercise-library");
   revalidatePath("/coach/programming/build");
   return { ok: true, id: data.id };
 }
@@ -61,7 +61,7 @@ export async function updateMovement(
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
 
   if (!hasSupabaseEnv()) {
-    revalidatePath("/coach/programming/exercise-library");
+    revalidatePath("/coach/programming/library/exercise-library");
     return { ok: true };
   }
 
@@ -83,7 +83,7 @@ export async function updateMovement(
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/coach/programming/exercise-library");
+  revalidatePath("/coach/programming/library/exercise-library");
   revalidatePath("/coach/programming/build");
   return { ok: true };
 }
@@ -95,7 +95,7 @@ export async function archiveMovement(
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
 
   if (!hasSupabaseEnv()) {
-    revalidatePath("/coach/programming/exercise-library");
+    revalidatePath("/coach/programming/library/exercise-library");
     return { ok: true };
   }
 
@@ -106,7 +106,7 @@ export async function archiveMovement(
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/coach/programming/exercise-library");
+  revalidatePath("/coach/programming/library/exercise-library");
   revalidatePath("/coach/programming/build");
   return { ok: true };
 }

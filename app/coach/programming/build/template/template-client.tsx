@@ -24,10 +24,10 @@ export default function TemplateClient({
   const byId = new Map(clients.map((c) => [c.id, c.name]));
 
   function openSheet(id: string) {
-    router.push(`/coach/programming/template?sheet=${id}`);
+    router.push(`/coach/programming/build/template?sheet=${id}`);
   }
   function newSheet() {
-    router.push(`/coach/programming/template`);
+    router.push(`/coach/programming/build/template`);
   }
 
   const current = currentSheetId ? sheets.find((s) => s.id === currentSheetId) ?? null : null;

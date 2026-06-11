@@ -25,7 +25,7 @@ import {
   pastProgramsForClient
 } from "@/lib/programs";
 import { saveProgram, getClientAppointments, loadProgramForAppointment, type ApptOption } from "./actions";
-import { addMovement } from "../exercise-library/actions";
+import { addMovement } from "../library/exercise-library/actions";
 import { decodeSpecs, encodeSpecs } from "@/lib/equipment-specs";
 import { fmtDate } from "@/lib/format";
 import type { ProgramKind } from "@/lib/programs";

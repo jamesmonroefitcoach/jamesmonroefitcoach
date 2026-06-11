@@ -2,20 +2,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export default function ProgrammingTabs() {
+// Sub-tab nav for Build Program: Template (first) | Build.
+// Only renders on the two relevant routes — the WIP rework / programs-rework
+// / session pages keep their own chrome.
+export default function BuildTabs() {
   const path = usePathname() ?? "";
-  const isBuild   = path.startsWith("/coach/programming/build");
-  const isLibrary = path.startsWith("/coach/programming/library");
-  const isView    = !isBuild && !isLibrary;
+  const isTemplate = path === "/coach/programming/build/template";
+  const isBuilder = path === "/coach/programming/build";
+  if (!isTemplate && !isBuilder) return null;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
-    padding: "0.55rem 1.4rem",
+    padding: "0.45rem 1.1rem",
     background: "transparent",
     border: "none",
     borderBottom: active ? "2px solid var(--rust)" : "2px solid transparent",
     marginBottom: "-2px",
     fontFamily: "inherit",
-    fontSize: "0.95rem",
+    fontSize: "0.86rem",
     fontWeight: active ? 700 : 400,
     color: active ? "var(--rust)" : "var(--muted)",
     cursor: "pointer",
@@ -28,22 +31,20 @@ export default function ProgrammingTabs() {
       className="no-print"
       style={{
         width: "min(1180px, 100% - 2rem)",
-        margin: "1rem auto 0",
+        margin: "0.45rem auto 0",
       }}
     >
       <nav
         style={{
-          borderBottom: "2px solid var(--line)",
+          borderBottom: "1px solid var(--line)",
           display: "flex",
           alignItems: "flex-end",
-          gap: "0.25rem",
+          gap: "0.2rem",
           overflowX: "auto",
         }}
       >
-        {/* Build Program first — its default sub-tab is Template */}
-        <Link href="/coach/programming/build/template" style={tabStyle(isBuild)}>Build Program</Link>
-        <Link href="/coach/programming" style={tabStyle(isView)}>View Programs</Link>
-        <Link href="/coach/programming/library/exercise-library" style={tabStyle(isLibrary)}>Library</Link>
+        <Link href="/coach/programming/build/template" style={tabStyle(isTemplate)}>Template</Link>
+        <Link href="/coach/programming/build" style={tabStyle(isBuilder)}>Build</Link>
       </nav>
     </div>
   );

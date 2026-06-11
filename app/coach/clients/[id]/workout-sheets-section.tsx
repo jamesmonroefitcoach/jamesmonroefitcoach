@@ -15,7 +15,7 @@ export default async function WorkoutSheetsSection({ clientId }: { clientId: str
         <h2 style={{ margin: 0 }}>Workout Sheets</h2>
         <Link
           className="btn btn-primary"
-          href={`/coach/programming/template`}
+          href={`/coach/programming/build/template`}
         >
           + New Sheet
         </Link>
@@ -30,7 +30,7 @@ export default async function WorkoutSheetsSection({ clientId }: { clientId: str
         <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginBottom: "1rem" }}>
           {sheets.map((s) => {
             const isPdf = s.kind === "pdf";
-            const href = isPdf ? `/api/workout-sheets/${s.id}/pdf` : `/coach/programming/template?sheet=${s.id}`;
+            const href = isPdf ? `/api/workout-sheets/${s.id}/pdf` : `/coach/programming/build/template?sheet=${s.id}`;
             return (
               <Link
                 key={s.id}

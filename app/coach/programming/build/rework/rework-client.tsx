@@ -26,7 +26,7 @@ import {
 } from "@/lib/programs";
 import type { ApptOption } from "../actions";
 import ImportPickerModal, { type ImportScope, type ImportResult } from "../import-picker";
-import { addMovement } from "../../exercise-library/actions";
+import { addMovement } from "../../library/exercise-library/actions";
 import {
   ExerciseCard, LibraryMovementsContext,
   VARIATION_LABELS,
