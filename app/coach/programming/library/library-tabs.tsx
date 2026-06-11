@@ -8,6 +8,7 @@ export default function LibraryTabs() {
   const isExLib = path.startsWith("/coach/programming/library/exercise-library");
   const isExplorer = path.startsWith("/coach/programming/library/exercise-explorer");
   const isMaterials = path.startsWith("/coach/programming/library/materials");
+  const isReview = path.startsWith("/coach/programming/library/review");
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.45rem 1.1rem",
@@ -44,6 +45,7 @@ export default function LibraryTabs() {
         <Link href="/coach/programming/library/exercise-library" style={tabStyle(isExLib)}>Exercise Library</Link>
         <Link href="/coach/programming/library/exercise-explorer" style={tabStyle(isExplorer)}>Exercise Explorer</Link>
         <Link href="/coach/programming/library/materials" style={tabStyle(isMaterials)}>Materials</Link>
+        <Link href="/coach/programming/library/review" style={tabStyle(isReview)}>Mapping Review</Link>
       </nav>
     </div>
   );

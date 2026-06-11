@@ -13,6 +13,7 @@
 
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import type { SheetData, SheetDay } from "@/lib/workout-sheets";
+import { loadLibrary, matchMovementByName } from "@/lib/movement-matcher";
 
 // ─── shapes used internally ──────────────────────────────────────────
 type ProgramRow = {
@@ -143,6 +144,9 @@ export async function syncSheetDataToProgram(programId: string, sheet: SheetData
     await supabase.from("program_days").delete().eq("program_id", programId);
   }
 
+  // Library is loaded once per sync, reused across all rows.
+  const library = await loadLibrary();
+
   const days = sheet?.days ?? [];
   for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
     const day = days[dayIdx];
@@ -181,9 +185,15 @@ export async function syncSheetDataToProgram(programId: string, sheet: SheetData
         equipmentText = movementText.slice(slash + 3).trim() || null;
       }
 
+      // Try to auto-map to a library movement. Confident match → 'auto',
+      // otherwise the row stays unmapped and surfaces in the review queue.
+      const match = await matchMovementByName(nameText, library);
+      const mapping_source: "auto" | "unmapped" = match ? "auto" : "unmapped";
+      const movement_id: string | null = match ? match.movement.id : null;
+
       await supabase.from("program_movements").insert({
         program_day_id: dayRow.id,
-        movement_id: null,                   // free-text row
+        movement_id,
         order_index: rowIdx,
         sets: setsCount,
         reps,
@@ -191,6 +201,7 @@ export async function syncSheetDataToProgram(programId: string, sheet: SheetData
         name_text: nameText || "—",
         equipment_text: equipmentText,
         notes_text: notesText || null,
+        mapping_source,
       });
     }
   }
