@@ -873,10 +873,23 @@ export default function ScheduleView({
 
       {/* ─── WEEK VIEW ─── */}
       {view === "week" ? (
-        <div className="card" style={{ marginTop: "1rem", padding: 0, overflow: "auto" }}>
+        <div
+          className="card"
+          style={{
+            marginTop: "1rem",
+            padding: 0,
+            overflow: "auto",
+            // Bound the card so it becomes its own scrollport — required for
+            // the day-header row's position:sticky top:0 to actually pin
+            // during vertical scroll. Without this, the page would scroll
+            // and the whole card (sticky headers and all) goes with it.
+            maxHeight: "calc(100vh - 200px)",
+          }}
+        >
           <div style={{ minWidth: 980, display: "grid", gridTemplateColumns: "70px repeat(7, 1fr)" }}>
-            {/* header row — corner cell sticks to top-left so the gutter
-                header doesn't pull off-screen when scrolling horizontally */}
+            {/* header row — corner cell sticks to top+left (highest z so it
+                wins both seams); day headers stick to top so they stay
+                visible while vertically scrolling past the grid. */}
             <div
               style={{
                 borderBottom: "1px solid var(--line)",
@@ -884,20 +897,30 @@ export default function ScheduleView({
                 background: "var(--paper)",
                 position: "sticky",
                 left: 0,
-                zIndex: 3,
+                top: 0,
+                zIndex: 30,
               }}
             ></div>
             {DAYS.map((d, i) => {
               const date = new Date(ws);
               date.setDate(ws.getDate() + i);
               const isToday = sameDay(date, today);
+              // Backgrounds need to be fully opaque while sticky so events
+              // scrolling underneath don't bleed through. Today's tint is
+              // composited over the cream paper base.
+              const headerBg = isToday
+                ? "linear-gradient(rgba(168,61,43,0.10), rgba(168,61,43,0.10)), var(--paper)"
+                : "var(--paper)";
               return (
                 <div key={d} style={{
                   textAlign: "center",
                   padding: "0.55rem 0.4rem",
                   borderBottom: "1px solid var(--line)",
                   borderLeft: "1px solid var(--line)",
-                  background: isToday ? "rgba(168,61,43,0.08)" : "rgba(0,0,0,0.02)"
+                  background: headerBg,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 20,
                 }}>
                   <div style={{ fontWeight: 700, fontSize: "0.85rem", color: isToday ? "var(--rust)" : undefined }}>
                     {d}{isToday ? " · today" : ""}
@@ -910,15 +933,15 @@ export default function ScheduleView({
               );
             })}
 
-            {/* time gutter — sticky-left so the hour labels stay visible
-                while horizontally scrolling through the week */}
+            {/* time gutter — sticky-left, z above event blocks (which use
+                z 2 and 3) so events scrolling underneath stay clipped. */}
             <div
               style={{
                 display: "grid",
                 gridTemplateRows: `repeat(${HOURS.length}, ${HOUR_HEIGHT}px)`,
                 position: "sticky",
                 left: 0,
-                zIndex: 2,
+                zIndex: 10,
                 background: "var(--paper)",
                 borderRight: "1px solid var(--line)",
                 boxShadow: "2px 0 4px rgba(0,0,0,0.06)",
