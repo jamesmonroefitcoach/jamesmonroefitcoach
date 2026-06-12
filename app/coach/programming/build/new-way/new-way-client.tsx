@@ -19,6 +19,10 @@ type ViewMode = "inapp" | "template";
 // New Way Build — lobby (client → type → entity) → workspace with an
 // In App | Template view toggle. Both views read/write through the
 // program↔sheet bridge, so editing in one updates the other.
+type QuickSession = { id: string; starts_at: string; client_id: string; client_name: string };
+type QuickClient = { id: string; name: string };
+type QuickDraftProgram = { id: string; name: string; client_id: string; client_name: string; created_at: string; program_kind: "in_gym" | "at_home" };
+
 export default function NewWayClient({
   user,
   initialType,
@@ -31,6 +35,10 @@ export default function NewWayClient({
   initialProgramId,
   initialView,
   clientProgramSummary,
+  quickSessionsNeeding,
+  quickClientsNeeding,
+  quickDraftSessions,
+  quickDraftPrograms,
 }: {
   user: { id: string; name: string; role: "coach" | "client" | "admin" };
   initialType: "session" | "program";
@@ -43,6 +51,10 @@ export default function NewWayClient({
   initialProgramId: string;
   initialView: ViewMode;
   clientProgramSummary: ClientProgramItem[];
+  quickSessionsNeeding: QuickSession[];
+  quickClientsNeeding: QuickClient[];
+  quickDraftSessions: QuickSession[];
+  quickDraftPrograms: QuickDraftProgram[];
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(initialClientId);
@@ -163,6 +175,33 @@ export default function NewWayClient({
     setApptId(""); setStartsAt(""); setEditProgramId(""); setStarted(false);
     syncUrl({ client: clientId, type });
   }
+
+  // ── Quick-actions ── jumps straight into the workspace bypassing the
+  // 3-step lobby. Used by the four collapsibles above Step 1.
+  function quickProgramSession(s: QuickSession) {
+    setClientId(s.client_id);
+    setType("session");
+    setApptId(s.id);
+    setStartsAt(s.starts_at);
+    setEditProgramId("");
+    setStarted(true);
+    syncUrl({ client: s.client_id, type: "session", appt: s.id, starts: s.starts_at, view });
+  }
+  function quickStartProgramForClient(c: QuickClient) {
+    try { localStorage.removeItem(`monroe-programs-rework-${c.id || "noclient"}`); } catch {}
+    setClientId(c.id);
+    setType("program");
+    setApptId(""); setStartsAt(""); setEditProgramId("");
+    setStarted(true);
+    syncUrl({ client: c.id, type: "program", view });
+  }
+  function quickEditProgram(p: QuickDraftProgram) {
+    setClientId(p.client_id);
+    setType("program");
+    setApptId(""); setStartsAt(""); setEditProgramId(p.id);
+    setStarted(true);
+    syncUrl({ client: p.client_id, type: "program", program: p.id, view });
+  }
   function switchView(next: ViewMode) {
     if (next === view) return;
     setView(next);
@@ -262,6 +301,78 @@ export default function NewWayClient({
         gap: "1rem",
       }}
     >
+      {/* Quick actions — four collapsibles for the most common entry
+          paths. All default closed so the lobby still leads with the
+          deliberate client→type→entity flow; click any row here to skip
+          straight into the workspace for that target. */}
+      <QuickGroup
+        title="Sessions needing programming this week"
+        subLabel="next 7 days · across all clients"
+        count={quickSessionsNeeding.length}
+        emptyLabel="Nothing flagged. Everyone's covered for the week."
+      >
+        {quickSessionsNeeding.map((s) => (
+          <QuickRow
+            key={s.id}
+            primary={fmtSessionWhen(s.starts_at)}
+            secondary={s.client_name}
+            ctaLabel="Create →"
+            onClick={() => quickProgramSession(s)}
+          />
+        ))}
+      </QuickGroup>
+
+      <QuickGroup
+        title="Clients needing programming"
+        subLabel="flagged for at-home, no active program"
+        count={quickClientsNeeding.length}
+        emptyLabel="Every flagged client has an active program."
+      >
+        {quickClientsNeeding.map((c) => (
+          <QuickRow
+            key={c.id}
+            primary={c.name}
+            secondary="No current at-home program"
+            ctaLabel="Create →"
+            onClick={() => quickStartProgramForClient(c)}
+          />
+        ))}
+      </QuickGroup>
+
+      <QuickGroup
+        title="Recently drafted sessions"
+        subLabel="started but not finished"
+        count={quickDraftSessions.length}
+        emptyLabel="No session drafts hanging around."
+      >
+        {quickDraftSessions.map((s) => (
+          <QuickRow
+            key={s.id}
+            primary={fmtSessionWhen(s.starts_at)}
+            secondary={s.client_name}
+            ctaLabel="Edit draft →"
+            onClick={() => quickProgramSession(s)}
+          />
+        ))}
+      </QuickGroup>
+
+      <QuickGroup
+        title="Recently drafted programs"
+        subLabel="unpublished, in progress"
+        count={quickDraftPrograms.length}
+        emptyLabel="No program drafts hanging around."
+      >
+        {quickDraftPrograms.map((p) => (
+          <QuickRow
+            key={p.id}
+            primary={p.name || "Untitled program"}
+            secondary={`${p.client_name} · ${p.program_kind === "at_home" ? "at-home" : "in-gym"}`}
+            ctaLabel="Edit program →"
+            onClick={() => quickEditProgram(p)}
+          />
+        ))}
+      </QuickGroup>
+
       {/* Step 1 — client picker */}
       <section className="card" style={{ padding: "1rem 1.15rem" }}>
         <StepLabel n={1} label="Pick client" />
@@ -394,6 +505,117 @@ export default function NewWayClient({
         </section>
       )}
     </div>
+  );
+}
+
+// ── quick actions ──────────────────────────────────────────────────────
+
+function fmtSessionWhen(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}
+
+function QuickGroup({
+  title, subLabel, count, emptyLabel, children,
+}: {
+  title: string;
+  subLabel: string;
+  count: number;
+  emptyLabel: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  // When the section has zero items, dim it but keep the header clickable
+  // so the count is visible.
+  return (
+    <div
+      style={{
+        border: "1px solid var(--line)",
+        borderRadius: 4,
+        background: count === 0 ? "rgba(0,0,0,0.015)" : "var(--paper)",
+        overflow: "hidden",
+        opacity: count === 0 ? 0.7 : 1,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.55rem",
+          background: open ? "rgba(0,0,0,0.02)" : "transparent",
+          border: "none",
+          padding: "0.55rem 0.85rem",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>{open ? "▾" : "▸"}</span>
+        <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{title}</span>
+        <span className="meta" style={{ fontSize: "0.7rem" }}>{subLabel}</span>
+        <span
+          className="badge"
+          style={{
+            marginLeft: "auto",
+            fontSize: "0.6rem",
+            color: count > 0 ? "var(--rust)" : "var(--muted)",
+            borderColor: count > 0 ? "var(--rust)" : "var(--line)",
+          }}
+        >
+          {count}
+        </span>
+      </button>
+      {open && (
+        count === 0 ? (
+          <p className="meta" style={{ padding: "0.55rem 0.85rem", fontStyle: "italic", fontSize: "0.78rem", margin: 0 }}>
+            {emptyLabel}
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {children}
+          </ul>
+        )
+      )}
+    </div>
+  );
+}
+
+function QuickRow({
+  primary, secondary, ctaLabel, onClick,
+}: {
+  primary: string;
+  secondary: string;
+  ctaLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <li
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "0.6rem",
+        padding: "0.45rem 0.85rem",
+        borderTop: "1px solid var(--line)",
+      }}
+    >
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: "0.86rem", fontWeight: 600 }}>{primary}</div>
+        <div className="meta" style={{ fontSize: "0.7rem", marginTop: "0.1rem" }}>{secondary}</div>
+      </div>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        style={{ padding: "0.28rem 0.85rem", fontSize: "0.78rem" }}
+        onClick={onClick}
+      >
+        {ctaLabel}
+      </button>
+    </li>
   );
 }
 
