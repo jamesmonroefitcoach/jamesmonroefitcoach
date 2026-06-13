@@ -246,6 +246,20 @@ export default function ScheduleView({
   const [clientsBarOpen, setClientsBarOpen] = useState(false);
   const touchDragRef = useRef<{ clientId: string; startX: number; startY: number; moved: boolean } | null>(null);
 
+  // Long-press touch drag for event blocks on mobile. Hold a block ~400ms
+  // to enter drag mode; finger move tracks the target cell; lift finger
+  // drops into it. Reuses the existing onCellDrop logic so the persist
+  // path is identical to desktop drag.
+  const eventTouchRef = useRef<{
+    apptId: string;
+    startX: number;
+    startY: number;
+    longPressTimer: ReturnType<typeof setTimeout> | null;
+    dragging: boolean;
+    moved: boolean;
+  } | null>(null);
+  const [touchDraggingApptId, setTouchDraggingApptId] = useState<string | null>(null);
+
   const today = new Date();
 
   // Reset edit modes when switching between appointments
@@ -613,6 +627,84 @@ export default function ScheduleView({
   function quickStatus(status: AppointmentRow["status"]) {
     if (!draft) return;
     setDraft({ ...draft, status });
+  }
+
+  // ─── Mobile long-press drag for event blocks ────────────────────
+  // Hold a block for ~400ms to enter drag mode; finger move tracks the
+  // target cell via document.elementFromPoint reading data-day / data-hour
+  // off the hour-cell. Lift finger to drop. Falls through to onClick
+  // (openEdit) if the hold doesn't fire or the finger barely moves.
+  const LONG_PRESS_MS = 400;
+  const TOUCH_MOVE_TOLERANCE_PX = 8;
+
+  function clearEventTouch() {
+    if (eventTouchRef.current?.longPressTimer) {
+      clearTimeout(eventTouchRef.current.longPressTimer);
+    }
+    eventTouchRef.current = null;
+    setTouchDraggingApptId(null);
+    setDropTarget(null);
+  }
+
+  function onEventTouchStart(e: React.TouchEvent, apptId: string) {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (eventTouchRef.current?.longPressTimer) clearTimeout(eventTouchRef.current.longPressTimer);
+    eventTouchRef.current = {
+      apptId,
+      startX: t.clientX,
+      startY: t.clientY,
+      longPressTimer: setTimeout(() => {
+        if (!eventTouchRef.current || eventTouchRef.current.apptId !== apptId) return;
+        eventTouchRef.current.dragging = true;
+        setTouchDraggingApptId(apptId);
+        setDragId(apptId);
+        // Subtle haptic confirmation on supported devices.
+        try { (navigator as { vibrate?: (n: number) => void }).vibrate?.(15); } catch {}
+      }, LONG_PRESS_MS),
+      dragging: false,
+      moved: false,
+    };
+  }
+  function onEventTouchMove(e: React.TouchEvent) {
+    if (!eventTouchRef.current) return;
+    const t = e.touches[0];
+    const dx = Math.abs(t.clientX - eventTouchRef.current.startX);
+    const dy = Math.abs(t.clientY - eventTouchRef.current.startY);
+    if (!eventTouchRef.current.dragging) {
+      if (dx > TOUCH_MOVE_TOLERANCE_PX || dy > TOUCH_MOVE_TOLERANCE_PX) {
+        eventTouchRef.current.moved = true;
+        if (eventTouchRef.current.longPressTimer) {
+          clearTimeout(eventTouchRef.current.longPressTimer);
+          eventTouchRef.current.longPressTimer = null;
+        }
+      }
+      return;
+    }
+    // Dragging — find the cell under the finger and update dropTarget.
+    e.preventDefault();
+    const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
+    const cell = el?.closest<HTMLElement>('[data-timecell="1"]');
+    if (!cell) { setDropTarget(null); return; }
+    const day = Number(cell.dataset.day);
+    const hour = Number(cell.dataset.hour);
+    if (Number.isFinite(day) && Number.isFinite(hour)) {
+      setDropTarget({ day, hour });
+    }
+  }
+  function onEventTouchEnd() {
+    const state = eventTouchRef.current;
+    clearEventTouch();
+    if (!state) return;
+    if (!state.dragging) return; // regular click falls through to onClick
+    // Drop into the last targeted cell.
+    if (dropTarget) {
+      setDragId(state.apptId);
+      onCellDrop(dropTarget.day, dropTarget.hour);
+    }
+  }
+  function onEventTouchCancel() {
+    clearEventTouch();
   }
 
   // ─── DRAG & DROP ─────────────────────────────────────────────────
@@ -1238,6 +1330,18 @@ export default function ScheduleView({
                         draggable
                         onDragStart={() => setDragId(e.id)}
                         onDragEnd={() => setDragId(null)}
+                        onTouchStart={(ev) => onEventTouchStart(ev, e.id)}
+                        onTouchMove={onEventTouchMove}
+                        onTouchEnd={(ev) => {
+                          // If a long-press drag fired, suppress the
+                          // synthetic click that would otherwise open the
+                          // edit panel.
+                          if (eventTouchRef.current?.dragging) {
+                            ev.preventDefault();
+                          }
+                          onEventTouchEnd();
+                        }}
+                        onTouchCancel={onEventTouchCancel}
                         onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}
                         title={`${e.client_name ?? e.personal_label ?? "—"} — ${e.status}${e.session_type === "session" ? ` · ${e.paid ? "paid" : "unpaid"}` : ""}${e.change_count > 0 ? ` (Moved ${e.change_count}×)` : ""}`}
                         style={{
@@ -1261,10 +1365,19 @@ export default function ScheduleView({
                             : "3px solid var(--steel)",
                           border: cancelled && e.session_type !== "session" ? "1px dashed rgba(255,255,255,0.5)" : undefined,
                           opacity: cancelled ? 0.85 : 1,
-                          boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
+                          boxShadow: touchDraggingApptId === e.id
+                            ? "0 4px 14px rgba(0,0,0,0.4)"
+                            : "0 1px 0 rgba(0,0,0,0.15)",
+                          outline: touchDraggingApptId === e.id ? "2px solid #fff" : undefined,
+                          transform: touchDraggingApptId === e.id ? "scale(1.04)" : undefined,
+                          transition: "transform 0.1s, box-shadow 0.1s",
                           cursor: "grab",
                           overflow: "hidden",
-                          zIndex: 2
+                          // Allow the parent's touchmove to capture the
+                          // long-press drag without the browser intercepting
+                          // it as a scroll once dragging begins.
+                          touchAction: touchDraggingApptId === e.id ? "none" : "pan-y",
+                          zIndex: touchDraggingApptId === e.id ? 4 : 2,
                         }}
                       >
                         <div style={{ fontWeight: 700, textDecoration: cancelled ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
