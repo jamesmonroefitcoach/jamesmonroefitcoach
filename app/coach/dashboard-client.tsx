@@ -487,6 +487,7 @@ export default function DashboardClient({
   claimedSlots,
   baseWeekStart,
   clientProgramInfo,
+  allTimeStats,
 }: {
   clients: ClientRow[];
   initialWeekAppts: AppointmentRow[];
@@ -497,6 +498,12 @@ export default function DashboardClient({
   claimedSlots: { id: string; starts_at: string; claimed_by_name: string | null; claimed_at: string | null }[];
   baseWeekStart: Date;
   clientProgramInfo: Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null }>;
+  allTimeStats: {
+    weeks: { weekStart: string; count: number }[];
+    totalSessions: number;
+    avgPerWeek: number;
+    firstWeek: string | null;
+  };
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [displayAppts, setDisplayAppts] = useState<AppointmentRow[]>(initialWeekAppts);
@@ -972,6 +979,146 @@ export default function DashboardClient({
           <TodoBlock />
         </div>
       </div>
+
+      {/* ─── ALL-TIME WEEKLY SESSIONS ─────────────────────────────────── */}
+      <AllTimeSessionsBlock stats={allTimeStats} />
     </>
+  );
+}
+
+// ── All-time weekly session counts ───────────────────────────────────
+// Sits at the bottom of the dashboard: one big stat (sessions/week avg
+// since the first session on record) + a horizontal bar chart of every
+// week with at least one session, so you can scan the long-term trend.
+function AllTimeSessionsBlock({
+  stats,
+}: {
+  stats: {
+    weeks: { weekStart: string; count: number }[];
+    totalSessions: number;
+    avgPerWeek: number;
+    firstWeek: string | null;
+  };
+}) {
+  if (stats.weeks.length === 0) {
+    return (
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h2>All-time session history</h2>
+        <hr className="divider" />
+        <p className="meta" style={{ fontStyle: "italic" }}>
+          No completed sessions on record yet.
+        </p>
+      </div>
+    );
+  }
+  const maxCount = Math.max(...stats.weeks.map((w) => w.count), 1);
+  const avg = stats.avgPerWeek;
+  const avgRounded = Math.round(avg * 10) / 10;
+  const firstLabel = stats.firstWeek
+    ? new Date(stats.firstWeek + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "—";
+  const lastLabel = stats.weeks.length > 0
+    ? new Date(stats.weeks[stats.weeks.length - 1].weekStart + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "—";
+  // Recent vs older average so we can show a trend hint.
+  const recent12 = stats.weeks.slice(-12);
+  const recentAvg = recent12.length > 0
+    ? recent12.reduce((s, w) => s + w.count, 0) / recent12.length
+    : 0;
+  const trendDelta = recentAvg - avg;
+  return (
+    <div className="card" style={{ marginTop: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem", flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0 }}>All-time session history</h2>
+        <span className="meta" style={{ fontSize: "0.78rem" }}>
+          {firstLabel} → {lastLabel} · {stats.totalSessions} sessions
+        </span>
+      </div>
+      <hr className="divider" />
+
+      {/* Stat row */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: "0.85rem",
+          marginBottom: "0.85rem",
+        }}
+      >
+        <div>
+          <div className="stat-label">Avg sessions / week</div>
+          <div style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--rust)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+            {avgRounded}
+          </div>
+          <div className="meta" style={{ fontSize: "0.7rem" }}>
+            over {stats.weeks.length} week{stats.weeks.length === 1 ? "" : "s"}
+          </div>
+        </div>
+        <div>
+          <div className="stat-label">Last 12 weeks</div>
+          <div style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+            {Math.round(recentAvg * 10) / 10}
+          </div>
+          <div className="meta" style={{ fontSize: "0.7rem", color: trendDelta >= 0 ? "var(--sage)" : "var(--red)", fontWeight: 600 }}>
+            {trendDelta >= 0 ? "▲" : "▼"} {Math.abs(Math.round(trendDelta * 10) / 10)}/wk vs all-time avg
+          </div>
+        </div>
+        <div>
+          <div className="stat-label">Highest week</div>
+          <div style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+            {maxCount}
+          </div>
+          <div className="meta" style={{ fontSize: "0.7rem" }}>peak</div>
+        </div>
+      </div>
+
+      {/* Bar chart — one bar per week, oldest on the left. Scrolls
+          horizontally if the history is too long for the card width. */}
+      <div
+        style={{
+          overflowX: "auto",
+          paddingBottom: "0.35rem",
+          borderTop: "1px solid var(--line)",
+          paddingTop: "0.85rem",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            gap: 2,
+            height: 110,
+            minWidth: "100%",
+          }}
+        >
+          {stats.weeks.map((w) => {
+            const pct = (w.count / maxCount) * 100;
+            const isAboveAvg = w.count >= avg;
+            return (
+              <div
+                key={w.weekStart}
+                title={`Week of ${new Date(w.weekStart + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} — ${w.count} session${w.count === 1 ? "" : "s"}`}
+                style={{
+                  width: 6,
+                  height: `${Math.max(2, pct)}%`,
+                  background: isAboveAvg ? "var(--rust)" : "rgba(168,61,43,0.35)",
+                  borderRadius: "1px 1px 0 0",
+                  flex: "0 0 auto",
+                }}
+              />
+            );
+          })}
+        </div>
+        {/* Reference line for the avg */}
+        <div style={{ height: 1, background: "var(--line)", marginTop: 4 }} />
+        <div className="meta" style={{ display: "flex", justifyContent: "space-between", fontSize: "0.66rem", marginTop: "0.25rem" }}>
+          <span>{firstLabel}</span>
+          <span style={{ fontStyle: "italic" }}>
+            Rust = at or above all-time avg · faded = below
+          </span>
+          <span>{lastLabel}</span>
+        </div>
+      </div>
+    </div>
   );
 }

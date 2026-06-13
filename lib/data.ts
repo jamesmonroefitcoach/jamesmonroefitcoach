@@ -892,3 +892,74 @@ export async function getProgramForClient(
   if (error || !data) return null;
   return data as ClientProgramRow;
 }
+
+// ─── All-time session-count history ───────────────────────────────────
+// For the dashboard's bottom analytics: how many sessions per week,
+// going back as far as the data exists. Filter is 'sessions that
+// actually happened' — past starts_at, status not cancelled / no-show,
+// session_type = 'session'.
+
+export type WeeklySessionCount = {
+  /** YYYY-MM-DD of the Monday for the week. */
+  weekStart: string;
+  count: number;
+};
+
+export type AllTimeSessionStats = {
+  weeks: WeeklySessionCount[];
+  totalSessions: number;
+  /** Average sessions per week over the span from the first week with
+   *  data to the current week (inclusive of any zero weeks in between). */
+  avgPerWeek: number;
+  /** ISO of the first week's Monday — null when no data. */
+  firstWeek: string | null;
+};
+
+export async function getAllTimeSessionStats(coachId: string): Promise<AllTimeSessionStats> {
+  if (!hasSupabaseEnv()) {
+    return { weeks: [], totalSessions: 0, avgPerWeek: 0, firstWeek: null };
+  }
+  const nowIso = new Date().toISOString();
+  const supabase = createSupabaseAdmin();
+  const { data } = await supabase
+    .from("appointments")
+    .select("starts_at, status")
+    .eq("coach_id", coachId)
+    .eq("session_type", "session")
+    .lte("starts_at", nowIso)
+    .not("status", "in", "(cancelled,no_show)");
+
+  type Row = { starts_at: string; status: string };
+  const rows = (data ?? []) as Row[];
+  if (rows.length === 0) {
+    return { weeks: [], totalSessions: 0, avgPerWeek: 0, firstWeek: null };
+  }
+
+  // Bucket by Monday-anchored week.
+  const buckets = new Map<string, number>();
+  for (const r of rows) {
+    const d = new Date(r.starts_at);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const key = d.toISOString().slice(0, 10);
+    buckets.set(key, (buckets.get(key) ?? 0) + 1);
+  }
+
+  // Fill zeros for any weeks between first and now so the chart shows
+  // real gaps rather than collapsing them.
+  const sortedKeys = Array.from(buckets.keys()).sort();
+  const firstKey = sortedKeys[0];
+  const first = new Date(firstKey + "T00:00:00");
+  const nowMon = new Date();
+  nowMon.setHours(0, 0, 0, 0);
+  nowMon.setDate(nowMon.getDate() - ((nowMon.getDay() + 6) % 7));
+  const weeks: WeeklySessionCount[] = [];
+  for (let d = new Date(first); d.getTime() <= nowMon.getTime(); d.setDate(d.getDate() + 7)) {
+    const key = d.toISOString().slice(0, 10);
+    weeks.push({ weekStart: key, count: buckets.get(key) ?? 0 });
+  }
+
+  const totalSessions = rows.length;
+  const avgPerWeek = weeks.length > 0 ? totalSessions / weeks.length : 0;
+  return { weeks, totalSessions, avgPerWeek, firstWeek: firstKey };
+}

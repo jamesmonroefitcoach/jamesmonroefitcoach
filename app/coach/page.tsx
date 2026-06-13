@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import {
   listClients, listAppointmentsForWeek, listAppointmentsForMonth,
   countOpenRequests, listCoachThreads, startOfWeek,
+  getAllTimeSessionStats,
 } from "@/lib/data";
 import { listSlotOffers } from "./availability/data";
 import { pastProgramsForClient } from "@/lib/programs";
@@ -17,13 +18,14 @@ export default async function CoachDashboard() {
   const weekStart = startOfWeek(new Date());
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-  const [clients, appts, monthAppts, openReq, threads, slotOffers] = await Promise.all([
+  const [clients, appts, monthAppts, openReq, threads, slotOffers, allTimeStats] = await Promise.all([
     listClients(user.id),
     listAppointmentsForWeek(user.id),
     listAppointmentsForMonth(user.id, monthStart),
     countOpenRequests(user.id),
     listCoachThreads(user.id),
     listSlotOffers(user.id),
+    getAllTimeSessionStats(user.id),
   ]);
 
   // Inbox feeds — change-requested appointments + claimed slot offers
@@ -91,6 +93,7 @@ export default async function CoachDashboard() {
         claimedSlots={claimedSlots}
         baseWeekStart={weekStart}
         clientProgramInfo={clientProgramInfo}
+        allTimeStats={allTimeStats}
       />
     </main>
   );
