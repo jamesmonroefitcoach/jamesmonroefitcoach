@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForWeek, listAppointmentsForMonth, listClients, startOfWeek } from "@/lib/data";
+import { listGoalsForUser } from "@/lib/goals.server";
 import ScheduleView from "./schedule-view";
 import ScheduleTabs from "./schedule-tabs";
 
@@ -13,11 +14,20 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const weekStart = sp.week ? new Date(sp.week) : startOfWeek(new Date());
   const monthStart = sp.month ? new Date(sp.month) : new Date();
 
-  const [weekAppts, monthAppts, clients] = await Promise.all([
+  const [weekAppts, monthAppts, clients, goalCategoriesRaw] = await Promise.all([
     listAppointmentsForWeek(user.id, weekStart),
     listAppointmentsForMonth(user.id, monthStart),
-    listClients(user.id)
+    listClients(user.id),
+    listGoalsForUser(user.id),
   ]);
+  // Flatten to the lighter shape the schedule needs (id/name/color +
+  // each category's goal id/name list).
+  const goalCategories = goalCategoriesRaw.map((c) => ({
+    id: c.id,
+    name: c.name,
+    color: c.color,
+    goals: c.goals.map((g) => ({ id: g.id, name: g.name })),
+  }));
 
   return (
     <>
@@ -38,6 +48,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         weekAppts={weekAppts}
         monthAppts={monthAppts}
         clients={clients}
+        goalCategories={goalCategories}
       />
     </main>
     </>

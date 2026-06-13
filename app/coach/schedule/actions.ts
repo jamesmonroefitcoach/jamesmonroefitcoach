@@ -29,6 +29,9 @@ export type ApptInput = {
   ends_at: string;
   session_type: "session" | "personal";
   personal_label?: string | null;
+  /** Optional goal tag for personal blocks — drives schedule block color
+   *  and feeds weekly goal-progress rollups. */
+  goal_id?: string | null;
   client_id?: string | null;
   rate?: number | null;
   paid?: boolean;
@@ -59,6 +62,8 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
     ends_at: input.ends_at,
     session_type: input.session_type,
     personal_label: isPersonal ? input.personal_label ?? null : null,
+    // goal_id only sticks on personal blocks for now.
+    goal_id: isPersonal ? input.goal_id ?? null : null,
     is_blocking: isPersonal,
     rate: isPersonal ? null : input.rate ?? null,
     paid: input.paid ?? false,

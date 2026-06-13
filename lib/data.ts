@@ -333,6 +333,9 @@ export type AppointmentRow = {
   requested_starts_at?: string | null;
   requested_ends_at?: string | null;
   requested_reason?: string | null;
+  /** Goal tag (personal blocks only). Drives schedule block color and the
+   *  weekly goal-progress rollup at the top of the schedule. */
+  goal_id?: string | null;
 };
 
 // Recurring weekly slots — each has a stable series_id.
@@ -508,7 +511,7 @@ export async function listAppointmentsForWeek(coachId: string, weekStart?: Date)
   end.setDate(start.getDate() + 7);
   const { data, error } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, goal_id, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
     .eq("coach_id", coachId)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString())
@@ -547,7 +550,7 @@ export async function listAppointmentsForMonth(coachId: string, monthStart: Date
   const supabase = createSupabaseAdmin();
   const { data } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, goal_id, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
     .eq("coach_id", coachId)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString());
@@ -585,7 +588,7 @@ export async function listAppointmentsForClient(clientId: string): Promise<Appoi
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("appointments_with_names")
-    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
+    .select("id, client_id, client_name, starts_at, ends_at, status, rate, paid, notes, change_count, session_type, personal_label, is_blocking, goal_id, session_program_id, series_id, requested_starts_at, requested_ends_at, requested_reason")
     .eq("client_id", clientId)
     .order("starts_at", { ascending: true });
   if (error || !data) return [];

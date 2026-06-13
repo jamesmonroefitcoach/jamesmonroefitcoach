@@ -7,7 +7,10 @@ import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeReq
 import { CANCEL_REASONS, CANCEL_REASON_LABELS } from "@/lib/cancel-reasons";
 
 const HOUR_HEIGHT = 56; // px per hour cell
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 6); // 6a–7p (start hours)
+// 6a–1a next day. Hours 24 and 25 are visual placeholders for midnight
+// and 1am of the following calendar day so sleep blocks (which routinely
+// span midnight) render cleanly.
+const HOURS = Array.from({ length: 20 }, (_, i) => i + 6);
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 type View = "week" | "month";
@@ -23,10 +26,34 @@ function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function dayIndex(d: Date): number { return (d.getDay() + 6) % 7; }
-function minutesFromTop(d: Date): number { return (d.getHours() - HOURS[0]) * 60 + d.getMinutes(); }
+// dayIndex / minutesFromTop both treat early-morning hours (00:00–01:59)
+// as continuations of the previous calendar day so a sleep block that
+// runs 10pm–6am renders inside the previous day's column, ending in the
+// 24/25 hour rows.
+function dayIndex(d: Date): number {
+  if (d.getHours() < 2) {
+    const prev = new Date(d);
+    prev.setDate(prev.getDate() - 1);
+    return (prev.getDay() + 6) % 7;
+  }
+  return (d.getDay() + 6) % 7;
+}
+function minutesFromTop(d: Date): number {
+  // Hours < HOURS[0] (i.e. < 6am) are treated as +24 so they slot into
+  // the extension rows at the bottom of the previous day's column.
+  const hr = d.getHours() < HOURS[0] ? d.getHours() + 24 : d.getHours();
+  return (hr - HOURS[0]) * 60 + d.getMinutes();
+}
 function minToPx(min: number): number { return min * HOUR_HEIGHT / 60; }
 function pxFromTop(d: Date): number { return minToPx(minutesFromTop(d)); }
+
+// Render an HOURS entry as a label — handles the >23 extension hours.
+function hourLabel(h: number): string {
+  const real = h % 24;
+  const hr12 = real % 12 === 0 ? 12 : real % 12;
+  const ampm = real < 12 ? "a" : "p";
+  return `${hr12}${ampm}`;
+}
 
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
   scheduled:        { bg: "#5b6d7a", fg: "#fff" },
@@ -58,10 +85,21 @@ type Draft = {
   change_count: number;
   series_id?: string | null;
   call_type: "voice" | "video" | null;
+  // Optional goal tag for personal blocks — color-codes the block by the
+  // goal's category and counts toward the weekly goal rollup.
+  goal_id: string | null;
   // repeat config (only used when creating new)
   repeat_enabled: boolean;
   repeat_cadence: 1 | 2;
   repeat_count: number;
+};
+
+// Goal data passed in from the page for the personal-block goal picker.
+export type ScheduleGoalCategory = {
+  id: string;
+  name: string;
+  color: string;
+  goals: { id: string; name: string }[];
 };
 
 function newDraft(starts_at: Date, ends_at: Date): Draft {
@@ -81,6 +119,7 @@ function newDraft(starts_at: Date, ends_at: Date): Draft {
     cancel_reason_other: "",
     change_count: 0,
     call_type: null,
+    goal_id: null,
     repeat_enabled: false,
     repeat_cadence: 1,
     repeat_count: 8
@@ -106,6 +145,7 @@ function fromAppt(a: AppointmentRow): Draft {
     change_count: a.change_count,
     call_type: a.call_type ?? null,
     series_id: a.series_id ?? null,
+    goal_id: (a as { goal_id?: string | null }).goal_id ?? null,
     repeat_enabled: false,
     repeat_cadence: 1,
     repeat_count: 8
@@ -150,7 +190,8 @@ export default function ScheduleView({
   initialView,
   weekAppts,
   monthAppts,
-  clients
+  clients,
+  goalCategories = [],
 }: {
   weekStart: string;
   monthStart: string;
@@ -158,7 +199,19 @@ export default function ScheduleView({
   weekAppts: AppointmentRow[];
   monthAppts: AppointmentRow[];
   clients: ClientRow[];
+  /** Coach's goal categories — feeds the personal-block goal picker
+   *  and color-codes blocks by their tagged category. Optional so the
+   *  client-side schedule (no goals yet) still compiles. */
+  goalCategories?: ScheduleGoalCategory[];
 }) {
+  // Index goal_id → color for fast lookup when rendering personal blocks.
+  const goalColorById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const cat of goalCategories) {
+      for (const g of cat.goals) m.set(g.id, cat.color);
+    }
+    return m;
+  }, [goalCategories]);
   const [view, setView] = useState<View>(initialView);
   // Parse "YYYY-MM-DD" as local midnight (not UTC) to avoid timezone shift
   const [ws, setWs] = useState(() => {
@@ -436,6 +489,7 @@ export default function ScheduleView({
         ends_at: draft.ends_at,
         session_type: draft.session_type,
         personal_label: draft.personal_label || null,
+        goal_id: draft.goal_id,
         client_id: draft.client_id || null,
         rate: draft.rate ? Number(draft.rate) : null,
         paid: draft.paid,
@@ -973,7 +1027,7 @@ export default function ScheduleView({
             >
               {HOURS.map((h) => (
                 <div key={h} className="meta" style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", textAlign: "right", borderBottom: "1px solid var(--line)" }}>
-                  {h % 12 === 0 ? 12 : h % 12}{h < 12 ? "a" : "p"}
+                  {hourLabel(h)}
                 </div>
               ))}
             </div>
@@ -1135,7 +1189,14 @@ export default function ScheduleView({
                     const widthPct = 100 / e.lanes;
                     const leftPct = e.lane * widthPct;
                     const eventClient = e.client_id ? clients.find((c) => c.id === e.client_id) : null;
-                    const colors = e.session_type === "personal" ? PERSONAL_COLOR
+                    // Personal blocks: prefer the goal-category color when one's
+                    // been tagged; otherwise the muted default. Sessions keep
+                    // their status-driven palette.
+                    const personalGoalColor = e.session_type === "personal"
+                      ? goalColorById.get((e as { goal_id?: string | null }).goal_id ?? "")
+                      : undefined;
+                    const colors = e.session_type === "personal"
+                      ? (personalGoalColor ? { bg: personalGoalColor, fg: "#fff" } : PERSONAL_COLOR)
                       : eventClient?.lifecycle === "online" ? ONLINE_COLOR
                       : STATUS_COLORS[e.status];
                     const cancelled = e.status === "cancelled";
@@ -1351,11 +1412,11 @@ export default function ScheduleView({
             </div>
 
             {draft.session_type === "personal" ? (
-              <div>
-                <label className="stat-label">Label</label>
-                <input className="input" placeholder="Doctor / Out of town / Lunch" value={draft.personal_label} onChange={(e) => setDraft({ ...draft, personal_label: e.target.value })} style={{ marginTop: "0.3rem" }} />
-                <p className="meta" style={{ fontSize: "0.74rem", marginTop: "0.4rem" }}>Personal blocks lock the calendar — clients can't request this slot.</p>
-              </div>
+              <PersonalBlockFields
+                draft={draft}
+                setDraft={setDraft}
+                goalCategories={goalCategories}
+              />
             ) : (
               <>
                 <div>
@@ -1797,4 +1858,177 @@ function setTimeOnIso(iso: string, timeStr: string): string {
 /** Add exactly one hour to an ISO string */
 function addOneHourToIso(iso: string): string {
   return new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString();
+}
+
+// ─── Personal block edit fields with goal picker + Sleep specifics ────
+function PersonalBlockFields({
+  draft, setDraft, goalCategories,
+}: {
+  draft: Draft;
+  setDraft: (d: Draft) => void;
+  goalCategories: ScheduleGoalCategory[];
+}) {
+  // Find the goal/cat for the current draft so we can show its color and
+  // detect 'Sleep' specifically for the bed/wake quick inputs.
+  const tagged = useMemo(() => {
+    if (!draft.goal_id) return null;
+    for (const cat of goalCategories) {
+      const g = cat.goals.find((x) => x.id === draft.goal_id);
+      if (g) return { goal: g, cat };
+    }
+    return null;
+  }, [draft.goal_id, goalCategories]);
+  const isSleepCategory = !!tagged && /sleep/i.test(tagged.cat.name);
+
+  function pickGoal(goalId: string) {
+    // Look up the goal so we can tell if it's in the Sleep category.
+    let nextCat: ScheduleGoalCategory | null = null;
+    let nextGoal: { id: string; name: string } | null = null;
+    for (const c of goalCategories) {
+      const g = c.goals.find((x) => x.id === goalId);
+      if (g) { nextCat = c; nextGoal = g; break; }
+    }
+    const isSleep = !!nextCat && /sleep/i.test(nextCat.name);
+    // If this is a brand-new draft (no appt_id) and we're tagging Sleep,
+    // auto-set the times to 10pm → 6am next day. Skip on existing rows.
+    if (isSleep && !draft.appt_id) {
+      const start = new Date(draft.starts_at);
+      start.setHours(22, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      end.setHours(6, 0, 0, 0);
+      setDraft({
+        ...draft,
+        goal_id: goalId,
+        personal_label: nextGoal?.name ?? "Sleep",
+        starts_at: start.toISOString(),
+        ends_at: end.toISOString(),
+      });
+    } else {
+      setDraft({
+        ...draft,
+        goal_id: goalId,
+        personal_label: draft.personal_label || nextGoal?.name || "",
+      });
+    }
+  }
+
+  // Quick bed/wake time editors for sleep blocks. They map directly to
+  // the appointment's start/end (same source of truth).
+  function bedAndWake(): { bedTime: string; wakeTime: string } {
+    const s = new Date(draft.starts_at);
+    const e = new Date(draft.ends_at);
+    return {
+      bedTime: `${String(s.getHours()).padStart(2, "0")}:${String(s.getMinutes()).padStart(2, "0")}`,
+      wakeTime: `${String(e.getHours()).padStart(2, "0")}:${String(e.getMinutes()).padStart(2, "0")}`,
+    };
+  }
+  function setBedTime(timeStr: string) {
+    const [h, m] = timeStr.split(":").map(Number);
+    const s = new Date(draft.starts_at);
+    s.setHours(h, m, 0, 0);
+    setDraft({ ...draft, starts_at: s.toISOString() });
+  }
+  function setWakeTime(timeStr: string) {
+    const [h, m] = timeStr.split(":").map(Number);
+    const e = new Date(draft.ends_at);
+    e.setHours(h, m, 0, 0);
+    setDraft({ ...draft, ends_at: e.toISOString() });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+      {/* Goal picker */}
+      {goalCategories.length > 0 && (
+        <div>
+          <label className="stat-label">Goal (color-codes the block + counts toward weekly progress)</label>
+          <select
+            className="input"
+            value={draft.goal_id ?? ""}
+            onChange={(e) => {
+              if (!e.target.value) setDraft({ ...draft, goal_id: null });
+              else pickGoal(e.target.value);
+            }}
+            style={{ marginTop: "0.3rem" }}
+          >
+            <option value="">— No goal —</option>
+            {goalCategories.map((cat) => (
+              <optgroup key={cat.id} label={cat.name}>
+                {cat.goals.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {tagged && (
+            <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: tagged.cat.color }} />
+              <span>{tagged.cat.name}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sleep-specific quick inputs (bed/wake times). Editing these
+          updates the appointment's start/end — same source of truth as
+          the regular date pickers below. Default 22:00 → 06:00 was set
+          when Sleep was picked. */}
+      {isSleepCategory && (() => {
+        const t = bedAndWake();
+        return (
+          <div style={{
+            background: "rgba(62,96,121,0.06)",
+            border: "1px solid var(--steel)",
+            borderRadius: 4,
+            padding: "0.6rem 0.7rem",
+          }}>
+            <div style={{
+              fontFamily: "Oswald, sans-serif", textTransform: "uppercase",
+              letterSpacing: "0.08em", fontSize: "0.7rem", color: "var(--steel)",
+              fontWeight: 600, marginBottom: "0.4rem",
+            }}>Daily sleep entry</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+              <label style={{ fontSize: "0.78rem" }}>
+                <span className="meta" style={{ fontSize: "0.66rem" }}>Est. time went to bed</span>
+                <input
+                  type="time"
+                  className="input"
+                  value={t.bedTime}
+                  onChange={(e) => setBedTime(e.target.value)}
+                  style={{ marginTop: "0.2rem" }}
+                />
+              </label>
+              <label style={{ fontSize: "0.78rem" }}>
+                <span className="meta" style={{ fontSize: "0.66rem" }}>Est. time woke up</span>
+                <input
+                  type="time"
+                  className="input"
+                  value={t.wakeTime}
+                  onChange={(e) => setWakeTime(e.target.value)}
+                  style={{ marginTop: "0.2rem" }}
+                />
+              </label>
+            </div>
+            <div className="meta" style={{ fontSize: "0.66rem", marginTop: "0.4rem", fontStyle: "italic" }}>
+              Defaults to 10pm → 6am. Adjust per night.
+            </div>
+          </div>
+        );
+      })()}
+
+      <div>
+        <label className="stat-label">Label</label>
+        <input
+          className="input"
+          placeholder="Doctor / Out of town / Lunch"
+          value={draft.personal_label}
+          onChange={(e) => setDraft({ ...draft, personal_label: e.target.value })}
+          style={{ marginTop: "0.3rem" }}
+        />
+        <p className="meta" style={{ fontSize: "0.74rem", marginTop: "0.4rem" }}>
+          Personal blocks lock the calendar — clients can&rsquo;t request this slot.
+        </p>
+      </div>
+    </div>
+  );
 }
