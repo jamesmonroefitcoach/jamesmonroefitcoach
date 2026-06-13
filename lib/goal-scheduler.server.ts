@@ -233,9 +233,25 @@ function scheduleCook(weekStart: Date, busy: AppointmentLite[], targetHours: num
   return out;
 }
 
-/** Cardio — evening 60 min runs, Sun 17:00 / Wed 18:00 / Fri 18:00. */
+/** Cardio — evening 60 min runs. Tries Sun 17:00 / Wed 18:00 / Fri 18:00
+ *  first; falls back to any free evening slot (16:00–20:00 start) on
+ *  any remaining future day this week so a packed week doesn't return
+ *  empty. */
 function scheduleCardio(weekStart: Date, busy: AppointmentLite[], targetRuns: number): Slot[] {
   const out: Slot[] = [];
+  const now = new Date();
+  const taken = new Set<number>(); // ms timestamps of starts we've used
+
+  function tryAdd(s: Date, e: Date): boolean {
+    if (s < now) return false;
+    if (taken.has(s.getTime())) return false;
+    if (isBusy(s, e, busy)) return false;
+    out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+    taken.add(s.getTime());
+    return true;
+  }
+
+  // Pass 1 — sunset preferences.
   const preferred: { dayOfWeek: number; hour: number }[] = [
     { dayOfWeek: 6, hour: 17 }, // Sun 5pm
     { dayOfWeek: 2, hour: 18 }, // Wed 6pm
@@ -245,8 +261,19 @@ function scheduleCardio(weekStart: Date, busy: AppointmentLite[], targetRuns: nu
     if (out.length >= targetRuns) break;
     const s = setLocalHours(new Date(weekStart.getTime() + p.dayOfWeek * 86_400_000), p.hour);
     const e = setLocalHours(s, p.hour + 1);
-    if (s < new Date()) continue;
-    if (!isBusy(s, e, busy)) out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+    tryAdd(s, e);
+  }
+
+  // Pass 2 — fallback. Scan every future day of the week for an
+  // evening hour (16–19 start, so the run finishes by 8pm) that's free.
+  if (out.length < targetRuns) {
+    for (let day = 0; day < 7 && out.length < targetRuns; day++) {
+      for (let h = 16; h <= 19 && out.length < targetRuns; h++) {
+        const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), h);
+        const e = setLocalHours(s, h + 1);
+        tryAdd(s, e);
+      }
+    }
   }
   return out;
 }
@@ -377,7 +404,23 @@ export async function autoFillCategoryForWeek(
 
   const slots = scheduleByCategoryName(category.name, ws, appts, targetWeekly);
   if (slots.length === 0) {
-    return { ok: false, error: "Nothing to add — already on target or no free slots." };
+    // Count existing future blocks for this category so the message can
+    // tell the user which is true: already booked vs. genuinely no room.
+    const futureExisting = appts.filter((a) => {
+      if (a.session_type !== "personal") return false;
+      if (!a.goal_id) return false;
+      if (!category.goals.some((g) => g.id === a.goal_id)) return false;
+      return new Date(a.starts_at) > new Date();
+    }).length;
+    if (futureExisting >= targetWeekly) {
+      return { ok: false, error: `Already booked ${futureExisting} for this week (target ${targetWeekly}).` };
+    }
+    return {
+      ok: false,
+      error: futureExisting > 0
+        ? `Booked ${futureExisting}/${targetWeekly}; no free preferred slots for the rest. Try Reorg or move existing appointments.`
+        : "No free slots match the rules for this category this week.",
+    };
   }
 
   // Sleep blocks get a time-range label so they read at a glance even
