@@ -13,6 +13,7 @@ import {
 import ReworkClient from "../rework/rework-client";
 import ProgramsReworkClient from "../programs-rework/programs-rework-client";
 import WorkoutSheetEmbed, { type ClientLite } from "@/components/workout-sheet-embed";
+import { archiveActiveWip, listWipBackups, restoreWipBackup, deleteWipBackup, type WipBackup } from "@/lib/program-wip";
 
 type ViewMode = "inapp" | "template";
 
@@ -68,6 +69,12 @@ export default function NewWayClient({
   // Program list for Step 3.
   const [programs, setPrograms] = useState<ImportableProgram[]>([]);
   const [programsLoading, startProgramsLoad] = useTransition();
+  /** localStorage backups for the picked client — surfaces the 'Recover
+   *  previous draft' banner. Read fresh whenever clientId changes. */
+  const [wipBackups, setWipBackups] = useState<WipBackup[]>([]);
+  // Refresh-trigger so we can re-list backups after restore/delete without
+  // making the listWipBackups call a render-time side effect.
+  const [backupTick, setBackupTick] = useState(0);
   /** Program ID currently being edited (set by clicking Edit on a row, or
    *  passed in via ?program=). Empty string means "new". */
   const [editProgramId, setEditProgramId] = useState<string>(initialProgramId);
@@ -97,6 +104,12 @@ export default function NewWayClient({
       setPrograms(rows);
     });
   }, [clientId, type]);
+
+  // Re-list WIP backups whenever the picked client (or backupTick) changes.
+  useEffect(() => {
+    if (!clientId || type !== "program") { setWipBackups([]); return; }
+    setWipBackups(listWipBackups(clientId));
+  }, [clientId, type, backupTick]);
 
   // When the workspace mounts (or its target program changes), resolve
   // the paired sheet ID so the Template view has something to load.
@@ -161,7 +174,9 @@ export default function NewWayClient({
     syncUrl({ client: clientId, type: "session", starts: now, view });
   }
   function startNewProgram() {
-    try { localStorage.removeItem(`monroe-programs-rework-${clientId || "noclient"}`); } catch {}
+    // Archive the active WIP to a timestamped backup key instead of
+    // destroying it — a misclicked '+ New' must not lose work.
+    archiveActiveWip(clientId);
     setEditProgramId("");
     setStarted(true);
     syncUrl({ client: clientId, type: "program", view });
@@ -188,7 +203,7 @@ export default function NewWayClient({
     syncUrl({ client: s.client_id, type: "session", appt: s.id, starts: s.starts_at, view });
   }
   function quickStartProgramForClient(c: QuickClient) {
-    try { localStorage.removeItem(`monroe-programs-rework-${c.id || "noclient"}`); } catch {}
+    archiveActiveWip(c.id);
     setClientId(c.id);
     setType("program");
     setApptId(""); setStartsAt(""); setEditProgramId("");
@@ -465,6 +480,81 @@ export default function NewWayClient({
               + New blank session
             </button>
           </div>
+        </section>
+      )}
+
+      {/* Recovery banner — shown when localStorage holds prior WIP backups
+          for the picked client. Each '+ New program' click moves the
+          current draft into a backup slot; this is how you get it back. */}
+      {clientId && type === "program" && wipBackups.length > 0 && (
+        <section
+          className="card"
+          style={{
+            padding: "0.7rem 0.95rem",
+            background: "rgba(168,61,43,0.05)",
+            border: "1px solid var(--rust)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+            <strong style={{ fontSize: "0.88rem", color: "var(--rust)" }}>
+              ↻ {wipBackups.length} previous draft{wipBackups.length === 1 ? "" : "s"} for this client
+            </strong>
+            <span className="meta" style={{ fontSize: "0.75rem" }}>
+              Saved when you clicked &lsquo;+ New program.&rsquo; Restore the most recent or browse them all.
+            </span>
+          </div>
+          <ul style={{ listStyle: "none", margin: "0.55rem 0 0", padding: 0, display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            {wipBackups.slice(0, 5).map((b) => {
+              const when = new Date(b.timestamp).toLocaleString("en-US", {
+                month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+              });
+              // Peek at the program name without parsing the full JSON.
+              const nameMatch = b.json.match(/"name":"([^"]+)"/);
+              const name = nameMatch?.[1] ?? "Untitled WIP";
+              return (
+                <li key={b.key} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  gap: "0.5rem", padding: "0.35rem 0.55rem",
+                  background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 4,
+                }}>
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    <strong style={{ fontSize: "0.82rem" }}>{name}</strong>
+                    <span className="meta" style={{ marginLeft: "0.45rem", fontSize: "0.7rem" }}>{when}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ padding: "0.22rem 0.7rem", fontSize: "0.72rem" }}
+                    onClick={() => {
+                      if (restoreWipBackup(b.key, clientId)) {
+                        // Drop into Program WIP with the restored draft.
+                        setEditProgramId("");
+                        setStarted(true);
+                        setBackupTick((t) => t + 1);
+                        syncUrl({ client: clientId, type: "program", view });
+                      }
+                    }}
+                  >Restore</button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: "0.22rem 0.55rem", fontSize: "0.7rem", color: "var(--muted)" }}
+                    onClick={() => {
+                      if (confirm("Delete this backup permanently?")) {
+                        deleteWipBackup(b.key);
+                        setBackupTick((t) => t + 1);
+                      }
+                    }}
+                  >×</button>
+                </li>
+              );
+            })}
+            {wipBackups.length > 5 && (
+              <li className="meta" style={{ fontSize: "0.68rem", fontStyle: "italic", marginTop: "0.15rem" }}>
+                + {wipBackups.length - 5} more (browse via DevTools → Local Storage if needed)
+              </li>
+            )}
+          </ul>
         </section>
       )}
 

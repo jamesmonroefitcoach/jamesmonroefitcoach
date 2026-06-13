@@ -122,7 +122,16 @@ export default function InAppBuildClient({
   }
   function startNewProgram() {
     // Wipe the per-client WIP cache so the rework mounts a blank program.
-    try { localStorage.removeItem(`monroe-programs-rework-${clientId || "noclient"}`); } catch {}
+    // Archive the active WIP instead of destroying it — keeps a recoverable
+    // backup in localStorage so a misclick doesn't lose work.
+    try {
+      const k = `monroe-programs-rework-${clientId || "noclient"}`;
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        localStorage.setItem(`monroe-programs-rework-backup-${clientId || "noclient"}-${Date.now()}`, raw);
+        localStorage.removeItem(k);
+      }
+    } catch {}
     setEditProgramId("");
     setStarted(true);
     syncUrl({ client: clientId, type: "program" });
