@@ -233,55 +233,64 @@ function scheduleCook(weekStart: Date, busy: AppointmentLite[], targetHours: num
   return out;
 }
 
-/** Cardio — evening 60 min runs preferred, then afternoon, then midday.
- *  Priority passes ensure all eligible evening slots are picked before
- *  any afternoon candidates are even considered (and afternoon before
- *  midday). Each pass scans across all 7 days. */
+/** Cardio — 30 min runs (2 mi @ easy pace lands here). Evening preferred,
+ *  then afternoon, then midday. Priority passes guarantee every eligible
+ *  evening slot across the week is exhausted before any afternoon
+ *  candidate is considered (and afternoon before midday). */
 function scheduleCardio(weekStart: Date, busy: AppointmentLite[], targetRuns: number): Slot[] {
   const out: Slot[] = [];
   const now = new Date();
-  const taken = new Set<number>(); // ms timestamps of starts we've used
+  const taken = new Set<number>();
+  const DURATION_MIN = 30;
 
-  function tryAdd(s: Date, e: Date): boolean {
+  function tryAdd(s: Date): boolean {
     if (s < now) return false;
     if (taken.has(s.getTime())) return false;
+    const e = new Date(s.getTime() + DURATION_MIN * 60_000);
     if (isBusy(s, e, busy)) return false;
     out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
     taken.add(s.getTime());
     return true;
   }
 
-  // Pass 1 — sunset preferences (still the named first choices).
-  const preferred: { dayOfWeek: number; hour: number }[] = [
-    { dayOfWeek: 6, hour: 17 }, // Sun 5pm
-    { dayOfWeek: 2, hour: 18 }, // Wed 6pm
-    { dayOfWeek: 4, hour: 18 }, // Fri 6pm
+  // Pass 1 — sunset preferences. Start times split into :00 and :30
+  // so a packed top-of-hour can still slot a half-past run.
+  const preferred: { dayOfWeek: number; hour: number; minute: number }[] = [
+    { dayOfWeek: 6, hour: 17, minute: 0 }, // Sun 5pm
+    { dayOfWeek: 2, hour: 18, minute: 0 }, // Wed 6pm
+    { dayOfWeek: 4, hour: 18, minute: 0 }, // Fri 6pm
   ];
   for (const p of preferred) {
     if (out.length >= targetRuns) break;
-    const s = setLocalHours(new Date(weekStart.getTime() + p.dayOfWeek * 86_400_000), p.hour);
-    const e = setLocalHours(s, p.hour + 1);
-    tryAdd(s, e);
+    const s = setLocalHours(new Date(weekStart.getTime() + p.dayOfWeek * 86_400_000), p.hour, p.minute);
+    tryAdd(s);
   }
 
-  // Priority-ordered time-of-day passes. Each pass scans every day so
-  // we exhaust the higher-priority window across the whole week before
-  // considering anything lower.
-  const passes: { label: string; hours: number[] }[] = [
-    { label: "evening",   hours: [17, 18, 19] },
-    { label: "afternoon", hours: [14, 15, 16] },
-    { label: "midday",    hours: [11, 12, 13] },
+  // Priority-ordered time-of-day passes. Half-hour candidates so 30-min
+  // runs slot more flexibly than a one-hour grid would allow.
+  const passes: { label: string; starts: { h: number; m: number }[] }[] = [
+    { label: "evening",   starts: makeHalfHours(17, 19) },
+    { label: "afternoon", starts: makeHalfHours(14, 16) },
+    { label: "midday",    starts: makeHalfHours(11, 13) },
   ];
   for (const pass of passes) {
     if (out.length >= targetRuns) break;
     for (let day = 0; day < 7 && out.length < targetRuns; day++) {
-      for (const h of pass.hours) {
+      for (const t of pass.starts) {
         if (out.length >= targetRuns) break;
-        const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), h);
-        const e = setLocalHours(s, h + 1);
-        tryAdd(s, e);
+        const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), t.h, t.m);
+        tryAdd(s);
       }
     }
+  }
+  return out;
+}
+
+function makeHalfHours(hStart: number, hEnd: number): { h: number; m: number }[] {
+  const out: { h: number; m: number }[] = [];
+  for (let h = hStart; h <= hEnd; h++) {
+    out.push({ h, m: 0 });
+    out.push({ h, m: 30 });
   }
   return out;
 }

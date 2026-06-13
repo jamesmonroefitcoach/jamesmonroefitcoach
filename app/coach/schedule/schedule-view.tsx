@@ -1228,6 +1228,21 @@ export default function ScheduleView({
               const dayEvents = appts.filter((a) => dayIndex(new Date(a.starts_at)) === dayIdx);
               const laid = layOutDay(dayEvents);
 
+              // Morning continuations — overnight blocks (sleep that runs
+              // past 6am the next day) get an extra mini-block in the
+              // next day's column at the top showing the morning portion
+              // that doesn't fit at the bottom of the previous day's
+              // column.
+              const morningContinuations = appts.filter((a) => {
+                const s = new Date(a.starts_at);
+                const e = new Date(a.ends_at);
+                if (e.toDateString() === s.toDateString()) return false; // single-day
+                const eHr = e.getHours();
+                if (eHr < HOURS[0]) return false; // earlier than 6am still falls into prev-day extension
+                if (eHr > 12) return false; // afternoon spans aren't 'morning' continuations
+                return dayIndex(e) === dayIdx;
+              });
+
               // Ghost block while editing/creating
               const showGhost = draft && (
                 draft.appt_id
@@ -1369,6 +1384,52 @@ export default function ScheduleView({
                         </div>
                       );
                     })}
+
+                  {/* morning continuations — the post-6am portion of an
+                      overnight block (most commonly sleep). Renders at
+                      the top of this column with a left-edge accent and
+                      a wraparound icon so it's obvious it's a continuation. */}
+                  {morningContinuations.map((c) => {
+                    const e = new Date(c.ends_at);
+                    const heightPx = Math.max(14, pxFromTop(e));
+                    const personalGoalColor = c.session_type === "personal"
+                      ? goalColorById.get((c as { goal_id?: string | null }).goal_id ?? "")
+                      : undefined;
+                    const color = personalGoalColor ?? PERSONAL_COLOR.bg;
+                    return (
+                      <div
+                        key={`cont-${c.id}`}
+                        onClick={(ev) => { ev.stopPropagation(); openEdit(c); }}
+                        title={`${c.personal_label ?? "continuation"} — ends ${e.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 4,
+                          right: 4,
+                          height: heightPx,
+                          background: color,
+                          color: "#fff",
+                          padding: "0.2rem 0.4rem 0.2rem 0.5rem",
+                          borderRadius: "0 0 3px 3px",
+                          borderLeft: `3px solid ${color}`,
+                          fontSize: "0.7rem",
+                          opacity: 0.85,
+                          cursor: "pointer",
+                          overflow: "hidden",
+                          zIndex: 2,
+                          boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontWeight: 700, fontSize: "0.66rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <span title="continues from previous day">↩</span>
+                          <span>{c.personal_label ?? "continued"}</span>
+                        </div>
+                        <div style={{ fontSize: "0.62rem", opacity: 0.85 }}>
+                          ends {e.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    );
+                  })}
 
                   {/* events */}
                   {laid.map((e) => {
