@@ -887,6 +887,21 @@ export default function DashboardClient({
               <WoWChart monthAppts={displayMonthAppts} monthStart={monthStart} />
             </div>
           </GroupShell>
+
+          {/* All-time session history — sits under the Month group on
+              the left column, collapsed by default so the dashboard
+              focuses on the current month at a glance. */}
+          <GroupShell
+            title="All-time session history"
+            badge={
+              <span style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600 }}>
+                {allTimeStats.totalSessions} total
+              </span>
+            }
+            defaultOpen={false}
+          >
+            <AllTimeSessionsBlock stats={allTimeStats} />
+          </GroupShell>
         </div>
 
         {/* ─ RIGHT: Inbox + Open Requests ─ */}
@@ -979,9 +994,6 @@ export default function DashboardClient({
           <TodoBlock />
         </div>
       </div>
-
-      {/* ─── ALL-TIME WEEKLY SESSIONS ─────────────────────────────────── */}
-      <AllTimeSessionsBlock stats={allTimeStats} />
     </>
   );
 }
@@ -1002,13 +1014,9 @@ function AllTimeSessionsBlock({
 }) {
   if (stats.weeks.length === 0) {
     return (
-      <div className="card" style={{ marginTop: "1.5rem" }}>
-        <h2>All-time session history</h2>
-        <hr className="divider" />
-        <p className="meta" style={{ fontStyle: "italic" }}>
-          No completed sessions on record yet.
-        </p>
-      </div>
+      <p className="meta" style={{ fontStyle: "italic" }}>
+        No completed sessions on record yet.
+      </p>
     );
   }
   const maxCount = Math.max(...stats.weeks.map((w) => w.count), 1);
@@ -1026,54 +1034,57 @@ function AllTimeSessionsBlock({
     ? recent12.reduce((s, w) => s + w.count, 0) / recent12.length
     : 0;
   const trendDelta = recentAvg - avg;
+  // Bar geometry — sized to fit data labels above each bar without
+  // making the GroupShell ridiculously tall. Wider bars + bigger gaps
+  // so the count text has room to breathe.
+  const BAR_W = 14;
+  const BAR_GAP = 3;
+  const BAR_H = 110;
   return (
-    <div className="card" style={{ marginTop: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem", flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>All-time session history</h2>
-        <span className="meta" style={{ fontSize: "0.78rem" }}>
-          {firstLabel} → {lastLabel} · {stats.totalSessions} sessions
-        </span>
+    <div>
+      <div className="meta" style={{ fontSize: "0.74rem", marginBottom: "0.7rem" }}>
+        {firstLabel} → {lastLabel} · {stats.totalSessions} sessions
       </div>
-      <hr className="divider" />
 
       {/* Stat row */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: "0.85rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: "0.75rem",
           marginBottom: "0.85rem",
         }}
       >
         <div>
-          <div className="stat-label">Avg sessions / week</div>
-          <div style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--rust)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+          <div className="stat-label">Avg sessions / wk</div>
+          <div style={{ fontSize: "1.55rem", fontWeight: 700, color: "var(--rust)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
             {avgRounded}
           </div>
-          <div className="meta" style={{ fontSize: "0.7rem" }}>
+          <div className="meta" style={{ fontSize: "0.68rem" }}>
             over {stats.weeks.length} week{stats.weeks.length === 1 ? "" : "s"}
           </div>
         </div>
         <div>
           <div className="stat-label">Last 12 weeks</div>
-          <div style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+          <div style={{ fontSize: "1.55rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
             {Math.round(recentAvg * 10) / 10}
           </div>
-          <div className="meta" style={{ fontSize: "0.7rem", color: trendDelta >= 0 ? "var(--sage)" : "var(--red)", fontWeight: 600 }}>
-            {trendDelta >= 0 ? "▲" : "▼"} {Math.abs(Math.round(trendDelta * 10) / 10)}/wk vs all-time avg
+          <div className="meta" style={{ fontSize: "0.68rem", color: trendDelta >= 0 ? "var(--sage)" : "var(--red)", fontWeight: 600 }}>
+            {trendDelta >= 0 ? "▲" : "▼"} {Math.abs(Math.round(trendDelta * 10) / 10)}/wk
           </div>
         </div>
         <div>
-          <div className="stat-label">Highest week</div>
-          <div style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+          <div className="stat-label">Highest wk</div>
+          <div style={{ fontSize: "1.55rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
             {maxCount}
           </div>
-          <div className="meta" style={{ fontSize: "0.7rem" }}>peak</div>
+          <div className="meta" style={{ fontSize: "0.68rem" }}>peak</div>
         </div>
       </div>
 
-      {/* Bar chart — one bar per week, oldest on the left. Scrolls
-          horizontally if the history is too long for the card width. */}
+      {/* Bar chart — one bar per week with the session count rendered as
+          a data label directly above the bar. Scrolls horizontally
+          inside the GroupShell when history is long. */}
       <div
         style={{
           overflowX: "auto",
@@ -1086,32 +1097,53 @@ function AllTimeSessionsBlock({
           style={{
             display: "flex",
             alignItems: "flex-end",
-            gap: 2,
-            height: 110,
+            gap: BAR_GAP,
+            height: BAR_H + 16, // bar area + label band above
             minWidth: "100%",
+            position: "relative",
           }}
         >
           {stats.weeks.map((w) => {
             const pct = (w.count / maxCount) * 100;
+            const barH = Math.max(2, Math.round((pct / 100) * BAR_H));
             const isAboveAvg = w.count >= avg;
             return (
               <div
                 key={w.weekStart}
                 title={`Week of ${new Date(w.weekStart + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} — ${w.count} session${w.count === 1 ? "" : "s"}`}
                 style={{
-                  width: 6,
-                  height: `${Math.max(2, pct)}%`,
-                  background: isAboveAvg ? "var(--rust)" : "rgba(168,61,43,0.35)",
-                  borderRadius: "1px 1px 0 0",
+                  width: BAR_W,
                   flex: "0 0 auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  alignItems: "center",
+                  height: "100%",
                 }}
-              />
+              >
+                {/* Data label sits in a 14px band above the bar */}
+                <span style={{
+                  fontSize: "0.58rem",
+                  lineHeight: 1,
+                  color: "var(--muted)",
+                  marginBottom: 2,
+                  fontVariantNumeric: "tabular-nums",
+                }}>
+                  {w.count}
+                </span>
+                <div style={{
+                  width: BAR_W,
+                  height: barH,
+                  background: isAboveAvg ? "var(--rust)" : "rgba(168,61,43,0.35)",
+                  borderRadius: "2px 2px 0 0",
+                }} />
+              </div>
             );
           })}
         </div>
         {/* Reference line for the avg */}
         <div style={{ height: 1, background: "var(--line)", marginTop: 4 }} />
-        <div className="meta" style={{ display: "flex", justifyContent: "space-between", fontSize: "0.66rem", marginTop: "0.25rem" }}>
+        <div className="meta" style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", marginTop: "0.2rem" }}>
           <span>{firstLabel}</span>
           <span style={{ fontStyle: "italic" }}>
             Rust = at or above all-time avg · faded = below
