@@ -56,6 +56,27 @@ function hourLabel(h: number): string {
   return `${hr12}${ampm}`;
 }
 
+/** "10p", "6:30a", "12p" — compact time label. */
+function compactTimeLabel(d: Date): string {
+  const hr24 = d.getHours();
+  const min = d.getMinutes();
+  const hr12 = hr24 % 12 === 0 ? 12 : hr24 % 12;
+  const ampm = hr24 < 12 ? "a" : "p";
+  return min === 0 ? `${hr12}${ampm}` : `${hr12}:${String(min).padStart(2, "0")}${ampm}`;
+}
+
+/** "Sleep 10p–6a · 8h" — captures the time range + total hours so a
+ *  sleep block reads at a glance even though the calendar only shows
+ *  6a–1a (not the full day). */
+function sleepBlockLabel(starts_at: string, ends_at: string): string {
+  const s = new Date(starts_at);
+  const e = new Date(ends_at);
+  const durHr = Math.max(0, (e.getTime() - s.getTime()) / 3_600_000);
+  const dur = Math.round(durHr * 10) / 10;
+  const durLabel = Number.isInteger(dur) ? `${dur}h` : `${dur}h`;
+  return `Sleep ${compactTimeLabel(s)}–${compactTimeLabel(e)} · ${durLabel}`;
+}
+
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
   scheduled:        { bg: "#5b6d7a", fg: "#fff" },
   completed:        { bg: "#5a6b4a", fg: "#fff" },
@@ -2150,9 +2171,10 @@ function GoalProgressStrip({
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "0.25rem",
-                minWidth: 168,
-                padding: "0.45rem 0.6rem",
+                gap: "0.2rem",
+                minWidth: 220,
+                flex: "1 1 220px",
+                padding: "0.4rem 0.55rem",
                 border: `1px solid ${inRange ? t.cat.color : "var(--line)"}`,
                 borderRadius: 4,
                 background: "var(--paper)",
@@ -2205,8 +2227,8 @@ function GoalProgressStrip({
 
 function miniBtnStyle(color: string, filled: boolean): React.CSSProperties {
   return {
-    padding: "0.18rem 0.5rem",
-    fontSize: "0.66rem",
+    padding: "0.12rem 0.4rem",
+    fontSize: "0.6rem",
     border: `1px solid ${color}`,
     background: filled ? color : "transparent",
     color: filled ? "#fff" : color,
@@ -2215,6 +2237,7 @@ function miniBtnStyle(color: string, filled: boolean): React.CSSProperties {
     fontFamily: "inherit",
     fontWeight: 600,
     letterSpacing: "0.02em",
+    lineHeight: 1.3,
     flex: 1,
   };
 }
@@ -2251,9 +2274,6 @@ function PersonalBlockFields({
       const g = c.goals.find((x) => x.id === goalId);
       if (g) { nextCat = c; nextGoal = g; break; }
     }
-    const labelFill = via === "category"
-      ? (nextCat?.name ?? "")
-      : (nextGoal?.name ?? "");
     const isSleep = !!nextCat && /sleep/i.test(nextCat.name);
     if (isSleep && !draft.appt_id) {
       // Brand-new draft → auto-set 10pm → 6am next day.
@@ -2265,11 +2285,24 @@ function PersonalBlockFields({
       setDraft({
         ...draft,
         goal_id: goalId,
-        personal_label: labelFill,
+        // Sleep label encodes bed→wake times and duration so the block
+        // reads at a glance even though the calendar only shows 6a–1a.
+        personal_label: sleepBlockLabel(start.toISOString(), end.toISOString()),
         starts_at: start.toISOString(),
         ends_at: end.toISOString(),
       });
+    } else if (isSleep) {
+      // Existing sleep block: refresh the time-range label against
+      // whatever the current bed/wake times are.
+      setDraft({
+        ...draft,
+        goal_id: goalId,
+        personal_label: sleepBlockLabel(draft.starts_at, draft.ends_at),
+      });
     } else {
+      const labelFill = via === "category"
+        ? (nextCat?.name ?? "")
+        : (nextGoal?.name ?? "");
       setDraft({
         ...draft,
         goal_id: goalId,
@@ -2292,13 +2325,23 @@ function PersonalBlockFields({
     const [h, m] = timeStr.split(":").map(Number);
     const s = new Date(draft.starts_at);
     s.setHours(h, m, 0, 0);
-    setDraft({ ...draft, starts_at: s.toISOString() });
+    const nextStart = s.toISOString();
+    // Refresh the auto-fill label if it still looks like our format —
+    // user-typed labels are left alone.
+    const label = /^Sleep \d/.test(draft.personal_label)
+      ? sleepBlockLabel(nextStart, draft.ends_at)
+      : draft.personal_label;
+    setDraft({ ...draft, starts_at: nextStart, personal_label: label });
   }
   function setWakeTime(timeStr: string) {
     const [h, m] = timeStr.split(":").map(Number);
     const e = new Date(draft.ends_at);
     e.setHours(h, m, 0, 0);
-    setDraft({ ...draft, ends_at: e.toISOString() });
+    const nextEnd = e.toISOString();
+    const label = /^Sleep \d/.test(draft.personal_label)
+      ? sleepBlockLabel(draft.starts_at, nextEnd)
+      : draft.personal_label;
+    setDraft({ ...draft, ends_at: nextEnd, personal_label: label });
   }
 
   return (

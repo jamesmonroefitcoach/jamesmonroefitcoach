@@ -380,19 +380,42 @@ export async function autoFillCategoryForWeek(
     return { ok: false, error: "Nothing to add — already on target or no free slots." };
   }
 
-  const rows = slots.map((s) => ({
-    coach_id: ownerId,
-    client_id: null,
-    starts_at: s.startsAt,
-    ends_at: s.endsAt,
-    session_type: "personal" as const,
-    personal_label: category.name,
-    is_blocking: true,
-    status: "scheduled" as const,
-    rate: null,
-    paid: false,
-    goal_id: primaryGoal.id,
-  }));
+  // Sleep blocks get a time-range label so they read at a glance even
+  // though the calendar only shows 6a–1a. Everything else uses the
+  // category name.
+  const isSleep = /sleep/i.test(category.name);
+  const rows = slots.map((s) => {
+    let label = category.name;
+    if (isSleep) {
+      const st = new Date(s.startsAt);
+      const en = new Date(s.endsAt);
+      const durHr = Math.max(0, (en.getTime() - st.getTime()) / 3_600_000);
+      const dur = Math.round(durHr * 10) / 10;
+      const fmt = (d: Date) => {
+        const hr24 = d.getHours();
+        const min = d.getMinutes();
+        const hr12 = hr24 % 12 === 0 ? 12 : hr24 % 12;
+        const ampm = hr24 < 12 ? "a" : "p";
+        return min === 0 ? `${hr12}${ampm}` : `${hr12}:${String(min).padStart(2, "0")}${ampm}`;
+      };
+      // Distinguish nap (under 3 hr) from full night.
+      const tag = durHr < 3 ? "Nap" : "Sleep";
+      label = `${tag} ${fmt(st)}–${fmt(en)} · ${dur}h`;
+    }
+    return {
+      coach_id: ownerId,
+      client_id: null,
+      starts_at: s.startsAt,
+      ends_at: s.endsAt,
+      session_type: "personal" as const,
+      personal_label: label,
+      is_blocking: true,
+      status: "scheduled" as const,
+      rate: null,
+      paid: false,
+      goal_id: primaryGoal.id,
+    };
+  });
   const { error } = await supabase.from("appointments").insert(rows);
   if (error) return { ok: false, error: error.message };
   return { ok: true, added: rows.length };
