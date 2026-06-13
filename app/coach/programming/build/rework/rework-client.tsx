@@ -165,7 +165,7 @@ function newExerciseSlot(leafId: string, movement: Movement): ExerciseSlot {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ReworkClient({
-  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements, hideTabs = false, autoStart = false,
+  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements, hideTabs = false, autoStart = false, onDraftSaved,
 }: {
   clients: ClientRow[];
   initialClientId: string;
@@ -181,6 +181,9 @@ export default function ReworkClient({
    *  internal PickerView and drop straight into the builder. The internal
    *  '← Back' button still returns to the picker for quick switching. */
   autoStart?: boolean;
+  /** Fired by autosave so the New Way workspace can use the draft's
+   *  program id for the Template view + paired-sheet lookup. */
+  onDraftSaved?: (draftId: string) => void;
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(initialClientId);
@@ -234,6 +237,7 @@ export default function ReworkClient({
           setSessionTitle(bs.sessionTitle ?? "");
           setSelectOpen(bs.selectExercisesOpen ?? true);
           setDraftId(stashed);
+          onDraftSaved?.(stashed);
           setHydrated(true);
           return;
         }
@@ -269,12 +273,14 @@ export default function ReworkClient({
         name: sessionTitle || "Session draft",
         programKind: "in_gym",
         builderState: { slots, sessionTitle, selectExercisesOpen: selectOpen } satisfies DraftSnapshot,
+        apptId: apptId || undefined,
       });
       if (res.ok) {
         if (!draftId) {
           setDraftId(res.draftId);
           try { localStorage.setItem(draftIdKey, res.draftId); } catch {}
         }
+        onDraftSaved?.(res.draftId);
         setLocalSaveError(null);
         setSaveStatus("saved");
       } else {

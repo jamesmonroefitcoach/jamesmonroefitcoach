@@ -78,6 +78,10 @@ export default function NewWayClient({
   /** Program ID currently being edited (set by clicking Edit on a row, or
    *  passed in via ?program=). Empty string means "new". */
   const [editProgramId, setEditProgramId] = useState<string>(initialProgramId);
+  /** Captured from the WIP's onDraftSaved callback. Lets the Template
+   *  view resolve a paired sheet immediately after the first autosave —
+   *  no need to wait for a manual Save Draft click. */
+  const [autosaveDraftId, setAutosaveDraftId] = useState<string>("");
   /** The paired workout_sheets.id for the chosen program. Loaded lazily
    *  when the workspace mounts. Null when nothing is paired yet. */
   const [pairedSheetId, setPairedSheetId] = useState<string | null>(null);
@@ -118,10 +122,17 @@ export default function NewWayClient({
     let cancelled = false;
     (async () => {
       let programIdToPair: string | null = null;
-      if (type === "program" && editProgramId) {
+      // Priority order:
+      //   1. The autosave draftId (most up-to-date — set as soon as the
+      //      WIP fires its first autosave or hydrates from a stash).
+      //   2. The Edit→ target the user picked from the lobby.
+      //   3. The appointment's session_program_id (links to whichever
+      //      programs row Old Way or a prior session draft saved into).
+      if (autosaveDraftId) {
+        programIdToPair = autosaveDraftId;
+      } else if (type === "program" && editProgramId) {
         programIdToPair = editProgramId;
       } else if (type === "session" && apptId) {
-        // The session might already have a session_program_id; if so use it.
         programIdToPair = await getSessionProgramId(apptId);
       }
       if (!programIdToPair) {
@@ -133,7 +144,7 @@ export default function NewWayClient({
       setPairedSheetId(res.ok ? res.sheetId : null);
     })();
     return () => { cancelled = true; };
-  }, [started, type, editProgramId, apptId]);
+  }, [started, type, editProgramId, apptId, autosaveDraftId]);
 
   function syncUrl(params: { client?: string; type?: string; appt?: string; starts?: string; program?: string; view?: string }) {
     const url = new URL(window.location.href);
@@ -153,13 +164,13 @@ export default function NewWayClient({
 
   function pickClient(id: string) {
     setClientId(id);
-    setApptId(""); setStartsAt(""); setEditProgramId(""); setStarted(false);
+    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
     syncUrl({ client: id, type });
   }
   function pickType(next: "session" | "program") {
     if (next === type) return;
     setType(next);
-    setApptId(""); setStartsAt(""); setEditProgramId(""); setStarted(false);
+    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
     syncUrl({ client: clientId, type: next });
   }
   function startSessionFor(a: ApptOption) {
@@ -187,7 +198,7 @@ export default function NewWayClient({
     syncUrl({ client: clientId, type: "program", program: p.id, view });
   }
   function backToLobby() {
-    setApptId(""); setStartsAt(""); setEditProgramId(""); setStarted(false);
+    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
     syncUrl({ client: clientId, type });
   }
 
@@ -261,6 +272,7 @@ export default function NewWayClient({
               libraryMovements={libraryMovements}
               hideTabs
               autoStart
+              onDraftSaved={setAutosaveDraftId}
             />
           ) : (
             <ProgramsReworkClient
@@ -269,6 +281,7 @@ export default function NewWayClient({
               libraryMovements={libraryMovements}
               clientProgramSummary={clientProgramSummary}
               hideTabs
+              onDraftSaved={setAutosaveDraftId}
             />
           )
         ) : (

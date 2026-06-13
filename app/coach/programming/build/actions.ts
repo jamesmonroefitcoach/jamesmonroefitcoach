@@ -499,6 +499,10 @@ export type SaveDraftInput = {
   programKind: "in_gym" | "at_home";
   /** The whole WIP state — stored verbatim in programs.builder_state. */
   builderState: unknown;
+  /** Session being edited (in_gym only). When the draft is first
+   *  created, the appointment's session_program_id is linked to it so
+   *  the Old Way builder and the Template view both find the same row. */
+  apptId?: string;
 };
 
 export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: true; draftId: string } | { ok: false; error: string }> {
@@ -509,12 +513,36 @@ export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: tru
   const supabase = createSupabaseAdmin();
   const name = input.name?.trim() || "Untitled draft";
 
-  if (input.draftId) {
+  // Cross-builder bridge: if we're editing a session that already has a
+  // linked program (set by an earlier draft save OR by the classic
+  // builder), update THAT row instead of creating a new one. Both
+  // builders converge on the same programs row this way.
+  let effectiveDraftId = input.draftId;
+  if (!effectiveDraftId && input.apptId && input.programKind === "in_gym") {
+    const { data: appt } = await supabase
+      .from("appointments")
+      .select("session_program_id")
+      .eq("id", input.apptId)
+      .maybeSingle<{ session_program_id: string | null }>();
+    if (appt?.session_program_id) {
+      // Confirm the program is one of ours and isn't yet published — we
+      // never want to overwrite a published session program with a WIP.
+      const { data: prog } = await supabase
+        .from("programs")
+        .select("id, is_published")
+        .eq("id", appt.session_program_id)
+        .eq("coach_id", me.id)
+        .maybeSingle<{ id: string; is_published: boolean }>();
+      if (prog && !prog.is_published) effectiveDraftId = prog.id;
+    }
+  }
+
+  if (effectiveDraftId) {
     // Update an existing draft — ownership guard via coach_id.
     const { data: existing } = await supabase
       .from("programs")
       .select("id")
-      .eq("id", input.draftId)
+      .eq("id", effectiveDraftId)
       .eq("coach_id", me.id)
       .maybeSingle<{ id: string }>();
     if (!existing) return { ok: false, error: "Draft not found." };
@@ -526,9 +554,19 @@ export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: tru
         program_kind: input.programKind,
         client_id: input.clientId,
       })
-      .eq("id", input.draftId);
+      .eq("id", effectiveDraftId);
     if (error) return { ok: false, error: error.message };
-    return { ok: true, draftId: input.draftId };
+    // Link the appt if it isn't yet — covers the case where the user
+    // started in Old Way (which created a program row but maybe didn't
+    // link session_program_id) and is continuing in New Way.
+    if (input.apptId && input.programKind === "in_gym") {
+      await supabase
+        .from("appointments")
+        .update({ session_program_id: effectiveDraftId })
+        .eq("id", input.apptId)
+        .is("session_program_id", null);
+    }
+    return { ok: true, draftId: effectiveDraftId };
   }
 
   // New draft.
@@ -548,6 +586,14 @@ export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: tru
     .select("id")
     .single<{ id: string }>();
   if (error || !data) return { ok: false, error: error?.message ?? "create failed" };
+
+  // Link to the appointment so cross-builder hydration finds this row.
+  if (input.apptId && input.programKind === "in_gym") {
+    await supabase
+      .from("appointments")
+      .update({ session_program_id: data.id })
+      .eq("id", input.apptId);
+  }
   return { ok: true, draftId: data.id };
 }
 

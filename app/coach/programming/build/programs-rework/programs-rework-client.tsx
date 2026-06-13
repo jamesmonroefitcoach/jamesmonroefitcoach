@@ -113,7 +113,7 @@ function defaultProgram(): ProgramState {
 // Main component
 // ───────────────────────────────────────────────────────────────────────────
 export default function ProgramsReworkClient({
-  clients, initialClientId, libraryMovements, clientProgramSummary, hideTabs = false,
+  clients, initialClientId, libraryMovements, clientProgramSummary, hideTabs = false, onDraftSaved,
 }: {
   clients: ClientRow[];
   initialClientId: string;
@@ -122,6 +122,9 @@ export default function ProgramsReworkClient({
   /** When embedded in the In App Build page, the WIP-cross-link tabs are
    *  redundant with the Session/Program toggle. */
   hideTabs?: boolean;
+  /** Fired by autosave so the New Way workspace can use the draft's
+   *  program id for the Template view + paired-sheet lookup. */
+  onDraftSaved?: (draftId: string) => void;
 }) {
   const [clientId, setClientId] = useState(initialClientId);
   const selectedClient = useMemo(() => clients.find((c) => c.id === clientId) ?? null, [clients, clientId]);
@@ -152,6 +155,7 @@ export default function ProgramsReworkClient({
         if (res.ok && res.data?.builderState) {
           setProgram(res.data.builderState as ProgramState);
           setDraftId(stashed);
+          onDraftSaved?.(stashed);
           setHydrated(true);
           return;
         }
@@ -188,6 +192,7 @@ export default function ProgramsReworkClient({
           setDraftId(res.draftId);
           try { localStorage.setItem(draftIdKey, res.draftId); } catch {}
         }
+        onDraftSaved?.(res.draftId);
         setLocalSaveError(null);
         setSaveStatus("saved");
       } else {
