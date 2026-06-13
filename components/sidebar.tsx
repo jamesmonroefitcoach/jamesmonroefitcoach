@@ -11,6 +11,7 @@ const COACH_NAV: NavLink[] = [
   { href: "/coach/schedule", label: "Schedule" },        // Appointments + Availability live as subtabs under Schedule
   { href: "/coach/programming", label: "Programming" },  // Build Program + Exercise Library live as subtabs under Programming
   { href: "/coach/clients", label: "Clients" },
+  { href: "/coach/goals", label: "Goals" },
   { href: "/coach/messages", label: "Messages" },
 ];
 
@@ -18,6 +19,7 @@ const CLIENT_NAV: NavLink[] = [
   { href: "/client", label: "My Schedule" },
   { href: "/client/profile", label: "Profile" },
   { href: "/client/programming", label: "Programming" },   // View / Build / Library / Materials live as subtabs
+  { href: "/client/goals", label: "Goals" },
   { href: "/client/check-ins", label: "Check-ins" },
   { href: "/client/messages", label: "Messages" }
 ];
