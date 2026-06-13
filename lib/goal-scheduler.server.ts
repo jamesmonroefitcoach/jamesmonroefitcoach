@@ -233,10 +233,10 @@ function scheduleCook(weekStart: Date, busy: AppointmentLite[], targetHours: num
   return out;
 }
 
-/** Cardio — evening 60 min runs. Tries Sun 17:00 / Wed 18:00 / Fri 18:00
- *  first; falls back to any free evening slot (16:00–20:00 start) on
- *  any remaining future day this week so a packed week doesn't return
- *  empty. */
+/** Cardio — evening 60 min runs preferred, then afternoon, then midday.
+ *  Priority passes ensure all eligible evening slots are picked before
+ *  any afternoon candidates are even considered (and afternoon before
+ *  midday). Each pass scans across all 7 days. */
 function scheduleCardio(weekStart: Date, busy: AppointmentLite[], targetRuns: number): Slot[] {
   const out: Slot[] = [];
   const now = new Date();
@@ -251,7 +251,7 @@ function scheduleCardio(weekStart: Date, busy: AppointmentLite[], targetRuns: nu
     return true;
   }
 
-  // Pass 1 — sunset preferences.
+  // Pass 1 — sunset preferences (still the named first choices).
   const preferred: { dayOfWeek: number; hour: number }[] = [
     { dayOfWeek: 6, hour: 17 }, // Sun 5pm
     { dayOfWeek: 2, hour: 18 }, // Wed 6pm
@@ -264,11 +264,19 @@ function scheduleCardio(weekStart: Date, busy: AppointmentLite[], targetRuns: nu
     tryAdd(s, e);
   }
 
-  // Pass 2 — fallback. Scan every future day of the week for an
-  // evening hour (16–19 start, so the run finishes by 8pm) that's free.
-  if (out.length < targetRuns) {
+  // Priority-ordered time-of-day passes. Each pass scans every day so
+  // we exhaust the higher-priority window across the whole week before
+  // considering anything lower.
+  const passes: { label: string; hours: number[] }[] = [
+    { label: "evening",   hours: [17, 18, 19] },
+    { label: "afternoon", hours: [14, 15, 16] },
+    { label: "midday",    hours: [11, 12, 13] },
+  ];
+  for (const pass of passes) {
+    if (out.length >= targetRuns) break;
     for (let day = 0; day < 7 && out.length < targetRuns; day++) {
-      for (let h = 16; h <= 19 && out.length < targetRuns; h++) {
+      for (const h of pass.hours) {
+        if (out.length >= targetRuns) break;
         const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), h);
         const e = setLocalHours(s, h + 1);
         tryAdd(s, e);
