@@ -1092,11 +1092,6 @@ export default function ScheduleView({
       {/* ─── WEEK VIEW ─── */}
       {view === "week" ? (
         <>
-        <GoalProgressStrip
-          appts={appts}
-          weekStart={ws}
-          goalCategories={goalCategories}
-        />
         <div
           className="card"
           style={{
@@ -1449,6 +1444,11 @@ export default function ScheduleView({
             })}
           </div>
         </div>
+        <GoalProgressStrip
+          appts={appts}
+          weekStart={ws}
+          goalCategories={goalCategories}
+        />
         </>
       ) : null}
 
