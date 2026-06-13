@@ -58,7 +58,7 @@ function MonthGroup({ clientId, month, sessions }: {
             return (
               <Link
                 key={s.id}
-                href={`/coach/programming/build?tab=session&client=${clientId}&appt=${s.id}${viewParam}`}
+                href={`/coach/programming/build/new-way?type=session&client=${clientId}&appt=${s.id}${viewParam}`}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem",
                   padding: "0.2rem 0.35rem", borderRadius: 3,
@@ -131,7 +131,7 @@ function ClientHistoricals({ block }: { block: ClientProgramBlock }) {
             {programs.map((p) => (
               <Link
                 key={p.id}
-                href={`/coach/programming/build?tab=program&client=${block.clientId}`}
+                href={`/coach/programming/build/new-way?type=program&client=${block.clientId}&program=${p.id}`}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
                   padding: "0.3rem 0.45rem", borderRadius: 3,
@@ -235,7 +235,7 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
                   {nextSession ? (() => {
                     const startsParam = encodeURIComponent(nextSession.starts_at);
                     const viewParam = nextSession.status === "Programmed" ? "&view=plan" : "";
-                    const href = `/coach/programming/build?tab=session&appt=${nextSession.id}&client=${block.clientId}&starts=${startsParam}${viewParam}`;
+                    const href = `/coach/programming/build/new-way?type=session&appt=${nextSession.id}&client=${block.clientId}&starts=${startsParam}${viewParam}`;
                     const verb = nextSession.status === "Programmed" ? "View"
                       : nextSession.status === "Drafted" ? "Edit"
                       : "Build";
@@ -271,7 +271,8 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
                 {/* Program — date range first, status link to the right */}
                 {(() => {
                   const viewParam = programStatusLabel === "Programmed" ? "&view=plan" : "";
-                  const href = `/coach/programming/build?tab=program&client=${block.clientId}${viewParam}`;
+                  const programParam = active.program ? `&program=${active.program.id}` : "";
+                  const href = `/coach/programming/build/new-way?type=program&client=${block.clientId}${programParam}${viewParam}`;
                   const verb = programStatusLabel === "Programmed" ? "View"
                     : programStatusLabel === "Drafted" ? "Edit"
                     : "Build";
@@ -298,6 +299,31 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
         </div>
 
         <div style={{ display: "flex", gap: "0.4rem", flexShrink: 0, alignItems: "flex-start", paddingTop: "0.1rem" }}>
+          {/* Build → New Way, pre-filled from this row.
+              Sessions view: client + next session (when known).
+              Programs view: client + active program (when known). */}
+          {(() => {
+            const params: string[] = [`client=${block.clientId}`];
+            if (isSessionsView) {
+              params.unshift("type=session");
+              if (nextSession) {
+                params.push(`appt=${nextSession.id}`);
+                params.push(`starts=${encodeURIComponent(nextSession.starts_at)}`);
+              }
+            } else {
+              params.unshift("type=program");
+              if (active.program) params.push(`program=${active.program.id}`);
+            }
+            const href = `/coach/programming/build/new-way?${params.join("&")}`;
+            return (
+              <Link
+                href={href}
+                className="btn btn-primary"
+                title="Open in New Way Build — pre-filled with this row"
+                style={{ fontSize: "0.7rem", padding: "0.2rem 0.65rem", whiteSpace: "nowrap" }}
+              >Build →</Link>
+            );
+          })()}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -328,11 +354,29 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
 function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
   const upcomingCount = block.upcomingSessions.length;
   const activeProgramName = block.active.program?.name ?? null;
+  // Default Build target for this client: if they're flagged for at-home
+  // programming, drop into Program mode (with the active program prefilled
+  // when one exists); otherwise drop into Session mode with the next
+  // session prefilled when one's scheduled.
+  const buildHref = (() => {
+    const params: string[] = [`client=${block.clientId}`];
+    if (block.needsAtHomeProgramming) {
+      params.unshift("type=program");
+      if (block.active.program) params.push(`program=${block.active.program.id}`);
+    } else {
+      params.unshift("type=session");
+      if (block.nextSession) {
+        params.push(`appt=${block.nextSession.id}`);
+        params.push(`starts=${encodeURIComponent(block.nextSession.starts_at)}`);
+      }
+    }
+    return `/coach/programming/build/new-way?${params.join("&")}`;
+  })();
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto",
+        gridTemplateColumns: "minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto auto",
         gap: "0.85rem",
         alignItems: "center",
         padding: "0.55rem 0.85rem",
@@ -367,6 +411,14 @@ function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
       <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>
         {upcomingCount} upcoming · {block.scheduledThisMonth} this mo
       </span>
+      <Link
+        href={buildHref}
+        className="btn btn-primary"
+        title={block.needsAtHomeProgramming ? "Open New Way Build · Program mode" : "Open New Way Build · Session mode"}
+        style={{ padding: "0.22rem 0.7rem", fontSize: "0.72rem", whiteSpace: "nowrap" }}
+      >
+        Build →
+      </Link>
     </div>
   );
 }
@@ -425,7 +477,7 @@ function WeekSessionRow({
       : "Program";
   const startsParam = encodeURIComponent(s.starts_at);
   const viewParam = s.program_status === "programmed" ? "&view=plan" : "";
-  const href = `/coach/programming/build?tab=session&appt=${s.apptId}&client=${s.clientId}&starts=${startsParam}${viewParam}`;
+  const href = `/coach/programming/build/new-way?type=session&appt=${s.apptId}&client=${s.clientId}&starts=${startsParam}${viewParam}`;
   const when = new Date(s.starts_at);
   const dayLabel = when.toLocaleDateString("en-US", {
     weekday: "short",
@@ -488,10 +540,11 @@ function WeekSessionRow({
       <StatusBadge status={s.program_status} />
       <Link
         href={href}
-        className="btn btn-ghost"
-        style={{ padding: "0.22rem 0.6rem", fontSize: "0.74rem" }}
+        className="btn btn-primary"
+        title={`${verb} in New Way · pre-filled with this session`}
+        style={{ padding: "0.22rem 0.7rem", fontSize: "0.74rem" }}
       >
-        {verb}
+        Build →
       </Link>
     </div>
   );
