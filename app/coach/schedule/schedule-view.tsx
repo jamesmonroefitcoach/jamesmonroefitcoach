@@ -277,6 +277,14 @@ export default function ScheduleView({
     // Row 0 = 6am, Row 1 = 7am. Scroll so 7am is at the top of the viewport.
     el.scrollTop = HOUR_HEIGHT;
   }, [view]);
+
+  // SSR / hydration timezone guard. During SSR the server runs in UTC, so
+  // `new Date(iso).getHours()` returns UTC hours. The events would render
+  // 4–5 hours off and React's hydration wouldn't recompute. Defer all
+  // time-positioned event rendering until after client mount so positions
+  // are always computed in the user's local timezone.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const [editingChangeCount, setEditingChangeCount] = useState(false);
   const [seriesScope, setSeriesScope] = useState<"series" | null>(null);
   const [clientsBarOpen, setClientsBarOpen] = useState(false);
@@ -1301,6 +1309,12 @@ export default function ScheduleView({
                     );
                   })}
 
+                  {/* Time-positioned content (ghost, change-requests, events)
+                      uses Date.getHours() which differs between the server
+                      (UTC) and the client (local TZ). Only render once
+                      mounted to avoid an SSR hydration mismatch shoving
+                      everything 4–5 hours off on a hard refresh. */}
+                  {mounted && <>
                   {/* WIP ghost */}
                   {ghost ? (
                     <div style={{
@@ -1475,6 +1489,7 @@ export default function ScheduleView({
                       </div>
                     );
                   })}
+                  </>}
                 </div>
               );
             })}
