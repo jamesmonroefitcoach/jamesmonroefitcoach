@@ -485,6 +485,87 @@ export async function logMovementSet(input: {
   return { ok: true };
 }
 
+// ─── Rework draft autosave (programs + sessions) ─────────────────────────
+// Writes the WIP rework state into a real programs row marked as
+// is_published=false. Drafts come back in the 'Recently drafted programs'
+// quick action and survive browser data clears, private windows, and
+// device switches.
+
+export type SaveDraftInput = {
+  /** Existing draft to update; omit for a fresh insert. */
+  draftId?: string;
+  clientId: string;
+  name: string;
+  programKind: "in_gym" | "at_home";
+  /** The whole WIP state — stored verbatim in programs.builder_state. */
+  builderState: unknown;
+};
+
+export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: true; draftId: string } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  if (!input.clientId) return { ok: false, error: "Client is required." };
+  const supabase = createSupabaseAdmin();
+  const name = input.name?.trim() || "Untitled draft";
+
+  if (input.draftId) {
+    // Update an existing draft — ownership guard via coach_id.
+    const { data: existing } = await supabase
+      .from("programs")
+      .select("id")
+      .eq("id", input.draftId)
+      .eq("coach_id", me.id)
+      .maybeSingle<{ id: string }>();
+    if (!existing) return { ok: false, error: "Draft not found." };
+    const { error } = await supabase
+      .from("programs")
+      .update({
+        name,
+        builder_state: input.builderState,
+        program_kind: input.programKind,
+        client_id: input.clientId,
+      })
+      .eq("id", input.draftId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, draftId: input.draftId };
+  }
+
+  // New draft.
+  const { data, error } = await supabase
+    .from("programs")
+    .insert({
+      coach_id: me.id,
+      client_id: input.clientId,
+      name,
+      program_kind: input.programKind,
+      builder_state: input.builderState,
+      is_published: false,
+      is_current: false,
+      starts_on: new Date().toISOString().slice(0, 10),
+      duration_weeks: 1,
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !data) return { ok: false, error: error?.message ?? "create failed" };
+  return { ok: true, draftId: data.id };
+}
+
+export async function loadDraftProgram(draftId: string): Promise<{ ok: true; data: { name: string; clientId: string; builderState: unknown } | null } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: true, data: null };
+  const { data, error } = await createSupabaseAdmin()
+    .from("programs")
+    .select("name, client_id, builder_state, coach_id")
+    .eq("id", draftId)
+    .maybeSingle<{ name: string; client_id: string; builder_state: unknown; coach_id: string }>();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: true, data: null };
+  if (data.coach_id !== me.id) return { ok: false, error: "Not allowed." };
+  return { ok: true, data: { name: data.name, clientId: data.client_id, builderState: data.builder_state } };
+}
+
 // ─── New Way toggle helpers — paired sheet lookup ─────────────────────────
 // Used by the In App / Template toggle in the New Way workspace. Given a
 // programId, returns the paired workout_sheets row (creating one if it

@@ -1,17 +1,10 @@
 "use client";
-// Programs Rework WIP — sandboxed at-home program builder with a Day ↔ Week
-// toggle. Day mode mirrors the existing at-home Program tab (day cards, each
-// with their own exercises). Week mode is a single flat block plus a
-// "suggested days/week" input that the client uses to decide pace.
-//
-// Switching modes is preserving-but-flattening:
-//   Day → Week: every day's exercises concatenate in order into one block.
-//   Week → Day: everything lands in Day 1.
-//
-// All state lives in localStorage keyed by client id. Supabase is intentionally
-// untouched on this WIP tab.
+// Programs Rework WIP — at-home program builder with a Day ↔ Week toggle.
+// State autosaves to Supabase as an unpublished program row (and to
+// localStorage as an offline mirror); 'Recently drafted programs' in the
+// New Way lobby surfaces these for resumption from any device.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { ClientRow, MovementRow } from "@/lib/data";
 import {
@@ -20,6 +13,7 @@ import {
   type Category, type Equipment, type Movement,
   type LibraryGroup, type LibraryNode, type LibraryLeaf,
 } from "@/lib/programs";
+import { saveDraftProgram, loadDraftProgram } from "../actions";
 import { fmtDate } from "@/lib/format";
 import type { ClientProgramItem } from "../page";
 
@@ -136,18 +130,75 @@ export default function ProgramsReworkClient({
   const [hydrated, setHydrated] = useState(false);
 
   // Hydrate when clientId changes
+  // ── Draft persistence (Supabase + localStorage mirror) ─────────────
+  // The draftId for a client is stashed in localStorage so an autosave
+  // resumes from the same row across reloads.
+  const draftIdKey = `monroe-programs-rework-draftid-${clientId || "noclient"}`;
+  const [draftId, setDraftId] = useState<string>("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setLocalSaveError] = useState<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!clientId) { setHydrated(true); return; }
-    const saved = loadProgram(clientId);
-    setProgram(saved ?? defaultProgram());
-    setHydrated(true);
-  }, [clientId]);
+    let cancelled = false;
+    (async () => {
+      // Try DB first via the stashed draftId — that's the source of truth.
+      let stashed = "";
+      try { stashed = localStorage.getItem(draftIdKey) ?? ""; } catch {}
+      if (stashed) {
+        const res = await loadDraftProgram(stashed);
+        if (cancelled) return;
+        if (res.ok && res.data?.builderState) {
+          setProgram(res.data.builderState as ProgramState);
+          setDraftId(stashed);
+          setHydrated(true);
+          return;
+        }
+        // The stashed draftId is stale — clear it and fall through.
+        try { localStorage.removeItem(draftIdKey); } catch {}
+      }
+      // Fallback: localStorage mirror (offline scenarios, pre-DB drafts).
+      const saved = loadProgram(clientId);
+      setProgram(saved ?? defaultProgram());
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, [clientId, draftIdKey]);
 
-  // Persist whenever program changes (after hydrate)
+  // Persist whenever program changes — both layers:
+  //   1. localStorage right away (offline mirror, instant).
+  //   2. Supabase via saveDraftProgram, debounced 1.2s.
   useEffect(() => {
     if (!hydrated || !clientId) return;
     saveProgram(clientId, program);
-  }, [program, hydrated, clientId]);
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSaveStatus("saving");
+    saveTimerRef.current = setTimeout(async () => {
+      const res = await saveDraftProgram({
+        draftId: draftId || undefined,
+        clientId,
+        name: program.name,
+        programKind: "at_home",
+        builderState: program,
+      });
+      if (res.ok) {
+        if (!draftId) {
+          setDraftId(res.draftId);
+          try { localStorage.setItem(draftIdKey, res.draftId); } catch {}
+        }
+        setLocalSaveError(null);
+        setSaveStatus("saved");
+      } else {
+        setLocalSaveError(res.error);
+        setSaveStatus("error");
+      }
+    }, 1200);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [program, hydrated, clientId, draftId, draftIdKey]);
 
   // ── toggle Day ↔ Week ───────────────────────────────────────────────────
   function setKind(next: ProgramKind) {
@@ -263,15 +314,39 @@ export default function ProgramsReworkClient({
     const target = program.days[0];
     if (target) addExerciseToDay(target.uid, movement);
   }
-  function handleSaveDraft() {
+  async function handleSaveDraft() {
     if (!clientId) return;
+    // Force an immediate Supabase save (bypasses the 1.2s debounce). The
+    // periodic autosave is already running in the effect above.
     saveProgram(clientId, program);
-    alert("Draft saved (sandboxed in this browser).");
+    setSaveStatus("saving");
+    const res = await saveDraftProgram({
+      draftId: draftId || undefined,
+      clientId,
+      name: program.name,
+      programKind: "at_home",
+      builderState: program,
+    });
+    if (res.ok) {
+      if (!draftId) {
+        setDraftId(res.draftId);
+        try { localStorage.setItem(draftIdKey, res.draftId); } catch {}
+      }
+      setLocalSaveError(null);
+      setSaveStatus("saved");
+      alert("Draft saved to your account.");
+    } else {
+      setLocalSaveError(res.error);
+      setSaveStatus("error");
+      alert(`Saved to browser only — couldn't reach Supabase: ${res.error}`);
+    }
   }
   function handleReset() {
     if (!confirm("Clear this draft and start over?")) return;
     if (clientId) clearProgram(clientId);
     setProgram(defaultProgram());
+    setDraftId("");
+    try { localStorage.removeItem(draftIdKey); } catch {}
   }
 
   if (!clientId) {
@@ -482,13 +557,22 @@ export default function ProgramsReworkClient({
       {/* Bottom action bar */}
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginTop: "1.5rem" }}>
         <button className="btn btn-ghost" onClick={handleReset} style={{ color: "var(--red)" }}>Reset draft</button>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+          {/* Live autosave indicator — so you can see your work is hitting
+              the server, not just the browser. */}
+          <span style={{ fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+            {saveStatus === "saving" && <span className="meta" style={{ fontStyle: "italic" }}>Saving to your account…</span>}
+            {saveStatus === "saved" && <span style={{ color: "var(--sage)", fontWeight: 600 }}>✓ Saved to your account</span>}
+            {saveStatus === "error" && <span style={{ color: "var(--red)", fontWeight: 600 }} title={saveError ?? ""}>⚠ Browser only — server save failed</span>}
+            {saveStatus === "idle" && <span className="meta">Autosave on</span>}
+          </span>
           <button className="btn btn-primary" onClick={handleSaveDraft}>Save Draft</button>
         </div>
       </div>
 
       <p className="meta no-print" style={{ marginTop: "1rem", fontSize: "0.72rem", fontStyle: "italic" }}>
-        Sandbox — this page persists per-client to localStorage only. The full publish-to-client flow is being built next.
+        Autosaves to Supabase (debounced) + a localStorage mirror as offline fallback. Drafts show up
+        in &lsquo;Recently drafted programs&rsquo; in the New Way lobby for resumption from any device.
       </p>
     </>
   );
