@@ -4,6 +4,11 @@ import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForWeek, listAppointmentsForMonth, type AppointmentRow } from "@/lib/data";
 import type { CancelReason } from "@/lib/cancel-reasons";
+import {
+  autoFillCategoryForWeek,
+  reorganizeCategoryForWeek,
+  type AutoFillResult,
+} from "@/lib/goal-scheduler.server";
 
 export async function fetchWeekAppts(weekStart: string): Promise<AppointmentRow[]> {
   const me = await getSessionUser();
@@ -390,4 +395,36 @@ export async function requestSessionChange(apptId: string, kind: "reschedule" | 
   revalidatePath("/client");
   revalidatePath("/coach/schedule");
   return { ok: true };
+}
+
+// ── Goal auto-scheduling ─────────────────────────────────────────────
+// Wraps the lib/goal-scheduler functions in server actions the
+// schedule-view chip buttons can call directly.
+
+export async function autoFillGoal(
+  category: { id: string; name: string; goals: { id: string; name: string; kind: string }[] },
+  targetWeekly: number,
+): Promise<AutoFillResult> {
+  const me = await getSessionUser();
+  if (!me) return { ok: false, error: "unauthorized" };
+  const result = await autoFillCategoryForWeek(me.id, category, targetWeekly);
+  if (result.ok) {
+    revalidatePath("/coach/schedule");
+    revalidatePath("/coach");
+  }
+  return result;
+}
+
+export async function reorganizeGoal(
+  category: { id: string; name: string; goals: { id: string; name: string; kind: string }[] },
+  targetWeekly: number,
+): Promise<AutoFillResult> {
+  const me = await getSessionUser();
+  if (!me) return { ok: false, error: "unauthorized" };
+  const result = await reorganizeCategoryForWeek(me.id, category, targetWeekly);
+  if (result.ok) {
+    revalidatePath("/coach/schedule");
+    revalidatePath("/coach");
+  }
+  return result;
 }

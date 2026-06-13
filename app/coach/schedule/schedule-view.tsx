@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
 import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, editSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
@@ -2017,124 +2018,203 @@ function GoalProgressStrip({
   weekStart: Date;
   goalCategories: ScheduleGoalCategory[];
 }) {
+  const router = useRouter();
+  const [pending, startBusy] = useTransition();
+  const [actErr, setActErr] = useState<string | null>(null);
   const weekEndMs = weekStart.getTime() + 7 * 86_400_000;
-  // Flat list of weekly-target goals + their category color.
-  const trackedGoals = useMemo(() => {
+
+  // One chip per CATEGORY that has at least one weekly_hours or
+  // weekly_count goal with a target. The chip's target is the FIRST such
+  // goal in the category (the 'primary' goal); auto-scheduling tags new
+  // blocks against that goal.
+  const trackedCats = useMemo(() => {
     type Tracked = {
-      id: string;
-      name: string;
+      cat: ScheduleGoalCategory;
+      primaryGoalId: string;
       kind: "weekly_hours" | "weekly_count";
       target: number;
       rangeLow: number | null;
       rangeHigh: number | null;
       unit: string;
-      color: string;
-      categoryName: string;
     };
     const out: Tracked[] = [];
     for (const cat of goalCategories) {
-      for (const g of cat.goals) {
-        if (g.kind !== "weekly_hours" && g.kind !== "weekly_count") continue;
-        const target = g.target_value ?? g.target_range_high ?? g.target_range_low ?? 0;
-        if (target <= 0) continue;
-        out.push({
-          id: g.id,
-          name: g.name,
-          kind: g.kind,
-          target,
-          rangeLow: g.target_range_low,
-          rangeHigh: g.target_range_high,
-          unit: g.target_unit || (g.kind === "weekly_hours" ? "hr" : ""),
-          color: cat.color,
-          categoryName: cat.name,
-        });
-      }
+      const primary = cat.goals.find(
+        (g) => (g.kind === "weekly_hours" || g.kind === "weekly_count") &&
+               (g.target_value ?? g.target_range_high ?? g.target_range_low ?? 0) > 0
+      );
+      if (!primary) continue;
+      out.push({
+        cat,
+        primaryGoalId: primary.id,
+        kind: primary.kind as "weekly_hours" | "weekly_count",
+        target: (primary.target_value ?? primary.target_range_high ?? primary.target_range_low ?? 0),
+        rangeLow: primary.target_range_low,
+        rangeHigh: primary.target_range_high,
+        unit: primary.target_unit || (primary.kind === "weekly_hours" ? "hr" : ""),
+      });
     }
     return out;
   }, [goalCategories]);
 
-  // Compute actuals for each tracked goal from this week's personal blocks.
+  // Actuals = sum of PAST or completed personal blocks this week, tagged
+  // to any goal in the category. Future planned blocks don't count toward
+  // progress — they're plans, not history.
   const actuals = useMemo(() => {
+    const now = Date.now();
     const m = new Map<string, { hours: number; count: number }>();
+    // category id → { hours, count }
+    const goalToCat = new Map<string, string>();
+    for (const cat of goalCategories) {
+      for (const g of cat.goals) goalToCat.set(g.id, cat.id);
+    }
     for (const a of appts) {
       if (a.session_type !== "personal") continue;
       const goalId = (a as { goal_id?: string | null }).goal_id;
       if (!goalId) continue;
-      const t = new Date(a.starts_at).getTime();
-      if (t < weekStart.getTime() || t >= weekEndMs) continue;
-      const cur = m.get(goalId) ?? { hours: 0, count: 0 };
-      const durHrs = Math.max(0, (new Date(a.ends_at).getTime() - t) / 3_600_000);
-      cur.hours += durHrs;
+      const catId = goalToCat.get(goalId);
+      if (!catId) continue;
+      const startMs = new Date(a.starts_at).getTime();
+      const endMs = new Date(a.ends_at).getTime();
+      if (startMs < weekStart.getTime() || startMs >= weekEndMs) continue;
+      // Past = ended before now. Completed = explicit status.
+      const isDone = endMs <= now || a.status === "completed";
+      if (!isDone) continue;
+      const cur = m.get(catId) ?? { hours: 0, count: 0 };
+      cur.hours += Math.max(0, (endMs - startMs) / 3_600_000);
       cur.count += 1;
-      m.set(goalId, cur);
+      m.set(catId, cur);
     }
     return m;
-  }, [appts, weekStart, weekEndMs]);
+  }, [appts, weekStart, weekEndMs, goalCategories]);
 
-  if (trackedGoals.length === 0) return null;
+  function doAction(
+    actionKind: "fill" | "reorg",
+    t: typeof trackedCats[number],
+  ) {
+    setActErr(null);
+    startBusy(async () => {
+      const target = t.kind === "weekly_hours"
+        ? (t.target ?? t.rangeHigh ?? 0)
+        : (t.target ?? t.rangeHigh ?? 0);
+      const cat = { id: t.cat.id, name: t.cat.name, goals: t.cat.goals.map((g) => ({ id: g.id, name: g.name, kind: g.kind })) };
+      const fn = actionKind === "fill"
+        ? (await import("./actions")).autoFillGoal
+        : (await import("./actions")).reorganizeGoal;
+      const res = await fn(cat, target);
+      if (!res.ok) setActErr(`${t.cat.name}: ${res.error}`);
+      router.refresh();
+    });
+  }
+
+  if (trackedCats.length === 0) return null;
 
   return (
-    <div
-      className="no-print"
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "0.5rem",
-        marginTop: "1rem",
-        paddingBottom: "0.25rem",
-      }}
-    >
-      {trackedGoals.map((g) => {
-        const a = actuals.get(g.id) ?? { hours: 0, count: 0 };
-        const actual = g.kind === "weekly_hours" ? a.hours : a.count;
-        const pct = Math.max(0, Math.min(100, (actual / g.target) * 100));
-        const inRange = g.rangeLow != null && g.rangeHigh != null
-          ? actual >= g.rangeLow && actual <= g.rangeHigh
-          : actual >= g.target;
-        const targetLabel = g.rangeLow != null && g.rangeHigh != null
-          ? `${g.rangeLow}–${g.rangeHigh}`
-          : `${g.target}`;
-        const actualDisplay = g.kind === "weekly_hours"
-          ? Math.round(actual * 10) / 10
-          : actual;
-        return (
-          <div
-            key={g.id}
-            title={`${g.categoryName} · ${g.name}\nThis week: ${actualDisplay} ${g.unit} (target ${targetLabel} ${g.unit})`}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.2rem",
-              minWidth: 140,
-              padding: "0.4rem 0.55rem",
-              border: `1px solid ${inRange ? g.color : "var(--line)"}`,
-              borderRadius: 4,
-              background: "var(--paper)",
-            }}
-          >
-            <div style={{
-              display: "flex", justifyContent: "space-between", gap: "0.4rem", alignItems: "baseline",
-              fontSize: "0.74rem", fontWeight: 600,
-            }}>
-              <span style={{ color: g.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {g.categoryName}
-              </span>
-              <span style={{ color: inRange ? g.color : "var(--ink)", whiteSpace: "nowrap" }}>
-                {actualDisplay}/{targetLabel} {g.unit}
-              </span>
-            </div>
-            <div style={{
-              height: 4, background: "rgba(0,0,0,0.08)", borderRadius: 999, overflow: "hidden",
-            }}>
+    <div className="no-print" style={{ marginTop: "1rem" }}>
+      {actErr && (
+        <div style={{
+          marginBottom: "0.45rem", padding: "0.35rem 0.55rem",
+          background: "rgba(192,57,43,0.07)", border: "1px solid var(--red)",
+          color: "var(--red)", borderRadius: 4, fontSize: "0.74rem",
+        }}>
+          {actErr}
+        </div>
+      )}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.55rem",
+          paddingBottom: "0.25rem",
+        }}
+      >
+        {trackedCats.map((t) => {
+          const a = actuals.get(t.cat.id) ?? { hours: 0, count: 0 };
+          const actual = t.kind === "weekly_hours" ? a.hours : a.count;
+          const pct = Math.max(0, Math.min(100, (actual / Math.max(t.target, 0.0001)) * 100));
+          const inRange = t.rangeLow != null && t.rangeHigh != null
+            ? actual >= t.rangeLow && actual <= t.rangeHigh
+            : actual >= t.target;
+          const targetLabel = t.rangeLow != null && t.rangeHigh != null
+            ? `${t.rangeLow}–${t.rangeHigh}`
+            : `${t.target}`;
+          const actualDisplay = t.kind === "weekly_hours"
+            ? Math.round(actual * 10) / 10
+            : actual;
+          return (
+            <div
+              key={t.cat.id}
+              title={`${t.cat.name}\nCompleted/past this week: ${actualDisplay} ${t.unit} (target ${targetLabel} ${t.unit})`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+                minWidth: 168,
+                padding: "0.45rem 0.6rem",
+                border: `1px solid ${inRange ? t.cat.color : "var(--line)"}`,
+                borderRadius: 4,
+                background: "var(--paper)",
+              }}
+            >
               <div style={{
-                width: `${pct}%`, height: "100%", background: g.color, transition: "width 0.2s",
-              }} />
+                display: "flex", justifyContent: "space-between", gap: "0.4rem", alignItems: "baseline",
+                fontSize: "0.74rem", fontWeight: 600,
+              }}>
+                <span style={{ color: t.cat.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {t.cat.name}
+                </span>
+                <span style={{ color: inRange ? t.cat.color : "var(--ink)", whiteSpace: "nowrap", fontSize: "0.72rem" }}>
+                  {actualDisplay}/{targetLabel} {t.unit}
+                </span>
+              </div>
+              <div style={{
+                height: 4, background: "rgba(0,0,0,0.08)", borderRadius: 999, overflow: "hidden",
+              }}>
+                <div style={{
+                  width: `${pct}%`, height: "100%", background: t.cat.color, transition: "width 0.2s",
+                }} />
+              </div>
+              <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.1rem" }}>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => doAction("fill", t)}
+                  title={`Schedule planned blocks across this week to hit ${targetLabel} ${t.unit}`}
+                  style={miniBtnStyle(t.cat.color, true)}
+                >+ add to cal</button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => doAction("reorg", t)}
+                  title="Delete future planned blocks for this category and re-fill"
+                  style={miniBtnStyle(t.cat.color, false)}
+                >↻ reorg</button>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.66rem", fontStyle: "italic" }}>
+        Numerator counts past + completed blocks only. Add / Reorg never touch history.
+      </div>
     </div>
   );
+}
+
+function miniBtnStyle(color: string, filled: boolean): React.CSSProperties {
+  return {
+    padding: "0.18rem 0.5rem",
+    fontSize: "0.66rem",
+    border: `1px solid ${color}`,
+    background: filled ? color : "transparent",
+    color: filled ? "#fff" : color,
+    borderRadius: 3,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontWeight: 600,
+    letterSpacing: "0.02em",
+    flex: 1,
+  };
 }
 
 // ─── Personal block edit fields with goal picker + Sleep specifics ────
@@ -2260,31 +2340,9 @@ function PersonalBlockFields({
             )}
           </div>
 
-          {/* Specifier — only shown when the category has more than one
-              goal AND a category is selected. */}
-          {tagged && tagged.cat.goals.length > 1 && (
-            <div>
-              <label className="stat-label" style={{ fontSize: "0.66rem" }}>
-                Specific goal (optional)
-              </label>
-              <select
-                className="input"
-                value={draft.goal_id ?? ""}
-                onChange={(e) => {
-                  if (e.target.value) pickGoal(e.target.value, "specifier");
-                }}
-                style={{
-                  marginTop: "0.2rem",
-                  fontSize: "0.82rem",
-                  padding: "0.32rem 0.5rem",
-                }}
-              >
-                {tagged.cat.goals.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Specifier dropdown removed per user — categories are enough.
+              When auto-scheduling lands we'll use the category's primary
+              goal as the rollup target. */}
         </div>
       )}
 
