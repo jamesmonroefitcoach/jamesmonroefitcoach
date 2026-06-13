@@ -1,16 +1,22 @@
 // Auto-scheduler for goal-tagged personal blocks.
 //
-// Each category has hard-coded rules (sleep nightly, piano 1-hr holes
-// w/ priority Tue+Thu noon, etc.). 'Add to calendar' adds enough new
-// blocks to hit the weekly target. 'Reorganize' deletes future planned
-// blocks for the goal/category and re-runs add. Past + completed
-// blocks are never touched.
-//
-// Rule defaults documented in the README of this file — adjust as
-// James iterates. Each category-matcher is just a string regex over
-// the category NAME, so adding a new category in the Goals UI without
-// matching rules just means auto-fill won't schedule for it (returns
-// 'no rules' as a soft error).
+// Per-category rules below match James's stated prefs (2026-06-13):
+//   Work        — NOT auto-scheduled. Client sessions on the calendar
+//                 are the actual work; progress comes from completed
+//                 sessions, not from add-to-cal.
+//   Sleep       — nightly 22:00 → 06:00 (slides on conflict). Adds a
+//                 60 min midday nap the day after any night < 7 hr.
+//   Piano       — Tue + Thu 12:00–13:00 priority, then exact 1-hr
+//                 holes between client sessions.
+//   Cook        — flexible 1–2 hour windows, any time of day, slotted
+//                 into the largest free gaps first.
+//   Cardio      — evening / sunset, 60 min: Sun 17:00, Wed 18:00,
+//                 Fri 18:00 by default.
+//   Body        — fits 1-hr and 30-min gaps between client sessions
+//                 (gym holes). Single-exercise focus blocks are
+//                 30 min.
+//   Business    — 30 min daily Mon–Fri. Finds an open 30 min hole
+//                 in the day; defaults to 19:00 if no hole exists.
 
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 
@@ -29,7 +35,6 @@ type GoalCategoryLite = {
   goals: { id: string; name: string; kind: string }[];
 };
 
-// Monday-anchored start of the week containing `d`.
 function weekStartOf(d: Date): Date {
   const s = new Date(d);
   s.setHours(0, 0, 0, 0);
@@ -47,7 +52,6 @@ function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
   return aStart < bEnd && bStart < aEnd;
 }
 
-// Does the proposed range collide with anything already on the schedule?
 function isBusy(
   start: Date, end: Date,
   busy: { starts_at: string; ends_at: string }[]
@@ -58,7 +62,6 @@ function isBusy(
   return false;
 }
 
-// Fetch this week's appointments — what we need to plan around.
 async function loadWeekContext(ownerId: string, weekStart: Date) {
   const supabase = createSupabaseAdmin();
   const weekEnd = new Date(weekStart);
@@ -74,20 +77,25 @@ async function loadWeekContext(ownerId: string, weekStart: Date) {
 }
 
 // ── Per-category schedulers ──────────────────────────────────────────
-// Each returns a list of proposed { starts_at, ends_at } slots to add.
 
 type Slot = { startsAt: string; endsAt: string };
 
+/** Sleep — nightly 22:00 → 06:00 with up-to-4×30-min shift on conflict.
+ *  After each scheduled night, check duration; if < 7 hr, add a 60 min
+ *  nap (13:00–14:00) the next day. Past nights already < 7 hr that
+ *  haven't had a nap yet also get one. */
 function scheduleSleep(weekStart: Date, busy: AppointmentLite[]): Slot[] {
   const out: Slot[] = [];
-  // For each night Mon..Sun (relative to weekStart), aim for 22:00→06:00.
+  const SEVEN_HR_MS = 7 * 3_600_000;
+  const now = new Date();
+
+  // 1) Future-night planning.
   for (let day = 0; day < 7; day++) {
-    const nightStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 22);
+    const dayBase = new Date(weekStart.getTime() + day * 86_400_000);
+    const nightStart = setLocalHours(dayBase, 22);
     const nightEnd = setLocalHours(new Date(nightStart.getTime() + 86_400_000), 6);
-    if (nightStart < new Date()) continue; // past
-    // If conflict with the standard window, slide 30 min later up to 4×.
-    let s = nightStart, e = nightEnd;
-    let attempts = 0;
+    if (nightStart < now) continue;
+    let s = nightStart, e = nightEnd, attempts = 0;
     while (isBusy(s, e, busy) && attempts < 4) {
       s = new Date(s.getTime() + 30 * 60_000);
       e = new Date(e.getTime() + 30 * 60_000);
@@ -97,28 +105,69 @@ function scheduleSleep(weekStart: Date, busy: AppointmentLite[]): Slot[] {
       out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
     }
   }
+
+  // 2) Nap detection — for each existing sleep block (past or in our
+  //    out[] queue) shorter than 7 hr, plan a midday nap the next day.
+  type CombinedBlock = { starts_at: string; ends_at: string };
+  const allSleep: CombinedBlock[] = [
+    ...out.map((s) => ({ starts_at: s.startsAt, ends_at: s.endsAt })),
+    ...busy.filter((b) => b.session_type === "personal" && /sleep/i.test(String(b.status))),
+  ];
+  // We don't know which past blocks are sleep without category — so
+  // just inspect each personal block tagged with any goal_id and check
+  // if its duration is < 7 hr; treat as 'maybe sleep' if the block
+  // spans a 22:00–06:00-ish window.
+  const lateNightCandidates = busy.filter((b) => {
+    if (b.session_type !== "personal" || !b.goal_id) return false;
+    const s = new Date(b.starts_at);
+    return s.getHours() >= 20 || s.getHours() <= 6;
+  });
+  for (const candidate of lateNightCandidates) {
+    const dur = new Date(candidate.ends_at).getTime() - new Date(candidate.starts_at).getTime();
+    if (dur < SEVEN_HR_MS) {
+      const wakeDay = new Date(candidate.ends_at);
+      const napStart = setLocalHours(wakeDay, 13);
+      const napEnd = setLocalHours(wakeDay, 14);
+      if (napStart < now) continue;
+      if (!isBusy(napStart, napEnd, busy)) {
+        out.push({ startsAt: napStart.toISOString(), endsAt: napEnd.toISOString() });
+      }
+    }
+  }
+  // Also nap the day after any short night we just planned.
+  for (const s of allSleep) {
+    const dur = new Date(s.ends_at).getTime() - new Date(s.starts_at).getTime();
+    if (dur < SEVEN_HR_MS) {
+      const wake = new Date(s.ends_at);
+      const napStart = setLocalHours(wake, 13);
+      const napEnd = setLocalHours(wake, 14);
+      if (napStart < now) continue;
+      if (!isBusy(napStart, napEnd, busy)) {
+        out.push({ startsAt: napStart.toISOString(), endsAt: napEnd.toISOString() });
+      }
+    }
+  }
   return out;
 }
 
+/** Piano — Tue + Thu 12:00–13:00 priority, then exact-1-hr gaps
+ *  between weekday client sessions. */
 function schedulePiano(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
   const out: Slot[] = [];
-  // Priority Tue + Thu 12:00–13:00.
   for (const day of [1, 3]) {
     const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 12);
     const e = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 13);
     if (s < new Date()) continue;
     if (!isBusy(s, e, busy)) out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
   }
-  // Fill remaining hours by scanning for exact 1-hour gaps between client
-  // sessions on weekdays.
   const remainingHrs = Math.max(0, targetHours - out.length);
   if (remainingHrs <= 0) return out;
 
-  // Sort weekday sessions by start time per day to find gaps.
-  for (let day = 0; day < 5; day++) {
+  // No weekend rule difference — scan all 7 days for 1-hr session gaps.
+  for (let day = 0; day < 7; day++) {
     if (out.length - 2 >= remainingHrs) break;
-    const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 8);
-    const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 20);
+    const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
+    const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 22);
     const todays = busy
       .filter((b) => {
         const t = new Date(b.starts_at);
@@ -129,34 +178,159 @@ function schedulePiano(weekStart: Date, busy: AppointmentLite[], targetHours: nu
       const gapStart = new Date(todays[i].ends_at);
       const gapEnd = new Date(todays[i + 1].starts_at);
       const gapMin = (gapEnd.getTime() - gapStart.getTime()) / 60_000;
-      if (gapMin === 60) {
-        if (gapStart > new Date() && !isBusy(gapStart, gapEnd, busy)) {
-          out.push({ startsAt: gapStart.toISOString(), endsAt: gapEnd.toISOString() });
-        }
+      if (gapMin === 60 && gapStart > new Date() && !isBusy(gapStart, gapEnd, busy)) {
+        out.push({ startsAt: gapStart.toISOString(), endsAt: gapEnd.toISOString() });
       }
     }
   }
   return out;
 }
 
-function scheduleWeeklyHourBlocks(
-  weekStart: Date,
-  busy: AppointmentLite[],
-  targetHours: number,
-  blockHours: number,
-  preferredWindows: { dayOfWeek: number; hour: number }[],
-): Slot[] {
+/** Cook — flexible 1–2 hr windows anywhere. Slots into the largest
+ *  free gaps first so the bigger chunks of free time get prep.
+ *  No work-hour bounds: any time of day is fair game. */
+function scheduleCook(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
   const out: Slot[] = [];
   let scheduled = 0;
-  for (const w of preferredWindows) {
+  type DayGap = { day: number; gapStart: Date; gapEnd: Date };
+  const gaps: DayGap[] = [];
+  for (let day = 0; day < 7; day++) {
+    const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
+    const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 22);
+    const todays = busy
+      .filter((b) => {
+        const t = new Date(b.starts_at);
+        return t >= dayStart && t < dayEnd;
+      })
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    let cursor = dayStart;
+    for (const a of todays) {
+      const aStart = new Date(a.starts_at);
+      if (aStart > cursor) gaps.push({ day, gapStart: cursor, gapEnd: aStart });
+      const aEnd = new Date(a.ends_at);
+      if (aEnd > cursor) cursor = aEnd;
+    }
+    if (cursor < dayEnd) gaps.push({ day, gapStart: cursor, gapEnd: dayEnd });
+  }
+  // Sort gaps largest first.
+  gaps.sort((a, b) =>
+    (b.gapEnd.getTime() - b.gapStart.getTime()) - (a.gapEnd.getTime() - a.gapStart.getTime())
+  );
+  for (const g of gaps) {
     if (scheduled >= targetHours) break;
-    const s = setLocalHours(new Date(weekStart.getTime() + w.dayOfWeek * 86_400_000), w.hour);
-    const e = setLocalHours(new Date(s.getTime() + blockHours * 3_600_000), s.getHours() + blockHours);
-    e.setMinutes(0);
-    if (s < new Date()) continue;
+    if (g.gapStart < new Date()) continue;
+    const lengthHr = (g.gapEnd.getTime() - g.gapStart.getTime()) / 3_600_000;
+    if (lengthHr < 1) continue;
+    // Use 2 hr if the gap allows; else 1 hr.
+    const useHr = lengthHr >= 2 ? 2 : 1;
+    const s = g.gapStart;
+    const e = new Date(s.getTime() + useHr * 3_600_000);
     if (!isBusy(s, e, busy)) {
       out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
-      scheduled += blockHours;
+      scheduled += useHr;
+    }
+  }
+  return out;
+}
+
+/** Cardio — evening 60 min runs, Sun 17:00 / Wed 18:00 / Fri 18:00. */
+function scheduleCardio(weekStart: Date, busy: AppointmentLite[], targetRuns: number): Slot[] {
+  const out: Slot[] = [];
+  const preferred: { dayOfWeek: number; hour: number }[] = [
+    { dayOfWeek: 6, hour: 17 }, // Sun 5pm
+    { dayOfWeek: 2, hour: 18 }, // Wed 6pm
+    { dayOfWeek: 4, hour: 18 }, // Fri 6pm
+  ];
+  for (const p of preferred) {
+    if (out.length >= targetRuns) break;
+    const s = setLocalHours(new Date(weekStart.getTime() + p.dayOfWeek * 86_400_000), p.hour);
+    const e = setLocalHours(s, p.hour + 1);
+    if (s < new Date()) continue;
+    if (!isBusy(s, e, busy)) out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+  }
+  return out;
+}
+
+/** Body Mastery — fits into 1-hr and 30-min gaps between client sessions
+ *  (gym holes). 60 min = full workout; 30 min = single-exercise focus. */
+function scheduleBodyMastery(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
+  const out: Slot[] = [];
+  let scheduledHrs = 0;
+  for (let day = 0; day < 7; day++) {
+    if (scheduledHrs >= targetHours) break;
+    const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
+    const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 21);
+    const todays = busy
+      .filter((b) => {
+        const t = new Date(b.starts_at);
+        return t >= dayStart && t < dayEnd && b.session_type === "session";
+      })
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    if (todays.length < 2) continue; // need gaps between sessions
+    for (let i = 0; i < todays.length - 1; i++) {
+      if (scheduledHrs >= targetHours) break;
+      const gapStart = new Date(todays[i].ends_at);
+      const gapEnd = new Date(todays[i + 1].starts_at);
+      const gapMin = (gapEnd.getTime() - gapStart.getTime()) / 60_000;
+      if (gapStart < new Date()) continue;
+      // Use full hour if 60+ min; else 30 min if 30+; else skip.
+      let useHr = 0;
+      if (gapMin >= 60) useHr = 1;
+      else if (gapMin >= 30) useHr = 0.5;
+      else continue;
+      const s = gapStart;
+      const e = new Date(s.getTime() + useHr * 3_600_000);
+      if (!isBusy(s, e, busy)) {
+        out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+        scheduledHrs += useHr;
+      }
+    }
+  }
+  return out;
+}
+
+/** Business — 30 min daily, all 7 days (no weekend rule difference).
+ *  Tries to slot into a free 30 min hole between client sessions;
+ *  falls back to 19:00 if none. */
+function scheduleBusiness(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
+  const out: Slot[] = [];
+  let scheduledHrs = 0;
+  for (let day = 0; day < 7; day++) {
+    if (scheduledHrs >= targetHours) break;
+    const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
+    const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 23);
+    const todays = busy
+      .filter((b) => {
+        const t = new Date(b.starts_at);
+        return t >= dayStart && t < dayEnd && b.session_type === "session";
+      })
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    let slotted = false;
+    for (let i = 0; i < todays.length - 1; i++) {
+      const gapStart = new Date(todays[i].ends_at);
+      const gapEnd = new Date(todays[i + 1].starts_at);
+      const gapMin = (gapEnd.getTime() - gapStart.getTime()) / 60_000;
+      if (gapMin >= 30 && gapStart > new Date()) {
+        const s = gapStart;
+        const e = new Date(s.getTime() + 30 * 60_000);
+        if (!isBusy(s, e, busy)) {
+          out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+          scheduledHrs += 0.5;
+          slotted = true;
+          break;
+        }
+      }
+    }
+    if (!slotted) {
+      // Fallback: 19:00–19:30 same day.
+      const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 19);
+      const e = setLocalHours(s, 19, 30);
+      e.setMinutes(30);
+      if (s < new Date()) continue;
+      if (!isBusy(s, e, busy)) {
+        out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+        scheduledHrs += 0.5;
+      }
     }
   }
   return out;
@@ -169,35 +343,14 @@ function scheduleByCategoryName(
   targetWeekly: number,
 ): Slot[] {
   const lower = name.toLowerCase();
+  if (/work/.test(lower)) return []; // Work = client sessions; not auto-scheduled.
   if (/sleep/.test(lower)) return scheduleSleep(weekStart, busy);
   if (/piano/.test(lower)) return schedulePiano(weekStart, busy, targetWeekly);
-  if (/cook/.test(lower)) {
-    return scheduleWeeklyHourBlocks(weekStart, busy, targetWeekly, 2, [
-      { dayOfWeek: 6, hour: 15 },  // Sun 3pm
-      { dayOfWeek: 2, hour: 19 },  // Wed 7pm
-      { dayOfWeek: 4, hour: 17 },  // Fri 5pm
-    ]);
-  }
-  if (/cardio/.test(lower)) {
-    return scheduleWeeklyHourBlocks(weekStart, busy, targetWeekly, 1, [
-      { dayOfWeek: 1, hour: 7 },  // Tue 7am — count goal so 'hours' here = runs
-      { dayOfWeek: 4, hour: 7 },  // Fri 7am
-    ]);
-  }
-  if (/body/.test(lower)) {
-    return scheduleWeeklyHourBlocks(weekStart, busy, targetWeekly, 1, [
-      { dayOfWeek: 0, hour: 6 },  // Mon 6am
-      { dayOfWeek: 2, hour: 6 },  // Wed 6am
-      { dayOfWeek: 4, hour: 6 },  // Fri 6am
-    ]);
-  }
-  if (/business|biz/.test(lower)) {
-    return scheduleWeeklyHourBlocks(weekStart, busy, targetWeekly, 2, [
-      { dayOfWeek: 2, hour: 19 }, // Wed 7pm
-      { dayOfWeek: 4, hour: 19 }, // Fri 7pm
-    ]);
-  }
-  return []; // No rules → don't schedule anything.
+  if (/cook|prep/.test(lower)) return scheduleCook(weekStart, busy, targetWeekly);
+  if (/cardio|run/.test(lower)) return scheduleCardio(weekStart, busy, targetWeekly);
+  if (/body/.test(lower)) return scheduleBodyMastery(weekStart, busy, targetWeekly);
+  if (/business|biz/.test(lower)) return scheduleBusiness(weekStart, busy, targetWeekly);
+  return [];
 }
 
 // ── Public entry points ─────────────────────────────────────────────
@@ -206,15 +359,16 @@ export type AutoFillResult =
   | { ok: true; added: number }
   | { ok: false; error: string };
 
-/** Schedule blocks for `categoryId` to hit its weekly target. Never
- *  touches past or completed blocks. Adds personal block rows to
- *  appointments. */
 export async function autoFillCategoryForWeek(
   ownerId: string,
   category: GoalCategoryLite,
   targetWeekly: number,
 ): Promise<AutoFillResult> {
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  // Work is sessions, not personal blocks — refuse to schedule.
+  if (/work/i.test(category.name)) {
+    return { ok: false, error: "Work is filled by client sessions, not auto-scheduled." };
+  }
   const supabase = createSupabaseAdmin();
   const ws = weekStartOf(new Date());
   const { appts } = await loadWeekContext(ownerId, ws);
@@ -223,7 +377,7 @@ export async function autoFillCategoryForWeek(
 
   const slots = scheduleByCategoryName(category.name, ws, appts, targetWeekly);
   if (slots.length === 0) {
-    return { ok: false, error: "No rules for this category yet (or no free slots)." };
+    return { ok: false, error: "Nothing to add — already on target or no free slots." };
   }
 
   const rows = slots.map((s) => ({
@@ -244,23 +398,19 @@ export async function autoFillCategoryForWeek(
   return { ok: true, added: rows.length };
 }
 
-/** Delete future + non-completed blocks tagged to `category`'s goals
- *  for this week, then re-run autoFill. Past + completed blocks are
- *  preserved. */
 export async function reorganizeCategoryForWeek(
   ownerId: string,
   category: GoalCategoryLite,
   targetWeekly: number,
 ): Promise<AutoFillResult> {
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  if (/work/i.test(category.name)) {
+    return { ok: false, error: "Work is filled by client sessions, not auto-scheduled." };
+  }
   const supabase = createSupabaseAdmin();
-  const ws = weekStartOf(new Date());
-  const we = new Date(ws); we.setDate(ws.getDate() + 7);
   const goalIds = category.goals.map((g) => g.id);
   if (goalIds.length === 0) return { ok: false, error: "Category has no goals." };
 
-  // Delete future personal blocks tagged to any of this category's goals.
-  // Past blocks (ends_at <= now) and completed status are preserved.
   await supabase
     .from("appointments")
     .delete()
