@@ -321,6 +321,56 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
   );
 }
 
+// ─── Compact roster row for the bottom 'Client list view' ──────────────────
+// One row per client with their headline numbers and a profile link. This
+// is a distinct shape from ClientRow (which is a per-client deep-dive used
+// in the Sessions / Programs sections).
+function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
+  const upcomingCount = block.upcomingSessions.length;
+  const activeProgramName = block.active.program?.name ?? null;
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(140px, 1.2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto",
+        gap: "0.85rem",
+        alignItems: "center",
+        padding: "0.55rem 0.85rem",
+        borderBottom: "1px solid var(--line)",
+        fontSize: "0.86rem",
+      }}
+    >
+      <Link
+        href={`/coach/clients/${block.clientId}`}
+        style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 600 }}
+      >
+        {block.clientName}
+        {block.needsAtHomeProgramming && (
+          <span
+            className="badge"
+            style={{ marginLeft: "0.4rem", fontSize: "0.56rem", color: "var(--rust)", borderColor: "var(--rust)", verticalAlign: "middle" }}
+          >
+            flagged
+          </span>
+        )}
+      </Link>
+      <span className="meta" style={{ fontSize: "0.78rem" }}>
+        {block.nextSession
+          ? `Next: ${fmtFullDateTime(block.nextSession.starts_at)}`
+          : "No upcoming session"}
+      </span>
+      <span className="meta" style={{ fontSize: "0.78rem" }}>
+        {activeProgramName
+          ? `Program: ${activeProgramName}`
+          : block.needsAtHomeProgramming ? "No active program" : "—"}
+      </span>
+      <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>
+        {upcomingCount} upcoming · {block.scheduledThisMonth} this mo
+      </span>
+    </div>
+  );
+}
+
 // ─── Section header — collapsible wrapper for Sessions / Programs ─────────
 function SectionHeader({ title, count, open, onToggle, subLabel }: {
   title: string;
@@ -550,68 +600,76 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
 
       <hr className="divider" />
 
-      {/* Client list view — the per-client deep-dive layout. Lives at the
-          bottom of the page and is collapsed by default so the daily-use
-          'Upcoming this week' stays the focus. Sessions + Programs are
-          nested inside as before. */}
+      {/* Sessions — top-level collapsible (no longer nested under
+          'Client list view'). */}
+      <section style={{ marginBottom: "1.25rem" }}>
+        <SectionHeader
+          title="Sessions"
+          count={sessionBlocks.length}
+          open={sessionsOpen}
+          onToggle={() => setSessionsOpen((v) => !v)}
+          subLabel="all active clients"
+        />
+        {sessionsOpen && (
+          sessionBlocks.length === 0 ? (
+            <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>No matching clients.</p>
+          ) : (
+            <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
+              {sessionBlocks.map((b) => (
+                <ClientRow key={`s-${b.clientId}`} block={b} view="sessions" />
+              ))}
+            </div>
+          )
+        )}
+      </section>
+
+      {/* Programs — top-level collapsible. */}
+      <section style={{ marginBottom: "1.25rem" }}>
+        <SectionHeader
+          title="Programs"
+          count={programBlocks.length}
+          open={programsOpen}
+          onToggle={() => setProgramsOpen((v) => !v)}
+          subLabel="clients flagged for at-home programming"
+        />
+        {programsOpen && (
+          programBlocks.length === 0 ? (
+            <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>
+              No clients flagged for programming. Hit the <strong>+</strong> on the Client Roster to add one.
+            </p>
+          ) : (
+            <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
+              {programBlocks.map((b) => (
+                <ClientRow key={`p-${b.clientId}`} block={b} view="programs" />
+              ))}
+            </div>
+          )
+        )}
+      </section>
+
+      {/* Client list view — distinct sibling collapsible at the bottom.
+          Compact per-client roster: one row per client with their next
+          session + active program + a profile link. Different shape
+          than the Sessions / Programs sections above, which break the
+          same data out by type. */}
       <section style={{ marginBottom: "1rem" }}>
         <SectionHeader
           title="Client list view"
-          count={blocks.length}
+          count={filtered.length}
           open={clientListOpen}
           onToggle={() => setClientListOpen((v) => !v)}
-          subLabel="all clients · sessions + at-home programs"
+          subLabel="compact roster · jump to a client"
         />
       </section>
 
       {!clientListOpen ? null : (
-      <div>
-        {/* Sessions — nested */}
-        <section style={{ marginBottom: "1.25rem" }}>
-          <SectionHeader
-            title="Sessions"
-            count={sessionBlocks.length}
-            open={sessionsOpen}
-            onToggle={() => setSessionsOpen((v) => !v)}
-            subLabel="all active clients"
-          />
-          {sessionsOpen && (
-            sessionBlocks.length === 0 ? (
-              <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>No matching clients.</p>
-            ) : (
-              <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
-                {sessionBlocks.map((b) => (
-                  <ClientRow key={`s-${b.clientId}`} block={b} view="sessions" />
-                ))}
-              </div>
-            )
-          )}
-        </section>
-
-        {/* Programs — nested */}
-        <section style={{ marginBottom: "1rem" }}>
-          <SectionHeader
-            title="Programs"
-            count={programBlocks.length}
-            open={programsOpen}
-            onToggle={() => setProgramsOpen((v) => !v)}
-            subLabel="clients flagged for at-home programming"
-          />
-          {programsOpen && (
-            programBlocks.length === 0 ? (
-              <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>
-                No clients flagged for programming. Hit the <strong>+</strong> on the Client Roster to add one.
-              </p>
-            ) : (
-              <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
-                {programBlocks.map((b) => (
-                  <ClientRow key={`p-${b.clientId}`} block={b} view="programs" />
-                ))}
-              </div>
-            )
-          )}
-        </section>
-      </div>
+        filtered.length === 0 ? (
+          <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>No matching clients.</p>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            {filtered.map((b) => <ClientRosterRow key={`r-${b.clientId}`} block={b} />)}
+          </div>
+        )
       )}
     </div>
   );
