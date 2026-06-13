@@ -1,12 +1,17 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { listGoalsForUser } from "@/lib/goals.server";
+import { rollupSleepForUser, rollupWeeklyGoalsForUser } from "@/lib/goal-rollups.server";
 import GoalsClient from "@/components/goals-client";
 
 export default async function ClientGoalsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== "client") redirect("/");
+  await Promise.all([
+    rollupSleepForUser(user.id),
+    rollupWeeklyGoalsForUser(user.id),
+  ]);
   const categories = await listGoalsForUser(user.id);
   return <GoalsClient ownerLabel={user.name} categories={categories} />;
 }

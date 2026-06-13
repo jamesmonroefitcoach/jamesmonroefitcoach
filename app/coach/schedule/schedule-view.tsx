@@ -99,7 +99,15 @@ export type ScheduleGoalCategory = {
   id: string;
   name: string;
   color: string;
-  goals: { id: string; name: string }[];
+  goals: {
+    id: string;
+    name: string;
+    kind: "weekly_hours" | "weekly_count" | "per_night" | "pr" | "one_time";
+    target_value: number | null;
+    target_range_low: number | null;
+    target_range_high: number | null;
+    target_unit: string | null;
+  }[];
 };
 
 function newDraft(starts_at: Date, ends_at: Date): Draft {
@@ -969,6 +977,12 @@ export default function ScheduleView({
 
       {/* ─── WEEK VIEW ─── */}
       {view === "week" ? (
+        <>
+        <GoalProgressStrip
+          appts={appts}
+          weekStart={ws}
+          goalCategories={goalCategories}
+        />
         <div
           className="card"
           style={{
@@ -1300,6 +1314,7 @@ export default function ScheduleView({
             })}
           </div>
         </div>
+        </>
       ) : null}
 
       {/* ─── MONTH VIEW ─── */}
@@ -1876,6 +1891,137 @@ function setTimeOnIso(iso: string, timeStr: string): string {
 /** Add exactly one hour to an ISO string */
 function addOneHourToIso(iso: string): string {
   return new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString();
+}
+
+// ─── Weekly goal-progress strip ──────────────────────────────────────
+// Renders above the week view: one chip per goal that has a weekly
+// target (weekly_hours or weekly_count) showing actual vs. target for
+// the displayed week. Counts goal-tagged personal blocks only.
+function GoalProgressStrip({
+  appts, weekStart, goalCategories,
+}: {
+  appts: AppointmentRow[];
+  weekStart: Date;
+  goalCategories: ScheduleGoalCategory[];
+}) {
+  const weekEndMs = weekStart.getTime() + 7 * 86_400_000;
+  // Flat list of weekly-target goals + their category color.
+  const trackedGoals = useMemo(() => {
+    type Tracked = {
+      id: string;
+      name: string;
+      kind: "weekly_hours" | "weekly_count";
+      target: number;
+      rangeLow: number | null;
+      rangeHigh: number | null;
+      unit: string;
+      color: string;
+      categoryName: string;
+    };
+    const out: Tracked[] = [];
+    for (const cat of goalCategories) {
+      for (const g of cat.goals) {
+        if (g.kind !== "weekly_hours" && g.kind !== "weekly_count") continue;
+        const target = g.target_value ?? g.target_range_high ?? g.target_range_low ?? 0;
+        if (target <= 0) continue;
+        out.push({
+          id: g.id,
+          name: g.name,
+          kind: g.kind,
+          target,
+          rangeLow: g.target_range_low,
+          rangeHigh: g.target_range_high,
+          unit: g.target_unit || (g.kind === "weekly_hours" ? "hr" : ""),
+          color: cat.color,
+          categoryName: cat.name,
+        });
+      }
+    }
+    return out;
+  }, [goalCategories]);
+
+  // Compute actuals for each tracked goal from this week's personal blocks.
+  const actuals = useMemo(() => {
+    const m = new Map<string, { hours: number; count: number }>();
+    for (const a of appts) {
+      if (a.session_type !== "personal") continue;
+      const goalId = (a as { goal_id?: string | null }).goal_id;
+      if (!goalId) continue;
+      const t = new Date(a.starts_at).getTime();
+      if (t < weekStart.getTime() || t >= weekEndMs) continue;
+      const cur = m.get(goalId) ?? { hours: 0, count: 0 };
+      const durHrs = Math.max(0, (new Date(a.ends_at).getTime() - t) / 3_600_000);
+      cur.hours += durHrs;
+      cur.count += 1;
+      m.set(goalId, cur);
+    }
+    return m;
+  }, [appts, weekStart, weekEndMs]);
+
+  if (trackedGoals.length === 0) return null;
+
+  return (
+    <div
+      className="no-print"
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "0.5rem",
+        marginTop: "1rem",
+        paddingBottom: "0.25rem",
+      }}
+    >
+      {trackedGoals.map((g) => {
+        const a = actuals.get(g.id) ?? { hours: 0, count: 0 };
+        const actual = g.kind === "weekly_hours" ? a.hours : a.count;
+        const pct = Math.max(0, Math.min(100, (actual / g.target) * 100));
+        const inRange = g.rangeLow != null && g.rangeHigh != null
+          ? actual >= g.rangeLow && actual <= g.rangeHigh
+          : actual >= g.target;
+        const targetLabel = g.rangeLow != null && g.rangeHigh != null
+          ? `${g.rangeLow}–${g.rangeHigh}`
+          : `${g.target}`;
+        const actualDisplay = g.kind === "weekly_hours"
+          ? Math.round(actual * 10) / 10
+          : actual;
+        return (
+          <div
+            key={g.id}
+            title={`${g.categoryName} · ${g.name}\nThis week: ${actualDisplay} ${g.unit} (target ${targetLabel} ${g.unit})`}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.2rem",
+              minWidth: 140,
+              padding: "0.4rem 0.55rem",
+              border: `1px solid ${inRange ? g.color : "var(--line)"}`,
+              borderRadius: 4,
+              background: "var(--paper)",
+            }}
+          >
+            <div style={{
+              display: "flex", justifyContent: "space-between", gap: "0.4rem", alignItems: "baseline",
+              fontSize: "0.74rem", fontWeight: 600,
+            }}>
+              <span style={{ color: g.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {g.categoryName}
+              </span>
+              <span style={{ color: inRange ? g.color : "var(--ink)", whiteSpace: "nowrap" }}>
+                {actualDisplay}/{targetLabel} {g.unit}
+              </span>
+            </div>
+            <div style={{
+              height: 4, background: "rgba(0,0,0,0.08)", borderRadius: 999, overflow: "hidden",
+            }}>
+              <div style={{
+                width: `${pct}%`, height: "100%", background: g.color, transition: "width 0.2s",
+              }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── Personal block edit fields with goal picker + Sleep specifics ────

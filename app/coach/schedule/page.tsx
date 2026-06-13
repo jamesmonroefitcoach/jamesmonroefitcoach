@@ -26,7 +26,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     id: c.id,
     name: c.name,
     color: c.color,
-    goals: c.goals.map((g) => ({ id: g.id, name: g.name })),
+    goals: c.goals.map((g) => ({
+      id: g.id,
+      name: g.name,
+      kind: g.kind,
+      target_value: g.target_value,
+      target_range_low: g.target_range_low,
+      target_range_high: g.target_range_high,
+      target_unit: g.target_unit,
+    })),
   }));
 
   return (
