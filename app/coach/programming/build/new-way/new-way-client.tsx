@@ -273,6 +273,7 @@ export default function NewWayClient({
               hideTabs
               autoStart
               onDraftSaved={setAutosaveDraftId}
+              initialDraftId={editProgramId || undefined}
             />
           ) : (
             <ProgramsReworkClient
@@ -282,6 +283,7 @@ export default function NewWayClient({
               clientProgramSummary={clientProgramSummary}
               hideTabs
               onDraftSaved={setAutosaveDraftId}
+              initialDraftId={editProgramId || undefined}
             />
           )
         ) : (

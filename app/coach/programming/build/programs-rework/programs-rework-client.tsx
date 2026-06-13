@@ -113,7 +113,7 @@ function defaultProgram(): ProgramState {
 // Main component
 // ───────────────────────────────────────────────────────────────────────────
 export default function ProgramsReworkClient({
-  clients, initialClientId, libraryMovements, clientProgramSummary, hideTabs = false, onDraftSaved,
+  clients, initialClientId, libraryMovements, clientProgramSummary, hideTabs = false, onDraftSaved, initialDraftId = "",
 }: {
   clients: ClientRow[];
   initialClientId: string;
@@ -125,6 +125,10 @@ export default function ProgramsReworkClient({
   /** Fired by autosave so the New Way workspace can use the draft's
    *  program id for the Template view + paired-sheet lookup. */
   onDraftSaved?: (draftId: string) => void;
+  /** When the parent lobby picks a specific program to edit, this is its
+   *  ID. The WIP hydrates from this row (overriding any stashed draft) so
+   *  picking 'Edit → Strength Block 4' actually loads Strength Block 4. */
+  initialDraftId?: string;
 }) {
   const [clientId, setClientId] = useState(initialClientId);
   const selectedClient = useMemo(() => clients.find((c) => c.id === clientId) ?? null, [clients, clientId]);
@@ -146,21 +150,41 @@ export default function ProgramsReworkClient({
     if (!clientId) { setHydrated(true); return; }
     let cancelled = false;
     (async () => {
-      // Try DB first via the stashed draftId — that's the source of truth.
+      // Priority order:
+      //   1. initialDraftId from the parent lobby ('Edit →' on a specific
+      //      program). Always wins — the user explicitly picked this row.
+      //   2. Stashed localStorage draftId (a prior session for this client).
+      //   3. localStorage snapshot (legacy offline mirror).
+      //   4. Empty default.
       let stashed = "";
       try { stashed = localStorage.getItem(draftIdKey) ?? ""; } catch {}
-      if (stashed) {
-        const res = await loadDraftProgram(stashed);
+      const target = initialDraftId || stashed;
+      if (target) {
+        const res = await loadDraftProgram(target);
         if (cancelled) return;
         if (res.ok && res.data?.builderState) {
-          setProgram(res.data.builderState as ProgramState);
-          setDraftId(stashed);
-          onDraftSaved?.(stashed);
-          setHydrated(true);
-          return;
+          // Best-effort shape check — the rework's ProgramState has a
+          // 'kind' field. If it's missing, the row was saved by Old Way
+          // with a different shape; fall through to empty rather than
+          // crash on render.
+          const bs = res.data.builderState as Partial<ProgramState>;
+          if (bs && typeof bs === "object" && (bs.kind === "day" || bs.kind === "week")) {
+            setProgram(bs as ProgramState);
+            setDraftId(target);
+            // If we resolved from initialDraftId, sync the stash so future
+            // autosaves continue updating the same row.
+            if (initialDraftId && initialDraftId !== stashed) {
+              try { localStorage.setItem(draftIdKey, target); } catch {}
+            }
+            onDraftSaved?.(target);
+            setHydrated(true);
+            return;
+          }
         }
-        // The stashed draftId is stale — clear it and fall through.
-        try { localStorage.removeItem(draftIdKey); } catch {}
+        // Stale id or incompatible shape — clear and fall through.
+        if (!initialDraftId) {
+          try { localStorage.removeItem(draftIdKey); } catch {}
+        }
       }
       // Fallback: localStorage mirror (offline scenarios, pre-DB drafts).
       const saved = loadProgram(clientId);
@@ -168,7 +192,7 @@ export default function ProgramsReworkClient({
       setHydrated(true);
     })();
     return () => { cancelled = true; };
-  }, [clientId, draftIdKey]);
+  }, [clientId, draftIdKey, initialDraftId]);
 
   // Persist whenever program changes — both layers:
   //   1. localStorage right away (offline mirror, instant).

@@ -25,7 +25,7 @@ import {
   type LibraryGroup, type LibraryNode, type LibraryLeaf,
 } from "@/lib/programs";
 import type { ApptOption } from "../actions";
-import { saveDraftProgram, loadDraftProgram } from "../actions";
+import { saveDraftProgram, loadDraftProgram, getSessionProgramId } from "../actions";
 import ImportPickerModal, { type ImportScope, type ImportResult } from "../import-picker";
 import { addMovement } from "../../library/exercise-library/actions";
 import {
@@ -165,7 +165,7 @@ function newExerciseSlot(leafId: string, movement: Movement): ExerciseSlot {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ReworkClient({
-  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements, hideTabs = false, autoStart = false, onDraftSaved,
+  clients, initialClientId, initialAppts, initialApptId, initialStartsAt, libraryMovements, hideTabs = false, autoStart = false, onDraftSaved, initialDraftId = "",
 }: {
   clients: ClientRow[];
   initialClientId: string;
@@ -184,6 +184,10 @@ export default function ReworkClient({
   /** Fired by autosave so the New Way workspace can use the draft's
    *  program id for the Template view + paired-sheet lookup. */
   onDraftSaved?: (draftId: string) => void;
+  /** Optional explicit draft to hydrate. If unset, the hydrate effect
+   *  falls back to: stashed localStorage draftId → session_program_id
+   *  from the appt → localStorage snapshot → empty. */
+  initialDraftId?: string;
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState(initialClientId);
@@ -221,28 +225,54 @@ export default function ReworkClient({
   const [saveError, setLocalSaveError] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hydrate: DB first via stashed draftId, fall back to localStorage.
+  // Hydrate priority:
+  //   1. initialDraftId from the parent lobby.
+  //   2. Stashed localStorage draftId for this (client, appt).
+  //   3. session_program_id linked to the appt (so when Build → is
+  //      clicked for an existing session, we load its program).
+  //   4. localStorage snapshot (legacy).
+  //   5. Empty.
   useEffect(() => {
     if (step !== "builder") return;
     let cancelled = false;
     (async () => {
       let stashed = "";
       try { stashed = localStorage.getItem(draftIdKey) ?? ""; } catch {}
-      if (stashed && clientId) {
-        const res = await loadDraftProgram(stashed);
+      let target = initialDraftId || stashed;
+      // If neither is set, try resolving from the appointment's
+      // session_program_id — covers 'edit existing session'.
+      if (!target && apptId && clientId) {
+        try {
+          const sid = await getSessionProgramId(apptId);
+          if (sid) target = sid;
+        } catch {}
+      }
+      if (target && clientId) {
+        const res = await loadDraftProgram(target);
         if (cancelled) return;
         if (res.ok && res.data?.builderState) {
-          const bs = res.data.builderState as DraftSnapshot;
-          setSlots(bs.slots ?? []);
-          setSessionTitle(bs.sessionTitle ?? "");
-          setSelectOpen(bs.selectExercisesOpen ?? true);
-          setDraftId(stashed);
-          onDraftSaved?.(stashed);
-          setHydrated(true);
-          return;
+          const bs = res.data.builderState as Partial<DraftSnapshot>;
+          // Shape check — only the rework's own shape carries 'slots'.
+          // Programs saved by Old Way / the at-home rework will fall
+          // through to the empty path instead of crashing on render.
+          if (bs && typeof bs === "object" && Array.isArray((bs as DraftSnapshot).slots)) {
+            const sn = bs as DraftSnapshot;
+            setSlots(sn.slots);
+            setSessionTitle(sn.sessionTitle ?? "");
+            setSelectOpen(sn.selectExercisesOpen ?? true);
+            setDraftId(target);
+            if (target !== stashed) {
+              try { localStorage.setItem(draftIdKey, target); } catch {}
+            }
+            onDraftSaved?.(target);
+            setHydrated(true);
+            return;
+          }
         }
-        // Stale id — drop it and try local.
-        try { localStorage.removeItem(draftIdKey); } catch {}
+        // Stale or incompatible — drop the stash and fall through.
+        if (!initialDraftId) {
+          try { localStorage.removeItem(draftIdKey); } catch {}
+        }
       }
       const snap = loadDraft(dKey);
       if (snap) {
@@ -256,7 +286,7 @@ export default function ReworkClient({
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, dKey, draftIdKey, clientId]);
+  }, [step, dKey, draftIdKey, clientId, apptId, initialDraftId]);
 
   // Persist on every change after hydrate — local now, Supabase debounced.
   useEffect(() => {
