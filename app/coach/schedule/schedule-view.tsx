@@ -263,6 +263,16 @@ export default function ScheduleView({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dragClientId, setDragClientId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ day: number; hour: number } | null>(null);
+  // Scroll container for the week view — initial scroll lands at 7am so
+  // the 6am extension row is just above the fold.
+  const weekScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (view !== "week") return;
+    const el = weekScrollRef.current;
+    if (!el) return;
+    // Row 0 = 6am, Row 1 = 7am. Scroll so 7am is at the top of the viewport.
+    el.scrollTop = HOUR_HEIGHT;
+  }, [view]);
   const [editingChangeCount, setEditingChangeCount] = useState(false);
   const [seriesScope, setSeriesScope] = useState<"series" | null>(null);
   const [clientsBarOpen, setClientsBarOpen] = useState(false);
@@ -1093,6 +1103,7 @@ export default function ScheduleView({
       {view === "week" ? (
         <>
         <div
+          ref={weekScrollRef}
           className="card"
           style={{
             marginTop: "1rem",
@@ -1167,7 +1178,23 @@ export default function ScheduleView({
               }}
             >
               {HOURS.map((h) => (
-                <div key={h} className="meta" style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", textAlign: "right", borderBottom: "1px solid var(--line)" }}>
+                <div
+                  key={h}
+                  className="meta"
+                  data-hour-label={h}
+                  style={{
+                    fontSize: "0.72rem",
+                    // No top padding — label sits flush with the top of its
+                    // row so it aligns with the gridline at y = i * HOUR_HEIGHT,
+                    // which marks where that hour STARTS. Earlier padding-top
+                    // of 4px pushed the '7a' text below the 7am gridline,
+                    // making events at the exact hour appear offset.
+                    padding: "0 0.5rem 0.25rem",
+                    textAlign: "right",
+                    borderBottom: "1px solid var(--line)",
+                    lineHeight: 1,
+                  }}
+                >
                   {hourLabel(h)}
                 </div>
               ))}
