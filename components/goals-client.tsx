@@ -2,15 +2,18 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { GoalCategoryWithGoals, GoalKind, GoalRow } from "@/lib/goals";
-import { targetLabel, cadenceLabel, progressPct } from "@/lib/goals";
+import { targetLabel, progressPct } from "@/lib/goals";
 import {
   createCategory, updateCategory, deleteCategory,
   createGoal, updateGoal, deleteGoal,
 } from "@/app/goals/actions";
 
-// Renders the Goals page for both /coach/goals and /client/goals — same
-// schema, same CRUD. Categories are top-level collapsible groups; goals
-// live inside; sub-goals nest one level under their parent.
+// Goals page — compact column layout. Categories tile side-by-side in
+// a responsive grid; each category is a header strip with a colored dot
+// + name and a vertical list of goal rows underneath, each row showing
+// goal name, current/target, and inline Edit / Delete buttons. No nested
+// card boxes — every category is a single panel with a thin divider
+// between rows.
 export default function GoalsClient({
   ownerLabel, categories,
 }: {
@@ -65,9 +68,15 @@ export default function GoalsClient({
           No categories yet. Add one to get started.
         </p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "0.95rem",
+          }}
+        >
           {categories.map((cat) => (
-            <CategoryCard
+            <CategoryColumn
               key={cat.id}
               cat={cat}
               isEditing={editingCatId === cat.id}
@@ -103,9 +112,9 @@ export default function GoalsClient({
   );
 }
 
-// ── Category card ────────────────────────────────────────────────────
+// ── Category column ──────────────────────────────────────────────────
 
-function CategoryCard({
+function CategoryColumn({
   cat, isEditing, onEditOpen, onEditClose, onAction, pending,
 }: {
   cat: GoalCategoryWithGoals;
@@ -115,10 +124,9 @@ function CategoryCard({
   onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
   pending: boolean;
 }) {
-  const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState(false);
 
-  // Partition goals into top-level + sub-goal map for nested render.
+  // Partition goals into top-level + sub-goals for nested render.
   const top = cat.goals.filter((g) => !g.parent_goal_id);
   const subsByParent = new Map<string, GoalRow[]>();
   for (const g of cat.goals) {
@@ -130,106 +138,109 @@ function CategoryCard({
   }
 
   return (
-    <section
-      className="card"
-      style={{
-        padding: 0, overflow: "hidden",
-        borderLeft: `4px solid ${cat.color}`,
-      }}
-    >
-      {/* Header */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: "0.6rem",
-        padding: "0.65rem 0.95rem", background: "rgba(0,0,0,0.015)",
-        borderBottom: open ? "1px solid var(--line)" : "none",
-      }}>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "0.82rem", color: "var(--muted)" }}
-        >
-          {open ? "▾" : "▸"}
-        </button>
+    <section style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+      {/* Header strip — colored dot + name, edit/delete inline */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          paddingBottom: "0.45rem",
+          borderBottom: `2px solid ${cat.color}`,
+          marginBottom: "0.5rem",
+        }}
+      >
         <span style={{
-          width: 12, height: 12, borderRadius: 3, background: cat.color, flex: "none",
+          width: 10, height: 10, borderRadius: 2, background: cat.color, flex: "none",
         }} />
         {isEditing ? (
           <CategoryEditForm cat={cat} onClose={onEditClose} onAction={onAction} pending={pending} />
         ) : (
           <>
-            <strong style={{ fontSize: "1rem" }}>{cat.name}</strong>
-            <span className="meta" style={{ fontSize: "0.74rem" }}>
-              {cat.goals.length} goal{cat.goals.length === 1 ? "" : "s"}
+            <strong style={{ fontSize: "0.95rem", color: cat.color, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {cat.name}
+            </strong>
+            <span className="meta" style={{ fontSize: "0.7rem" }}>
+              {cat.goals.length}
             </span>
-            <div style={{ marginLeft: "auto", display: "flex", gap: "0.3rem" }}>
+            <div style={{ marginLeft: "auto", display: "flex", gap: "0.2rem" }}>
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ padding: "0.22rem 0.6rem", fontSize: "0.72rem" }}
                 onClick={onEditOpen}
-              >Edit</button>
+                title="Edit category"
+                style={iconBtnStyle}
+              >✎</button>
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ padding: "0.22rem 0.6rem", fontSize: "0.72rem", color: "var(--red)" }}
                 onClick={() => {
                   if (confirm(`Delete category "${cat.name}" and all its goals?`)) {
                     onAction(deleteCategory(cat.id));
                   }
                 }}
-              >Delete</button>
+                title="Delete category"
+                style={{ ...iconBtnStyle, color: "var(--red)" }}
+              >×</button>
             </div>
           </>
         )}
       </div>
 
-      {/* Goals list */}
-      {open && (
-        <div>
-          {top.length === 0 ? (
-            <p className="meta" style={{ padding: "0.65rem 0.95rem", fontStyle: "italic", fontSize: "0.8rem", margin: 0 }}>
-              No goals yet in this category.
-            </p>
-          ) : (
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {top.map((g) => (
-                <GoalListItem
-                  key={g.id}
-                  goal={g}
-                  subs={subsByParent.get(g.id) ?? []}
-                  categoryId={cat.id}
-                  categoryColor={cat.color}
-                  onAction={onAction}
-                  pending={pending}
-                />
-              ))}
-            </ul>
-          )}
+      {/* Goal rows */}
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {top.length === 0 ? (
+          <p className="meta" style={{ fontStyle: "italic", fontSize: "0.78rem", margin: "0 0 0.45rem" }}>
+            No goals yet.
+          </p>
+        ) : (
+          top.map((g) => (
+            <GoalRowItem
+              key={g.id}
+              goal={g}
+              subs={subsByParent.get(g.id) ?? []}
+              categoryId={cat.id}
+              categoryColor={cat.color}
+              onAction={onAction}
+              pending={pending}
+            />
+          ))
+        )}
 
-          {/* Add goal */}
-          <div style={{ padding: "0.55rem 0.95rem", borderTop: "1px solid var(--line)" }}>
-            {adding ? (
-              <NewGoalForm
-                onCancel={() => setAdding(false)}
-                onSubmit={(input) => onAction(createGoal({ category_id: cat.id, ...input })).then(() => setAdding(false))}
-                pending={pending}
-              />
-            ) : (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ padding: "0.32rem 0.85rem", fontSize: "0.78rem" }}
-                onClick={() => setAdding(true)}
-              >
-                + Goal
-              </button>
-            )}
+        {/* Add goal — sits beneath the rows */}
+        {adding ? (
+          <div style={{ paddingTop: "0.5rem", borderTop: "1px solid var(--line)" }}>
+            <NewGoalForm
+              onCancel={() => setAdding(false)}
+              onSubmit={(input) =>
+                onAction(createGoal({ category_id: cat.id, ...input })).then(() => setAdding(false))
+              }
+              pending={pending}
+            />
           </div>
-        </div>
-      )}
+        ) : (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{
+              alignSelf: "flex-start", marginTop: "0.35rem",
+              padding: "0.22rem 0.55rem", fontSize: "0.72rem", color: "var(--muted)",
+            }}
+            onClick={() => setAdding(true)}
+          >+ goal</button>
+        )}
+      </div>
     </section>
   );
 }
+
+const iconBtnStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  padding: "0.1rem 0.35rem",
+  fontSize: "0.85rem",
+  lineHeight: 1,
+  cursor: "pointer",
+  color: "var(--muted)",
+};
 
 function CategoryEditForm({
   cat, onClose, onAction, pending,
@@ -242,31 +253,31 @@ function CategoryEditForm({
   const [name, setName] = useState(cat.name);
   const [color, setColor] = useState(cat.color);
   return (
-    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flex: 1, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: "0.3rem", alignItems: "center", flex: 1, flexWrap: "wrap" }}>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        style={{ padding: "0.3rem 0.5rem", border: "1px solid var(--line)", borderRadius: 4, flex: "1 1 160px", fontSize: "0.86rem" }}
+        style={{ padding: "0.22rem 0.4rem", border: "1px solid var(--line)", borderRadius: 4, flex: "1 1 120px", fontSize: "0.82rem", minWidth: 0 }}
       />
       <input
         type="color"
         value={color}
         onChange={(e) => setColor(e.target.value)}
-        style={{ width: 32, height: 28, padding: 0, border: "1px solid var(--line)", borderRadius: 4, background: "transparent" }}
+        style={{ width: 28, height: 24, padding: 0, border: "1px solid var(--line)", borderRadius: 4, background: "transparent" }}
       />
       <button
         type="button"
         className="btn btn-primary"
-        style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem" }}
+        style={{ padding: "0.2rem 0.55rem", fontSize: "0.72rem" }}
         disabled={pending}
         onClick={() => onAction(updateCategory(cat.id, { name, color })).then(onClose)}
       >Save</button>
       <button
         type="button"
         className="btn btn-ghost"
-        style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem" }}
+        style={{ padding: "0.2rem 0.5rem", fontSize: "0.72rem" }}
         onClick={onClose}
-      >Cancel</button>
+      >×</button>
     </div>
   );
 }
@@ -283,14 +294,14 @@ function NewCategoryForm({
   return (
     <div style={{
       display: "flex", gap: "0.4rem", alignItems: "center",
-      padding: "0.6rem 0.85rem", border: "1px dashed var(--line)", borderRadius: 4, flexWrap: "wrap",
+      padding: "0.55rem 0.75rem", border: "1px dashed var(--line)", borderRadius: 4, flexWrap: "wrap",
     }}>
       <input
         autoFocus
         placeholder="Category name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        style={{ padding: "0.32rem 0.5rem", border: "1px solid var(--line)", borderRadius: 4, flex: "1 1 200px", fontSize: "0.86rem" }}
+        style={{ padding: "0.3rem 0.5rem", border: "1px solid var(--line)", borderRadius: 4, flex: "1 1 200px", fontSize: "0.84rem" }}
       />
       <input
         type="color"
@@ -301,14 +312,14 @@ function NewCategoryForm({
       <button
         type="button"
         className="btn btn-primary"
-        style={{ padding: "0.34rem 0.85rem", fontSize: "0.82rem" }}
+        style={{ padding: "0.32rem 0.85rem", fontSize: "0.8rem" }}
         disabled={pending || !name.trim()}
         onClick={() => onSubmit(name, color)}
       >Create</button>
       <button
         type="button"
         className="btn btn-ghost"
-        style={{ padding: "0.34rem 0.7rem", fontSize: "0.82rem" }}
+        style={{ padding: "0.32rem 0.7rem", fontSize: "0.8rem" }}
         onClick={onCancel}
       >Cancel</button>
     </div>
@@ -317,7 +328,7 @@ function NewCategoryForm({
 
 // ── Goal row ─────────────────────────────────────────────────────────
 
-function GoalListItem({
+function GoalRowItem({
   goal, subs, categoryId, categoryColor, onAction, pending,
 }: {
   goal: GoalRow;
@@ -330,126 +341,114 @@ function GoalListItem({
   const [editing, setEditing] = useState(false);
   const [addingSub, setAddingSub] = useState(false);
   const pct = progressPct(goal);
+  const showProgress = pct != null && goal.kind !== "one_time";
 
   return (
-    <li style={{ borderBottom: "1px solid var(--line)" }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: "0.6rem",
-        padding: "0.55rem 0.95rem",
-      }}>
-        {editing ? (
-          <GoalEditForm
-            goal={goal}
-            onClose={() => setEditing(false)}
-            onAction={onAction}
-            pending={pending}
-          />
-        ) : (
-          <>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "0.45rem", flexWrap: "wrap" }}>
-                <strong style={{ fontSize: "0.92rem" }}>{goal.name}</strong>
-                <span className="meta" style={{ fontSize: "0.7rem" }}>
-                  {targetLabel(goal)} · {cadenceLabel(goal)}
-                </span>
-                {goal.is_achieved && (
-                  <span className="badge" style={{
-                    fontSize: "0.58rem", color: "var(--sage)", borderColor: "var(--sage)",
-                  }}>
-                    ✓ done
-                  </span>
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      padding: "0.42rem 0",
+      borderBottom: "1px solid var(--line)",
+    }}>
+      {editing ? (
+        <GoalEditForm
+          goal={goal}
+          onClose={() => setEditing(false)}
+          onAction={onAction}
+          pending={pending}
+        />
+      ) : (
+        <>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
+            <span style={{ fontSize: "0.86rem", fontWeight: 500, flex: 1, minWidth: 0 }}>
+              {goal.name}
+              {goal.is_achieved && (
+                <span style={{ marginLeft: "0.4rem", color: "var(--sage)", fontSize: "0.7rem" }} title="Completed">✓</span>
+              )}
+            </span>
+            {/* Right-aligned numeric — target only or current/target depending on kind */}
+            <span className="meta" style={{ fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+              {goal.kind === "one_time"
+                ? (goal.is_achieved ? "done" : "open")
+                : (
+                  <>
+                    <span style={{ color: "var(--ink)", fontWeight: 600 }}>
+                      {goal.current_value ?? 0}
+                    </span>
+                    /<span>{targetLabel(goal)}</span>
+                  </>
                 )}
-              </div>
-              {/* Progress display */}
-              {pct != null && goal.kind !== "one_time" && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.3rem",
-                }}>
-                  <div style={{
-                    flex: 1, height: 6, background: "rgba(0,0,0,0.06)",
-                    borderRadius: 999, overflow: "hidden",
-                  }}>
-                    <div style={{
-                      width: `${pct}%`, height: "100%", background: categoryColor,
-                    }} />
-                  </div>
-                  <span className="meta" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }}>
-                    {goal.current_value ?? 0}/{goal.target_value ?? "—"}{goal.target_unit ? ` ${goal.target_unit}` : ""}
-                  </span>
-                </div>
-              )}
-              {goal.notes && (
-                <div className="meta" style={{ fontSize: "0.7rem", marginTop: "0.25rem", fontStyle: "italic" }}>
-                  {goal.notes}
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: "0.3rem", flex: "none" }}>
-              {goal.kind === "one_time" && !goal.is_achieved && (
+            </span>
+            {/* Inline action buttons — compact icons */}
+            <div style={{ display: "flex", gap: "0.05rem" }}>
+              {goal.kind === "one_time" && (
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "0.22rem 0.55rem", fontSize: "0.72rem", color: "var(--sage)" }}
-                  onClick={() => onAction(updateGoal(goal.id, { is_achieved: true }))}
-                >✓ Mark done</button>
-              )}
-              {goal.kind === "one_time" && goal.is_achieved && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "0.22rem 0.55rem", fontSize: "0.72rem" }}
-                  onClick={() => onAction(updateGoal(goal.id, { is_achieved: false }))}
-                >Undo</button>
+                  title={goal.is_achieved ? "Mark not done" : "Mark done"}
+                  onClick={() =>
+                    onAction(updateGoal(goal.id, { is_achieved: !goal.is_achieved }))
+                  }
+                  style={{ ...iconBtnStyle, color: goal.is_achieved ? "var(--muted)" : "var(--sage)" }}
+                >{goal.is_achieved ? "↺" : "✓"}</button>
               )}
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ padding: "0.22rem 0.55rem", fontSize: "0.72rem" }}
                 onClick={() => setEditing(true)}
-              >Edit</button>
+                title="Edit goal"
+                style={iconBtnStyle}
+              >✎</button>
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ padding: "0.22rem 0.55rem", fontSize: "0.72rem", color: "var(--red)" }}
                 onClick={() => {
                   if (confirm(`Delete goal "${goal.name}"?`)) onAction(deleteGoal(goal.id));
                 }}
-              >Delete</button>
+                title="Delete goal"
+                style={{ ...iconBtnStyle, color: "var(--red)" }}
+              >×</button>
             </div>
-          </>
-        )}
-      </div>
-
-      {/* Sub-goals */}
-      {subs.length > 0 && (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, background: "rgba(0,0,0,0.015)" }}>
-          {subs.map((s) => (
-            <li key={s.id} style={{
-              display: "flex", alignItems: "center", gap: "0.4rem",
-              padding: "0.35rem 0.95rem 0.35rem 2.05rem",
-              borderTop: "1px solid var(--line)",
+          </div>
+          {showProgress && (
+            <div style={{
+              marginTop: "0.25rem", height: 3,
+              background: "rgba(0,0,0,0.06)",
+              borderRadius: 999, overflow: "hidden",
             }}>
-              <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>↳</span>
-              <span style={{ fontSize: "0.82rem", flex: 1 }}>{s.name}</span>
-              {s.is_achieved ? (
-                <span className="badge" style={{ fontSize: "0.56rem", color: "var(--sage)", borderColor: "var(--sage)" }}>
-                  ✓ done
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "0.18rem 0.5rem", fontSize: "0.68rem", color: "var(--sage)" }}
-                  onClick={() => onAction(updateGoal(s.id, { is_achieved: true }))}
-                >✓</button>
-              )}
+              <div style={{
+                width: `${pct}%`, height: "100%", background: categoryColor,
+              }} />
+            </div>
+          )}
+          {goal.notes && (
+            <div className="meta" style={{ fontSize: "0.7rem", marginTop: "0.18rem", fontStyle: "italic" }}>
+              {goal.notes}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Sub-goals — compact bulleted list */}
+      {subs.length > 0 && (
+        <ul style={{ listStyle: "none", margin: "0.25rem 0 0", padding: "0 0 0 0.85rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {subs.map((s) => (
+            <li key={s.id} style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.76rem" }}>
+              <span style={{ color: "var(--muted)", fontSize: "0.65rem" }}>↳</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.name}
+                {s.is_achieved && (
+                  <span style={{ marginLeft: "0.3rem", color: "var(--sage)" }}>✓</span>
+                )}
+              </span>
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ padding: "0.18rem 0.5rem", fontSize: "0.68rem", color: "var(--red)" }}
-                onClick={() => {
-                  if (confirm(`Delete sub-goal "${s.name}"?`)) onAction(deleteGoal(s.id));
-                }}
+                title={s.is_achieved ? "Mark not done" : "Mark done"}
+                onClick={() => onAction(updateGoal(s.id, { is_achieved: !s.is_achieved }))}
+                style={{ ...iconBtnStyle, fontSize: "0.7rem", color: s.is_achieved ? "var(--muted)" : "var(--sage)" }}
+              >{s.is_achieved ? "↺" : "✓"}</button>
+              <button
+                type="button"
+                onClick={() => { if (confirm(`Delete sub-goal "${s.name}"?`)) onAction(deleteGoal(s.id)); }}
+                title="Delete"
+                style={{ ...iconBtnStyle, fontSize: "0.7rem", color: "var(--red)" }}
               >×</button>
             </li>
           ))}
@@ -457,25 +456,26 @@ function GoalListItem({
       )}
 
       {/* Add sub-goal */}
-      <div style={{ padding: "0.3rem 0.95rem 0.5rem 2.05rem", background: "rgba(0,0,0,0.015)" }}>
+      <div style={{ paddingLeft: "0.85rem" }}>
         {addingSub ? (
-          <NewSubGoalForm
-            onCancel={() => setAddingSub(false)}
-            onSubmit={(name) => onAction(createGoal({
-              category_id: categoryId, parent_goal_id: goal.id, name, kind: "one_time",
-            })).then(() => setAddingSub(false))}
-            pending={pending}
-          />
+          <div style={{ marginTop: "0.2rem" }}>
+            <NewSubGoalForm
+              onCancel={() => setAddingSub(false)}
+              onSubmit={(name) => onAction(createGoal({
+                category_id: categoryId, parent_goal_id: goal.id, name, kind: "one_time",
+              })).then(() => setAddingSub(false))}
+              pending={pending}
+            />
+          </div>
         ) : (
           <button
             type="button"
-            className="btn btn-ghost"
-            style={{ padding: "0.18rem 0.55rem", fontSize: "0.68rem", color: "var(--muted)" }}
             onClick={() => setAddingSub(true)}
-          >+ Sub-goal</button>
+            style={{ ...iconBtnStyle, fontSize: "0.66rem", marginTop: "0.1rem", color: "var(--muted)" }}
+          >+ sub</button>
         )}
       </div>
-    </li>
+    </div>
   );
 }
 
@@ -497,46 +497,47 @@ function GoalEditForm({
   const [notes, setNotes] = useState(goal.notes ?? "");
 
   const inputStyle: React.CSSProperties = {
-    padding: "0.28rem 0.45rem",
+    padding: "0.22rem 0.4rem",
     border: "1px solid var(--line)",
     borderRadius: 4,
-    fontSize: "0.82rem",
+    fontSize: "0.78rem",
     fontFamily: "inherit",
     background: "#fff",
+    minWidth: 0,
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         style={{ ...inputStyle, width: "100%" }}
       />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "0.35rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: "0.3rem" }}>
         <select value={kind} onChange={(e) => setKind(e.target.value as GoalKind)} style={inputStyle}>
-          <option value="weekly_hours">Weekly hours</option>
-          <option value="weekly_count">Weekly count</option>
+          <option value="weekly_hours">Weekly hrs</option>
+          <option value="weekly_count">Weekly ct</option>
           <option value="per_night">Per night</option>
-          <option value="pr">PR / max</option>
+          <option value="pr">PR</option>
           <option value="one_time">One-time</option>
         </select>
         <input placeholder="Target" value={target} onChange={(e) => setTarget(e.target.value)} style={inputStyle} />
-        <input placeholder="Range low" value={low} onChange={(e) => setLow(e.target.value)} style={inputStyle} />
-        <input placeholder="Range high" value={high} onChange={(e) => setHigh(e.target.value)} style={inputStyle} />
-        <input placeholder="Unit (hr/reps/...)" value={unit} onChange={(e) => setUnit(e.target.value)} style={inputStyle} />
+        <input placeholder="Low" value={low} onChange={(e) => setLow(e.target.value)} style={inputStyle} />
+        <input placeholder="High" value={high} onChange={(e) => setHigh(e.target.value)} style={inputStyle} />
+        <input placeholder="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} style={inputStyle} />
         <input placeholder="Current" value={current} onChange={(e) => setCurrent(e.target.value)} style={inputStyle} />
       </div>
       <input
-        placeholder="Notes (optional)"
+        placeholder="Notes"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         style={{ ...inputStyle, width: "100%" }}
       />
-      <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: "0.3rem", justifyContent: "flex-end" }}>
         <button
           type="button"
           className="btn btn-primary"
-          style={{ padding: "0.3rem 0.8rem", fontSize: "0.78rem" }}
+          style={{ padding: "0.22rem 0.6rem", fontSize: "0.74rem" }}
           disabled={pending}
           onClick={() => {
             const toNum = (v: string) => v.trim() === "" ? null : Number(v);
@@ -554,7 +555,7 @@ function GoalEditForm({
         <button
           type="button"
           className="btn btn-ghost"
-          style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem" }}
+          style={{ padding: "0.22rem 0.55rem", fontSize: "0.74rem" }}
           onClick={onClose}
         >Cancel</button>
       </div>
@@ -582,16 +583,17 @@ function NewGoalForm({
   const [high, setHigh] = useState("");
   const [unit, setUnit] = useState("hr");
   const inputStyle: React.CSSProperties = {
-    padding: "0.32rem 0.5rem",
+    padding: "0.24rem 0.4rem",
     border: "1px solid var(--line)",
     borderRadius: 4,
-    fontSize: "0.84rem",
+    fontSize: "0.78rem",
     fontFamily: "inherit",
     background: "#fff",
+    minWidth: 0,
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "0.35rem" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", gap: "0.25rem" }}>
       <input
         autoFocus
         placeholder="Goal name"
@@ -600,21 +602,21 @@ function NewGoalForm({
         style={{ ...inputStyle, gridColumn: "1 / -1" }}
       />
       <select value={kind} onChange={(e) => setKind(e.target.value as GoalKind)} style={inputStyle}>
-        <option value="weekly_hours">Weekly hours</option>
-        <option value="weekly_count">Weekly count</option>
+        <option value="weekly_hours">Weekly hrs</option>
+        <option value="weekly_count">Weekly ct</option>
         <option value="per_night">Per night</option>
-        <option value="pr">PR / max</option>
+        <option value="pr">PR</option>
         <option value="one_time">One-time</option>
       </select>
       <input placeholder="Target" value={target} onChange={(e) => setTarget(e.target.value)} style={inputStyle} />
       <input placeholder="Low" value={low} onChange={(e) => setLow(e.target.value)} style={inputStyle} />
       <input placeholder="High" value={high} onChange={(e) => setHigh(e.target.value)} style={inputStyle} />
       <input placeholder="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} style={inputStyle} />
-      <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.35rem", justifyContent: "flex-end" }}>
+      <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.3rem", justifyContent: "flex-end" }}>
         <button
           type="button"
           className="btn btn-primary"
-          style={{ padding: "0.32rem 0.85rem", fontSize: "0.82rem" }}
+          style={{ padding: "0.22rem 0.6rem", fontSize: "0.76rem" }}
           disabled={pending || !name.trim()}
           onClick={() => {
             const toNum = (v: string) => v.trim() === "" ? null : Number(v);
@@ -626,13 +628,13 @@ function NewGoalForm({
               target_unit: unit.trim() || null,
             });
           }}
-        >Create</button>
+        >Add</button>
         <button
           type="button"
           className="btn btn-ghost"
-          style={{ padding: "0.32rem 0.7rem", fontSize: "0.82rem" }}
+          style={{ padding: "0.22rem 0.55rem", fontSize: "0.76rem" }}
           onClick={onCancel}
-        >Cancel</button>
+        >×</button>
       </div>
     </div>
   );
@@ -647,25 +649,25 @@ function NewSubGoalForm({
 }) {
   const [name, setName] = useState("");
   return (
-    <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+    <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
       <input
         autoFocus
         placeholder="Sub-goal"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        style={{ padding: "0.22rem 0.45rem", border: "1px solid var(--line)", borderRadius: 4, fontSize: "0.78rem", flex: 1 }}
+        style={{ padding: "0.18rem 0.35rem", border: "1px solid var(--line)", borderRadius: 4, fontSize: "0.74rem", flex: 1, minWidth: 0 }}
       />
       <button
         type="button"
         className="btn btn-primary"
-        style={{ padding: "0.2rem 0.55rem", fontSize: "0.7rem" }}
+        style={{ padding: "0.16rem 0.45rem", fontSize: "0.7rem" }}
         disabled={pending || !name.trim()}
         onClick={() => onSubmit(name)}
       >+</button>
       <button
         type="button"
         className="btn btn-ghost"
-        style={{ padding: "0.2rem 0.55rem", fontSize: "0.7rem" }}
+        style={{ padding: "0.16rem 0.4rem", fontSize: "0.7rem" }}
         onClick={onCancel}
       >×</button>
     </div>
