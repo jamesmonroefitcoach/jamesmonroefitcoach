@@ -2145,21 +2145,46 @@ function GoalProgressStrip({
     return m;
   }, [appts, weekStart, weekEndMs, goalCategories]);
 
+  // Helper: convert a tracked-cat row into the args the server action
+  // wants, then call fill or reorg.
+  async function runFor(actionKind: "fill" | "reorg", t: typeof trackedCats[number]) {
+    const target = t.target ?? t.rangeHigh ?? 0;
+    const cat = { id: t.cat.id, name: t.cat.name, goals: t.cat.goals.map((g) => ({ id: g.id, name: g.name, kind: g.kind })) };
+    const mod = await import("./actions");
+    const fn = actionKind === "fill" ? mod.autoFillGoal : mod.reorganizeGoal;
+    return { name: t.cat.name, res: await fn(cat, target) };
+  }
+
   function doAction(
     actionKind: "fill" | "reorg",
     t: typeof trackedCats[number],
   ) {
     setActErr(null);
     startBusy(async () => {
-      const target = t.kind === "weekly_hours"
-        ? (t.target ?? t.rangeHigh ?? 0)
-        : (t.target ?? t.rangeHigh ?? 0);
-      const cat = { id: t.cat.id, name: t.cat.name, goals: t.cat.goals.map((g) => ({ id: g.id, name: g.name, kind: g.kind })) };
-      const fn = actionKind === "fill"
-        ? (await import("./actions")).autoFillGoal
-        : (await import("./actions")).reorganizeGoal;
-      const res = await fn(cat, target);
+      const { res } = await runFor(actionKind, t);
       if (!res.ok) setActErr(`${t.cat.name}: ${res.error}`);
+      router.refresh();
+    });
+  }
+
+  function doAllAction(actionKind: "fill" | "reorg") {
+    setActErr(null);
+    startBusy(async () => {
+      // Sequential, not parallel — a single coach is one user and
+      // sequential keeps any race conditions in the busy-slot map
+      // off the table.
+      let added = 0;
+      const failures: string[] = [];
+      for (const t of trackedCats) {
+        const { name, res } = await runFor(actionKind, t);
+        if (res.ok) added += res.added;
+        else failures.push(`${name}: ${res.error}`);
+      }
+      if (failures.length === trackedCats.length) {
+        setActErr(failures.join(" · "));
+      } else if (failures.length > 0) {
+        setActErr(`Added ${added} block${added === 1 ? "" : "s"}. Skipped: ${failures.join(" · ")}`);
+      }
       router.refresh();
     });
   }
@@ -2251,6 +2276,47 @@ function GoalProgressStrip({
             </div>
           );
         })}
+
+        {/* Trailing 'All' chip — same shape as the per-category ones
+            but runs the action across every chip in one go. */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.2rem",
+            minWidth: 200,
+            flex: "1 1 200px",
+            padding: "0.4rem 0.55rem",
+            border: "1px solid var(--ink)",
+            borderRadius: 4,
+            background: "var(--paper)",
+          }}
+        >
+          <div style={{
+            fontSize: "0.74rem", fontWeight: 700, color: "var(--ink)",
+          }}>
+            All categories
+          </div>
+          <div className="meta" style={{ fontSize: "0.66rem", lineHeight: 1.3 }}>
+            Schedule or rebuild the week across every chip at once.
+          </div>
+          <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.1rem" }}>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => doAllAction("fill")}
+              title="Run + add to cal for every category"
+              style={miniBtnStyle("var(--ink)", true)}
+            >+ add all</button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => doAllAction("reorg")}
+              title="Reorg every category"
+              style={miniBtnStyle("var(--ink)", false)}
+            >↻ reorg all</button>
+          </div>
+        </div>
       </div>
       <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.66rem", fontStyle: "italic" }}>
         Numerator counts past + completed blocks only. Add / Reorg never touch history.
