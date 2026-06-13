@@ -370,7 +370,7 @@ export default function ScheduleView({
     openNewBookingForClient(clientId);
   }
 
-  function applyLocalSave() {
+  function applyLocalSave(realId?: string) {
     if (!draft) return;
     if (draft.appt_id) {
       const isSeriesEdit = seriesScope === "series" && !!draft.series_id;
@@ -430,7 +430,11 @@ export default function ScheduleView({
         })
       );
     } else {
-      const id = `local-${Date.now()}`;
+      // Use the real UUID returned from Supabase when available. The
+      // 'local-...' fallback only fires when Supabase isn't configured
+      // (demo mode) — in production we always have a server id and must
+      // store it so subsequent delete/edit calls hit the right row.
+      const id = realId ?? `local-${Date.now()}`;
       setAppts((cur) => [...cur, {
         id,
         client_id: draft.session_type === "personal" ? null : draft.client_id || null,
@@ -483,8 +487,11 @@ export default function ScheduleView({
         return;
       }
 
+      // A 'local-...' appt_id is a stale demo-mode placeholder — there's
+      // no Supabase row yet, so send it through as a new insert.
+      const apptIdForSave = draft.appt_id?.startsWith("local-") ? undefined : draft.appt_id;
       const res = await saveAppointment({
-        appt_id: draft.appt_id,
+        appt_id: apptIdForSave,
         starts_at: draft.starts_at,
         ends_at: draft.ends_at,
         session_type: draft.session_type,
@@ -514,7 +521,10 @@ export default function ScheduleView({
         setSaveError(res.error);
         return;
       }
-      applyLocalSave();
+      // res.data.id is the canonical UUID for new inserts; for edits it's
+      // the same id we already had. Pass it down so optimistic state holds
+      // a real row reference.
+      applyLocalSave(res.data?.id);
       close();
     });
   }
@@ -523,6 +533,14 @@ export default function ScheduleView({
     if (!draft?.appt_id) return;
     const id = draft.appt_id;
     setSaveError(null);
+    // Guard: 'local-...' ids are demo-mode optimistic placeholders that
+    // never made it to Supabase. Server delete would fail with a UUID
+    // syntax error — just remove from local state directly.
+    if (id.startsWith("local-")) {
+      setAppts((cur) => cur.filter((a) => a.id !== id));
+      close();
+      return;
+    }
     startSave(async () => {
       const res = await deleteAppointment(id);
       if (!res.ok && !res.error.startsWith("Supabase not configured")) {
