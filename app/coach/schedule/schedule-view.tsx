@@ -2215,32 +2215,64 @@ function PersonalBlockFields({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-      {/* Goal picker */}
+      {/* Goal picker — two-stage:
+           1. Category (main dropdown): color-codes the block + chooses
+              which bucket the block counts toward.
+           2. Specific goal (smaller, optional): refines to a specific
+              goal within the category. Defaults to the category's first
+              goal so 'just pick Sleep' tags it without a second click. */}
       {goalCategories.length > 0 && (
-        <div>
-          <label className="stat-label">Goal (color-codes the block + counts toward weekly progress)</label>
-          <select
-            className="input"
-            value={draft.goal_id ?? ""}
-            onChange={(e) => {
-              if (!e.target.value) setDraft({ ...draft, goal_id: null });
-              else pickGoal(e.target.value);
-            }}
-            style={{ marginTop: "0.3rem" }}
-          >
-            <option value="">— No goal —</option>
-            {goalCategories.map((cat) => (
-              <optgroup key={cat.id} label={cat.name}>
-                {cat.goals.map((g) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+          <div>
+            <label className="stat-label">Goal category</label>
+            <select
+              className="input"
+              value={tagged?.cat.id ?? ""}
+              onChange={(e) => {
+                const catId = e.target.value;
+                if (!catId) { setDraft({ ...draft, goal_id: null }); return; }
+                const cat = goalCategories.find((c) => c.id === catId);
+                const firstGoalId = cat?.goals[0]?.id;
+                if (firstGoalId) pickGoal(firstGoalId);
+              }}
+              style={{ marginTop: "0.3rem" }}
+            >
+              <option value="">— No goal —</option>
+              {goalCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+            {tagged && (
+              <div className="meta" style={{ marginTop: "0.3rem", fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: tagged.cat.color }} />
+                <span>Block will render in {tagged.cat.name.toLowerCase()} color</span>
+              </div>
+            )}
+          </div>
+
+          {/* Specifier — only shown when the category has more than one
+              goal AND a category is selected. */}
+          {tagged && tagged.cat.goals.length > 1 && (
+            <div>
+              <label className="stat-label" style={{ fontSize: "0.66rem" }}>
+                Specific goal (optional)
+              </label>
+              <select
+                className="input"
+                value={draft.goal_id ?? ""}
+                onChange={(e) => {
+                  if (e.target.value) pickGoal(e.target.value);
+                }}
+                style={{
+                  marginTop: "0.2rem",
+                  fontSize: "0.82rem",
+                  padding: "0.32rem 0.5rem",
+                }}
+              >
+                {tagged.cat.goals.map((g) => (
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-          {tagged && (
-            <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: tagged.cat.color }} />
-              <span>{tagged.cat.name}</span>
+              </select>
             </div>
           )}
         </div>
