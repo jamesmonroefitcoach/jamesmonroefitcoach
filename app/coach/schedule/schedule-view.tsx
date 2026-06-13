@@ -456,6 +456,7 @@ export default function ScheduleView({
               session_type: draft.session_type,
               personal_label: draft.session_type === "personal" ? draft.personal_label || null : null,
               is_blocking: draft.session_type === "personal",
+              goal_id: draft.session_type === "personal" ? (draft.goal_id ?? null) : null,
               client_id: draft.session_type === "personal" ? null : draft.client_id || null,
               client_name: draft.session_type === "personal" ? null : clients.find((c) => c.id === draft.client_id)?.full_name ?? null,
               rate: draft.session_type === "personal" ? null : (Number(draft.rate) || null),
@@ -507,6 +508,7 @@ export default function ScheduleView({
         session_type: draft.session_type,
         personal_label: draft.session_type === "personal" ? (draft.personal_label || null) : null,
         is_blocking: draft.session_type === "personal",
+        goal_id: draft.session_type === "personal" ? (draft.goal_id ?? null) : null,
         session_program_id: draft.session_program_id || null,
         program_status: draft.session_type === "personal" ? "n/a" : draft.program_status,
         call_type: draft.session_type === "session" ? (draft.call_type ?? null) : null,
@@ -2116,12 +2118,13 @@ function GoalProgressStrip({
     return out;
   }, [goalCategories]);
 
-  // Actuals = past + completed personal blocks this week, tagged to any
-  // goal in the category. Future planned blocks don't count. (Work is
-  // excluded above in trackedCats so we never even visit it here.)
+  // Per-category bucket: completed (past/done) and scheduled (future not
+  // yet done) totals. Chip displays both alongside the goal; bar tracks
+  // completed only.
   const actuals = useMemo(() => {
     const now = Date.now();
-    const m = new Map<string, { hours: number; count: number }>();
+    type Bucket = { completedHr: number; completedCt: number; scheduledHr: number; scheduledCt: number };
+    const m = new Map<string, Bucket>();
     const goalToCat = new Map<string, string>();
     for (const cat of goalCategories) {
       for (const g of cat.goals) goalToCat.set(g.id, cat.id);
@@ -2136,10 +2139,15 @@ function GoalProgressStrip({
       const endMs = new Date(a.ends_at).getTime();
       if (startMs < weekStart.getTime() || startMs >= weekEndMs) continue;
       const isDone = endMs <= now || a.status === "completed";
-      if (!isDone) continue;
-      const cur = m.get(catId) ?? { hours: 0, count: 0 };
-      cur.hours += Math.max(0, (endMs - startMs) / 3_600_000);
-      cur.count += 1;
+      const hrs = Math.max(0, (endMs - startMs) / 3_600_000);
+      const cur = m.get(catId) ?? { completedHr: 0, completedCt: 0, scheduledHr: 0, scheduledCt: 0 };
+      if (isDone) {
+        cur.completedHr += hrs;
+        cur.completedCt += 1;
+      } else {
+        cur.scheduledHr += hrs;
+        cur.scheduledCt += 1;
+      }
       m.set(catId, cur);
     }
     return m;
@@ -2211,22 +2219,25 @@ function GoalProgressStrip({
         }}
       >
         {trackedCats.map((t) => {
-          const a = actuals.get(t.cat.id) ?? { hours: 0, count: 0 };
-          const actual = t.kind === "weekly_hours" ? a.hours : a.count;
-          const pct = Math.max(0, Math.min(100, (actual / Math.max(t.target, 0.0001)) * 100));
+          const a = actuals.get(t.cat.id) ?? { completedHr: 0, completedCt: 0, scheduledHr: 0, scheduledCt: 0 };
+          const completed = t.kind === "weekly_hours" ? a.completedHr : a.completedCt;
+          const scheduled = t.kind === "weekly_hours" ? a.scheduledHr : a.scheduledCt;
+          const pct = Math.max(0, Math.min(100, (completed / Math.max(t.target, 0.0001)) * 100));
           const inRange = t.rangeLow != null && t.rangeHigh != null
-            ? actual >= t.rangeLow && actual <= t.rangeHigh
-            : actual >= t.target;
+            ? completed >= t.rangeLow && completed <= t.rangeHigh
+            : completed >= t.target;
           const targetLabel = t.rangeLow != null && t.rangeHigh != null
             ? `${t.rangeLow}–${t.rangeHigh}`
             : `${t.target}`;
-          const actualDisplay = t.kind === "weekly_hours"
-            ? Math.round(actual * 10) / 10
-            : actual;
+          const fmt = (v: number) => t.kind === "weekly_hours"
+            ? Math.round(v * 10) / 10
+            : v;
+          const completedLabel = fmt(completed);
+          const scheduledLabel = fmt(scheduled);
           return (
             <div
               key={t.cat.id}
-              title={`${t.cat.name}\nCompleted/past this week: ${actualDisplay} ${t.unit} (target ${targetLabel} ${t.unit})`}
+              title={`${t.cat.name}\nCompleted: ${completedLabel} ${t.unit}\nScheduled (future): ${scheduledLabel} ${t.unit}\nGoal: ${targetLabel} ${t.unit}`}
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -2246,10 +2257,26 @@ function GoalProgressStrip({
                 <span style={{ color: t.cat.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {t.cat.name}
                 </span>
-                <span style={{ color: inRange ? t.cat.color : "var(--ink)", whiteSpace: "nowrap", fontSize: "0.72rem" }}>
-                  {actualDisplay}/{targetLabel} {t.unit}
+                {/* completed / scheduled / goal triplet — color codes each
+                    value so it's parseable at a glance. */}
+                <span style={{ whiteSpace: "nowrap", fontSize: "0.7rem", fontFamily: "Oswald, sans-serif", letterSpacing: "0.02em" }}>
+                  <span title="Completed" style={{ color: inRange ? t.cat.color : "var(--ink)", fontWeight: 700 }}>
+                    {completedLabel}
+                  </span>
+                  <span style={{ color: "var(--muted)" }}>/</span>
+                  <span title="Scheduled (future)" style={{ color: "var(--steel)" }}>
+                    {scheduledLabel}
+                  </span>
+                  <span style={{ color: "var(--muted)" }}>/</span>
+                  <span title="Goal" style={{ color: "var(--muted)" }}>
+                    {targetLabel}
+                  </span>
+                  <span style={{ color: "var(--muted)", marginLeft: "0.18rem", fontFamily: "inherit", fontSize: "0.62rem" }}>
+                    {t.unit}
+                  </span>
                 </span>
               </div>
+              {/* Progress bar — completed only (not scheduled) */}
               <div style={{
                 height: 4, background: "rgba(0,0,0,0.08)", borderRadius: 999, overflow: "hidden",
               }}>
@@ -2319,7 +2346,7 @@ function GoalProgressStrip({
         </div>
       </div>
       <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.66rem", fontStyle: "italic" }}>
-        Numerator counts past + completed blocks only. Add / Reorg never touch history.
+        chip reads <strong>completed / scheduled / goal</strong> · progress bar tracks completed only · Add / Reorg never touch history
       </div>
     </div>
   );
@@ -2350,6 +2377,14 @@ function PersonalBlockFields({
   setDraft: (d: Draft) => void;
   goalCategories: ScheduleGoalCategory[];
 }) {
+  // Work category is filled by client sessions, not personal blocks —
+  // hide it from the dropdown so the coach can't mistakenly tag a
+  // personal block against it.
+  const pickableCategories = useMemo(
+    () => goalCategories.filter((c) => !/work/i.test(c.name)),
+    [goalCategories],
+  );
+
   // Find the goal/cat for the current draft so we can show its color and
   // detect 'Sleep' specifically for the bed/wake quick inputs.
   const tagged = useMemo(() => {
@@ -2452,7 +2487,7 @@ function PersonalBlockFields({
            2. Specific goal (smaller, optional): refines to a specific
               goal within the category. Defaults to the category's first
               goal so 'just pick Sleep' tags it without a second click. */}
-      {goalCategories.length > 0 && (
+      {pickableCategories.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
           <div>
             <label className="stat-label">Goal category</label>
@@ -2473,7 +2508,7 @@ function PersonalBlockFields({
               style={{ marginTop: "0.3rem" }}
             >
               <option value="">— No goal —</option>
-              {goalCategories.map((cat) => (
+              {pickableCategories.map((cat) => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
