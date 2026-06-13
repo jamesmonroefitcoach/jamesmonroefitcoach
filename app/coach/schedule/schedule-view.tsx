@@ -2157,18 +2157,24 @@ function PersonalBlockFields({
   }, [draft.goal_id, goalCategories]);
   const isSleepCategory = !!tagged && /sleep/i.test(tagged.cat.name);
 
-  function pickGoal(goalId: string) {
-    // Look up the goal so we can tell if it's in the Sleep category.
+  /** Apply a goal selection.
+   *  - When `via='category'`, label = category name (compact, e.g. 'Sleep').
+   *  - When `via='specifier'`, label = the specific goal name.
+   *  The label remains a normal editable input so a coach can type over
+   *  it (e.g. 'Sleep — restless') after the auto-fill. */
+  function pickGoal(goalId: string, via: "category" | "specifier" = "specifier") {
     let nextCat: ScheduleGoalCategory | null = null;
     let nextGoal: { id: string; name: string } | null = null;
     for (const c of goalCategories) {
       const g = c.goals.find((x) => x.id === goalId);
       if (g) { nextCat = c; nextGoal = g; break; }
     }
+    const labelFill = via === "category"
+      ? (nextCat?.name ?? "")
+      : (nextGoal?.name ?? "");
     const isSleep = !!nextCat && /sleep/i.test(nextCat.name);
-    // If this is a brand-new draft (no appt_id) and we're tagging Sleep,
-    // auto-set the times to 10pm → 6am next day. Skip on existing rows.
     if (isSleep && !draft.appt_id) {
+      // Brand-new draft → auto-set 10pm → 6am next day.
       const start = new Date(draft.starts_at);
       start.setHours(22, 0, 0, 0);
       const end = new Date(start);
@@ -2177,7 +2183,7 @@ function PersonalBlockFields({
       setDraft({
         ...draft,
         goal_id: goalId,
-        personal_label: nextGoal?.name ?? "Sleep",
+        personal_label: labelFill,
         starts_at: start.toISOString(),
         ends_at: end.toISOString(),
       });
@@ -2185,7 +2191,7 @@ function PersonalBlockFields({
       setDraft({
         ...draft,
         goal_id: goalId,
-        personal_label: draft.personal_label || nextGoal?.name || "",
+        personal_label: labelFill,
       });
     }
   }
@@ -2230,10 +2236,14 @@ function PersonalBlockFields({
               value={tagged?.cat.id ?? ""}
               onChange={(e) => {
                 const catId = e.target.value;
-                if (!catId) { setDraft({ ...draft, goal_id: null }); return; }
+                if (!catId) {
+                  // Clearing the category: drop both goal + label.
+                  setDraft({ ...draft, goal_id: null, personal_label: "" });
+                  return;
+                }
                 const cat = goalCategories.find((c) => c.id === catId);
                 const firstGoalId = cat?.goals[0]?.id;
-                if (firstGoalId) pickGoal(firstGoalId);
+                if (firstGoalId) pickGoal(firstGoalId, "category");
               }}
               style={{ marginTop: "0.3rem" }}
             >
@@ -2261,7 +2271,7 @@ function PersonalBlockFields({
                 className="input"
                 value={draft.goal_id ?? ""}
                 onChange={(e) => {
-                  if (e.target.value) pickGoal(e.target.value);
+                  if (e.target.value) pickGoal(e.target.value, "specifier");
                 }}
                 style={{
                   marginTop: "0.2rem",
