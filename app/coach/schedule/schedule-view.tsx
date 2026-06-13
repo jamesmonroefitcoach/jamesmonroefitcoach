@@ -2118,9 +2118,12 @@ function GoalProgressStrip({
     return out;
   }, [goalCategories]);
 
-  // Per-category bucket: completed (past/done) and scheduled (future not
-  // yet done) totals. Chip displays both alongside the goal; bar tracks
-  // completed only.
+  // Per-category bucket per category:
+  //   scheduled = TOTAL of every goal-tagged personal block this week
+  //               (past + future, completed or not — anything 'on the cal')
+  //   completed = subset that has actually happened (past OR status=completed)
+  // Progress bar tracks completed only; the chip header shows both
+  // alongside the goal so you can see your commitment vs your delivery.
   const actuals = useMemo(() => {
     const now = Date.now();
     type Bucket = { completedHr: number; completedCt: number; scheduledHr: number; scheduledCt: number };
@@ -2141,12 +2144,13 @@ function GoalProgressStrip({
       const isDone = endMs <= now || a.status === "completed";
       const hrs = Math.max(0, (endMs - startMs) / 3_600_000);
       const cur = m.get(catId) ?? { completedHr: 0, completedCt: 0, scheduledHr: 0, scheduledCt: 0 };
+      // Always count toward scheduled — that's 'on the cal'.
+      cur.scheduledHr += hrs;
+      cur.scheduledCt += 1;
+      // Subset that's actually happened counts toward completed.
       if (isDone) {
         cur.completedHr += hrs;
         cur.completedCt += 1;
-      } else {
-        cur.scheduledHr += hrs;
-        cur.scheduledCt += 1;
       }
       m.set(catId, cur);
     }
@@ -2237,7 +2241,7 @@ function GoalProgressStrip({
           return (
             <div
               key={t.cat.id}
-              title={`${t.cat.name}\nCompleted: ${completedLabel} ${t.unit}\nScheduled (future): ${scheduledLabel} ${t.unit}\nGoal: ${targetLabel} ${t.unit}`}
+              title={`${t.cat.name}\nCompleted: ${completedLabel} ${t.unit}\nScheduled (everything on cal this week): ${scheduledLabel} ${t.unit}\nGoal: ${targetLabel} ${t.unit}`}
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -2264,7 +2268,7 @@ function GoalProgressStrip({
                     {completedLabel}
                   </span>
                   <span style={{ color: "var(--muted)" }}>/</span>
-                  <span title="Scheduled (future)" style={{ color: "var(--steel)" }}>
+                  <span title="Scheduled — every block on the cal this week" style={{ color: "var(--steel)" }}>
                     {scheduledLabel}
                   </span>
                   <span style={{ color: "var(--muted)" }}>/</span>
