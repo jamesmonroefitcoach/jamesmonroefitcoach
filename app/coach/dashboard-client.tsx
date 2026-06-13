@@ -1119,6 +1119,116 @@ function AllTimeSessionsBlock({
           <span>{lastLabel}</span>
         </div>
       </div>
+
+      {/* Distribution histogram — actual % of weeks at light / target /
+          heavy compared against the 20/60/20 target split. */}
+      <SessionDistributionBlock weeks={stats.weeks} />
+    </div>
+  );
+}
+
+// ── Distribution vs target ───────────────────────────────────────────
+// Per James's plan: 60% of weeks at 25 sessions, 20% at 30, 20% at 20.
+// Bucket each week's count into Light (<=22) / Target (23-27) / Heavy
+// (>=28) and show actual % vs. target %.
+function SessionDistributionBlock({
+  weeks,
+}: {
+  weeks: { weekStart: string; count: number }[];
+}) {
+  if (weeks.length === 0) return null;
+  type Bucket = {
+    key: "light" | "target" | "heavy";
+    label: string;
+    rangeLabel: string;
+    targetPct: number;
+    count: number;
+    pct: number;
+    color: string;
+  };
+  let light = 0, target = 0, heavy = 0;
+  for (const w of weeks) {
+    if (w.count <= 22) light += 1;
+    else if (w.count <= 27) target += 1;
+    else heavy += 1;
+  }
+  const total = weeks.length;
+  const buckets: Bucket[] = [
+    { key: "light",  label: "Light",  rangeLabel: "≤22 sess",   targetPct: 20, count: light,  pct: (light  / total) * 100, color: "var(--steel)" },
+    { key: "target", label: "Target", rangeLabel: "23–27 sess", targetPct: 60, count: target, pct: (target / total) * 100, color: "var(--sage)"  },
+    { key: "heavy",  label: "Heavy",  rangeLabel: "≥28 sess",   targetPct: 20, count: heavy,  pct: (heavy  / total) * 100, color: "var(--rust)"  },
+  ];
+  return (
+    <div style={{ marginTop: "1.25rem", borderTop: "1px solid var(--line)", paddingTop: "0.85rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "0.6rem", marginBottom: "0.55rem" }}>
+        <h3 style={{ margin: 0, fontSize: "0.9rem" }}>Weekly distribution</h3>
+        <span className="meta" style={{ fontSize: "0.7rem" }}>
+          target split: 20% Light · 60% Target · 20% Heavy
+        </span>
+      </div>
+
+      {/* Single stacked bar showing the actual breakdown. */}
+      <div style={{
+        display: "flex", height: 10, borderRadius: 999, overflow: "hidden",
+        border: "1px solid var(--line)", marginBottom: "0.45rem",
+      }}>
+        {buckets.map((b) => (
+          <div
+            key={b.key}
+            title={`${b.label} (${b.rangeLabel}): ${b.count}/${total} weeks · ${Math.round(b.pct)}%`}
+            style={{ width: `${b.pct}%`, background: b.color }}
+          />
+        ))}
+      </div>
+
+      {/* Per-bucket comparison rows. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.32rem" }}>
+        {buckets.map((b) => {
+          const delta = b.pct - b.targetPct;
+          const deltaRounded = Math.round(delta * 10) / 10;
+          const onTarget = Math.abs(delta) < 5;
+          return (
+            <div key={b.key} style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(64px, 90px) minmax(80px, 110px) 1fr auto",
+              gap: "0.55rem",
+              alignItems: "center",
+              fontSize: "0.78rem",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", minWidth: 0 }}>
+                <span style={{ width: 8, height: 8, background: b.color, borderRadius: 2, flexShrink: 0 }} />
+                <strong>{b.label}</strong>
+              </div>
+              <span className="meta" style={{ fontSize: "0.7rem" }}>{b.rangeLabel}</span>
+              <div style={{
+                position: "relative",
+                height: 6, background: "rgba(0,0,0,0.06)", borderRadius: 999, overflow: "visible",
+              }}>
+                {/* Actual fill */}
+                <div style={{
+                  position: "absolute", left: 0, top: 0, bottom: 0,
+                  width: `${Math.min(100, b.pct)}%`,
+                  background: b.color, borderRadius: 999,
+                }} />
+                {/* Target marker — vertical line */}
+                <div title={`Target ${b.targetPct}%`} style={{
+                  position: "absolute", left: `${b.targetPct}%`, top: -3, bottom: -3,
+                  width: 2, background: "var(--ink)", borderRadius: 1,
+                }} />
+              </div>
+              <span className="meta" style={{
+                fontSize: "0.7rem", whiteSpace: "nowrap",
+                color: onTarget ? "var(--sage)" : (delta > 0 ? "var(--rust)" : "var(--steel)"),
+                fontWeight: 600,
+              }}>
+                {Math.round(b.pct)}% {onTarget
+                  ? "≈ target"
+                  : `(${deltaRounded >= 0 ? "+" : ""}${deltaRounded}% vs ${b.targetPct}%)`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
