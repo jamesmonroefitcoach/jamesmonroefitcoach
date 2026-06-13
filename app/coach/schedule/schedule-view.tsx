@@ -2039,6 +2039,10 @@ function GoalProgressStrip({
     };
     const out: Tracked[] = [];
     for (const cat of goalCategories) {
+      // Work is filled by client sessions, not personal blocks — the
+      // dashboard's WoW chart already tracks weekly sessions, so the
+      // strip has nothing useful to show. Skip it entirely.
+      if (/work/i.test(cat.name)) continue;
       const primary = cat.goals.find(
         (g) => (g.kind === "weekly_hours" || g.kind === "weekly_count") &&
                (g.target_value ?? g.target_range_high ?? g.target_range_low ?? 0) > 0
@@ -2057,45 +2061,26 @@ function GoalProgressStrip({
     return out;
   }, [goalCategories]);
 
-  // Actuals — what counts toward progress this week.
-  //   Work       → completed CLIENT SESSIONS (status='completed' OR past
-  //               with non-cancelled/no_show status). Personal blocks are
-  //               irrelevant here; the sessions ARE the work.
-  //   Everything → past + completed personal blocks tagged to any goal
-  //               in the category. Future planned blocks don't count.
+  // Actuals = past + completed personal blocks this week, tagged to any
+  // goal in the category. Future planned blocks don't count. (Work is
+  // excluded above in trackedCats so we never even visit it here.)
   const actuals = useMemo(() => {
     const now = Date.now();
     const m = new Map<string, { hours: number; count: number }>();
     const goalToCat = new Map<string, string>();
-    const workCatIds = new Set<string>();
     for (const cat of goalCategories) {
       for (const g of cat.goals) goalToCat.set(g.id, cat.id);
-      if (/work/i.test(cat.name)) workCatIds.add(cat.id);
     }
     for (const a of appts) {
+      if (a.session_type !== "personal") continue;
+      const goalId = (a as { goal_id?: string | null }).goal_id;
+      if (!goalId) continue;
+      const catId = goalToCat.get(goalId);
+      if (!catId) continue;
       const startMs = new Date(a.starts_at).getTime();
       const endMs = new Date(a.ends_at).getTime();
       if (startMs < weekStart.getTime() || startMs >= weekEndMs) continue;
       const isDone = endMs <= now || a.status === "completed";
-
-      if (a.session_type === "session") {
-        if (workCatIds.size === 0) continue;
-        if (a.status === "cancelled" || a.status === "no_show") continue;
-        if (!isDone) continue;
-        for (const catId of workCatIds) {
-          const cur = m.get(catId) ?? { hours: 0, count: 0 };
-          cur.hours += Math.max(0, (endMs - startMs) / 3_600_000);
-          cur.count += 1;
-          m.set(catId, cur);
-        }
-        continue;
-      }
-
-      // Personal blocks: count toward their tagged goal's category.
-      const goalId = (a as { goal_id?: string | null }).goal_id;
-      if (!goalId) continue;
-      const catId = goalToCat.get(goalId);
-      if (!catId || workCatIds.has(catId)) continue; // Work skips personal blocks
       if (!isDone) continue;
       const cur = m.get(catId) ?? { hours: 0, count: 0 };
       cur.hours += Math.max(0, (endMs - startMs) / 3_600_000);
@@ -2191,31 +2176,22 @@ function GoalProgressStrip({
                   width: `${pct}%`, height: "100%", background: t.cat.color, transition: "width 0.2s",
                 }} />
               </div>
-              {/* Work fills itself via client sessions on the calendar —
-                  the Add/Reorg buttons are hidden so we don't accidentally
-                  drop personal blocks into client time. */}
-              {!/work/i.test(t.cat.name) ? (
-                <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.1rem" }}>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => doAction("fill", t)}
-                    title={`Schedule planned blocks across this week to hit ${targetLabel} ${t.unit}`}
-                    style={miniBtnStyle(t.cat.color, true)}
-                  >+ add to cal</button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => doAction("reorg", t)}
-                    title="Delete future planned blocks for this category and re-fill"
-                    style={miniBtnStyle(t.cat.color, false)}
-                  >↻ reorg</button>
-                </div>
-              ) : (
-                <div className="meta" style={{ fontSize: "0.6rem", fontStyle: "italic", marginTop: "0.1rem" }}>
-                  Filled by client sessions
-                </div>
-              )}
+              <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.1rem" }}>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => doAction("fill", t)}
+                  title={`Schedule planned blocks across this week to hit ${targetLabel} ${t.unit}`}
+                  style={miniBtnStyle(t.cat.color, true)}
+                >+ add to cal</button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => doAction("reorg", t)}
+                  title="Delete future planned blocks for this category and re-fill"
+                  style={miniBtnStyle(t.cat.color, false)}
+                >↻ reorg</button>
+              </div>
             </div>
           );
         })}
