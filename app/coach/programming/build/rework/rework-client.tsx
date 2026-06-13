@@ -14,7 +14,7 @@
 // Everything in this file persists to localStorage only — it is intentionally
 // not wired to Supabase yet so we can iterate freely.
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ClientRow, MovementRow } from "@/lib/data";
@@ -25,6 +25,7 @@ import {
   type LibraryGroup, type LibraryNode, type LibraryLeaf,
 } from "@/lib/programs";
 import type { ApptOption } from "../actions";
+import { saveDraftProgram, loadDraftProgram } from "../actions";
 import ImportPickerModal, { type ImportScope, type ImportResult } from "../import-picker";
 import { addMovement } from "../../library/exercise-library/actions";
 import {
@@ -207,26 +208,84 @@ export default function ReworkClient({
   const [selectOpen, setSelectOpen] = useState(true);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from localStorage when client+appt is known
+  // ── Draft persistence (Supabase + localStorage mirror) ─────────────
+  // Same model as Programs Rework: localStorage is an offline mirror,
+  // Supabase is the source of truth. The per-(client,appt) draftId stash
+  // lets autosave upsert the same row across reloads.
+  const draftIdKey = `monroe-rework-draftid-${clientId || "noclient"}-${apptId || "noappt"}`;
+  const [draftId, setDraftId] = useState<string>("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setLocalSaveError] = useState<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hydrate: DB first via stashed draftId, fall back to localStorage.
   useEffect(() => {
     if (step !== "builder") return;
-    const snap = loadDraft(dKey);
-    if (snap) {
-      setSlots(snap.slots);
-      setSessionTitle(snap.sessionTitle);
-      setSelectOpen(snap.selectExercisesOpen);
-    } else {
-      setSlots([]);
-    }
-    setHydrated(true);
+    let cancelled = false;
+    (async () => {
+      let stashed = "";
+      try { stashed = localStorage.getItem(draftIdKey) ?? ""; } catch {}
+      if (stashed && clientId) {
+        const res = await loadDraftProgram(stashed);
+        if (cancelled) return;
+        if (res.ok && res.data?.builderState) {
+          const bs = res.data.builderState as DraftSnapshot;
+          setSlots(bs.slots ?? []);
+          setSessionTitle(bs.sessionTitle ?? "");
+          setSelectOpen(bs.selectExercisesOpen ?? true);
+          setDraftId(stashed);
+          setHydrated(true);
+          return;
+        }
+        // Stale id — drop it and try local.
+        try { localStorage.removeItem(draftIdKey); } catch {}
+      }
+      const snap = loadDraft(dKey);
+      if (snap) {
+        setSlots(snap.slots);
+        setSessionTitle(snap.sessionTitle);
+        setSelectOpen(snap.selectExercisesOpen);
+      } else {
+        setSlots([]);
+      }
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, dKey]);
+  }, [step, dKey, draftIdKey, clientId]);
 
-  // Persist on every change after hydrate
+  // Persist on every change after hydrate — local now, Supabase debounced.
   useEffect(() => {
     if (step !== "builder" || !hydrated) return;
     saveDraft(dKey, { slots, sessionTitle, selectExercisesOpen: selectOpen });
-  }, [slots, sessionTitle, selectOpen, dKey, step, hydrated]);
+
+    if (!clientId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSaveStatus("saving");
+    saveTimerRef.current = setTimeout(async () => {
+      const res = await saveDraftProgram({
+        draftId: draftId || undefined,
+        clientId,
+        name: sessionTitle || "Session draft",
+        programKind: "in_gym",
+        builderState: { slots, sessionTitle, selectExercisesOpen: selectOpen } satisfies DraftSnapshot,
+      });
+      if (res.ok) {
+        if (!draftId) {
+          setDraftId(res.draftId);
+          try { localStorage.setItem(draftIdKey, res.draftId); } catch {}
+        }
+        setLocalSaveError(null);
+        setSaveStatus("saved");
+      } else {
+        setLocalSaveError(res.error);
+        setSaveStatus("error");
+      }
+    }, 1200);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [slots, sessionTitle, selectOpen, dKey, step, hydrated, clientId, draftId, draftIdKey]);
 
   // ── Derived: how many slots reference each leaf (supports adding twice) ──
   const leafCounts = useMemo(() => {
@@ -369,9 +428,35 @@ export default function ReworkClient({
   // ── Save Draft / Complete Session ────────────────────────────────────────
   const [confirmCompleteOpen, setConfirmCompleteOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  function handleSaveDraft() {
+  async function handleSaveDraft() {
+    // Local first, then immediate Supabase write (skipping the autosave
+    // debounce).
     saveDraft(dKey, { slots, sessionTitle, selectExercisesOpen: selectOpen });
-    alert("Draft saved to this browser.");
+    if (!clientId) {
+      alert("Saved to browser only (no client selected).");
+      return;
+    }
+    setSaveStatus("saving");
+    const res = await saveDraftProgram({
+      draftId: draftId || undefined,
+      clientId,
+      name: sessionTitle || "Session draft",
+      programKind: "in_gym",
+      builderState: { slots, sessionTitle, selectExercisesOpen: selectOpen } satisfies DraftSnapshot,
+    });
+    if (res.ok) {
+      if (!draftId) {
+        setDraftId(res.draftId);
+        try { localStorage.setItem(draftIdKey, res.draftId); } catch {}
+      }
+      setLocalSaveError(null);
+      setSaveStatus("saved");
+      alert("Draft saved to your account.");
+    } else {
+      setLocalSaveError(res.error);
+      setSaveStatus("error");
+      alert(`Saved to browser only — couldn't reach Supabase: ${res.error}`);
+    }
   }
   function handleCompleteSession() {
     const incomplete = exerciseSlots.filter((s) => s.mode !== "complete");
@@ -558,7 +643,14 @@ export default function ReworkClient({
       </section>
 
       {/* ─── Bottom action bar ─── */}
-      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1.25rem" }}>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", alignItems: "center", marginTop: "1.25rem" }}>
+        {/* Live autosave indicator */}
+        <span style={{ fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+          {saveStatus === "saving" && <span className="meta" style={{ fontStyle: "italic" }}>Saving to your account…</span>}
+          {saveStatus === "saved" && <span style={{ color: "var(--sage)", fontWeight: 600 }}>✓ Saved to your account</span>}
+          {saveStatus === "error" && <span style={{ color: "var(--red)", fontWeight: 600 }} title={saveError ?? ""}>⚠ Browser only — server save failed</span>}
+          {saveStatus === "idle" && <span className="meta">Autosave on</span>}
+        </span>
         <button className="btn btn-ghost" onClick={handleSaveDraft}>Save Draft</button>
         <button className="btn btn-primary" onClick={handleCompleteSession}>Complete Session</button>
       </div>
