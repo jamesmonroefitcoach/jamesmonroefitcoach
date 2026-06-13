@@ -38,6 +38,24 @@ export async function updateCoachProfile(
     const { error } = await supabase.from("client_details").update(payload).eq("profile_id", clientId);
     if (error) return { ok: false, error: error.message };
   }
+
+  // Rate propagation — when session_rate changes, update every future,
+  // non-cancelled session appointment for this client so already-booked
+  // programs reflect current pricing. Past + cancelled rows keep their
+  // historical rate so revenue history stays accurate.
+  if (input.session_rate !== undefined && input.session_rate !== null) {
+    const nowIso = new Date().toISOString();
+    await supabase
+      .from("appointments")
+      .update({ rate: input.session_rate })
+      .eq("client_id", clientId)
+      .eq("session_type", "session")
+      .gte("starts_at", nowIso)
+      .not("status", "in", "(cancelled,no_show)");
+    revalidatePath("/coach/schedule");
+    revalidatePath("/coach");
+  }
+
   revalidatePath(`/coach/clients/${clientId}`);
   revalidatePath("/coach/clients");
   return { ok: true };

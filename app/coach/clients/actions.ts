@@ -121,8 +121,25 @@ export async function quickUpdateClient(
 
   const { error } = await supabase.from("client_details").update(payload).eq("profile_id", clientId);
   if (error) return { ok: false, error: error.message };
+
+  // Rate propagation — when the client's session_rate changes, pull
+  // every future, non-cancelled appointment for this client up to the
+  // new rate so already-scheduled programs reflect current pricing.
+  // Past sessions (or cancelled / no-show) keep their historical rate.
+  if (input.session_rate !== undefined && input.session_rate !== null) {
+    const nowIso = new Date().toISOString();
+    await supabase
+      .from("appointments")
+      .update({ rate: input.session_rate })
+      .eq("client_id", clientId)
+      .eq("session_type", "session")
+      .gte("starts_at", nowIso)
+      .not("status", "in", "(cancelled,no_show)");
+  }
+
   revalidatePath("/coach/clients");
   revalidatePath(`/coach/clients/${clientId}`);
+  revalidatePath("/coach/schedule");
   revalidatePath("/coach/programming");
   revalidatePath("/coach/programming/build");
   revalidatePath("/coach");
