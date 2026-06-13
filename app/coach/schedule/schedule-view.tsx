@@ -7,7 +7,11 @@ import { fmtMoney } from "@/lib/format";
 import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, editSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
 import { CANCEL_REASONS, CANCEL_REASON_LABELS } from "@/lib/cancel-reasons";
 
-const HOUR_HEIGHT = 56; // px per hour cell
+// 44 px per hour. 13-hour stretch (7am→8pm) = 572 px which fits inside
+// the card's maxHeight on standard laptop viewports without scrolling.
+// The full 20-row grid is still there (6a → 1a), just compressed so the
+// 'normal day' window is above the fold.
+const HOUR_HEIGHT = 44;
 // 6a–1a next day. Hours 24 and 25 are visual placeholders for midnight
 // and 1am of the following calendar day so sleep blocks (which routinely
 // span midnight) render cleanly.
@@ -1113,7 +1117,10 @@ export default function ScheduleView({
             // the day-header row's position:sticky top:0 to actually pin
             // during vertical scroll. Without this, the page would scroll
             // and the whole card (sticky headers and all) goes with it.
-            maxHeight: "calc(100vh - 200px)",
+            // Give the calendar a bit more room so the 7a–8p stretch
+            // (572 px at HOUR_HEIGHT 44) fits without scrolling on
+            // typical laptop viewports.
+            maxHeight: "calc(100vh - 150px)",
           }}
         >
           <div style={{ minWidth: 980, display: "grid", gridTemplateColumns: "70px repeat(7, 1fr)" }}>
