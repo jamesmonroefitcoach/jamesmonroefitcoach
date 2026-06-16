@@ -474,6 +474,13 @@ export default async function HomePage() {
           <span className="public-footer-spacer">·</span>
           <Link href="/login" className="public-footer-signin">Sign in</Link>
         </div>
+        <div className="public-footer-credit">
+          Website &amp; app built by Ryan Mecca &mdash; see{" "}
+          <a href="https://ryanmecca.com" target="_blank" rel="noopener">
+            ryanmecca.com
+          </a>{" "}
+          for consulting services.
+        </div>
       </footer>
     </main>
   );

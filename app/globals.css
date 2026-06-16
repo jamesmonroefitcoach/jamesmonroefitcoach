@@ -1273,6 +1273,26 @@ th.tbl-sticky-last {
   .public-footer-signin { margin-left: 0; }
 }
 
+/* Tiny credit strip under the main footer row */
+.public-footer-credit {
+  width: min(1100px, 100% - 2rem);
+  margin: 0.7rem auto 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid #2a2522;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: #6b5e4a;
+}
+.public-footer-credit a {
+  color: #a3927a;
+  text-decoration: none;
+  border-bottom: 1px solid #3a322d;
+}
+.public-footer-credit a:hover {
+  color: #f3deba;
+  border-bottom-color: #6b5e4a;
+}
+
 /* Consult modal */
 .public-modal-backdrop {
   position: fixed;
