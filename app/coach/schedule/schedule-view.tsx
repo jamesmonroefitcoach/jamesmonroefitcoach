@@ -1190,6 +1190,48 @@ export default function ScheduleView({
       {/* ─── WEEK VIEW ─── */}
       {view === "week" ? (
         <>
+        {/* Status glyph key — non-colour cue for James (colour-blind).
+            Matches the per-event glyph rendered in the title prefix. */}
+        <div
+          className="no-print"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+            marginTop: "1rem",
+            padding: "0.4rem 0.65rem",
+            border: "1px solid var(--line)",
+            borderRadius: 4,
+            fontSize: "0.72rem",
+            background: "var(--paper)",
+          }}
+        >
+          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+            Status key
+          </span>
+          {([
+            ["scheduled",        "Scheduled"],
+            ["completed",        "Completed"],
+            ["cancelled",        "Cancelled"],
+            ["no_show",          "No-show"],
+            ["change_requested", "Reschedule"],
+          ] as const).map(([key, label]) => (
+            <span
+              key={key}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+              title={`Block glyph: ${STATUS_GLYPH[key]}`}
+            >
+              <span style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 18, height: 18, borderRadius: 3,
+                background: STATUS_COLORS[key].bg, color: STATUS_COLORS[key].fg,
+                fontSize: "0.78rem", fontWeight: 700,
+              }}>{STATUS_GLYPH[key]}</span>
+              <span>{label}</span>
+            </span>
+          ))}
+        </div>
+
         <div
           ref={weekScrollRef}
           className="card"

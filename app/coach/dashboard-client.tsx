@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
 import { pastProgramsForClient } from "@/lib/programs";
-import { fetchWeekAppts, fetchMonthAppts, markApptPaid } from "@/app/coach/schedule/actions";
+import { fetchWeekAppts, fetchMonthAppts, markApptPaid, setApptRate, setApptStatus } from "@/app/coach/schedule/actions";
+import { CANCEL_REASONS, CANCEL_REASON_LABELS, type CancelReason } from "@/lib/cancel-reasons";
 import WeekBanners from "./week-banners";
 import TodoBlock from "./todo-block";
 import type { WeekSessionItem, WeekProgramItem, NoSessionClient } from "./week-banners";
@@ -14,12 +16,16 @@ import type { WeekSessionItem, WeekProgramItem, NoSessionClient } from "./week-b
 
 // Mirrors the schedule view's status pill colors so the dashboard's All
 // Sessions Summary table reads the same as the schedule.
+// Colour-blind safe palette matched to the schedule view (5 distinct
+// luminance levels + glyph cue). Keeps dashboard badges visually
+// aligned with the calendar so a coach scanning both screens isn't
+// learning two colour languages.
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
-  scheduled:        { bg: "#5b6d7a", fg: "#fff" },
-  completed:        { bg: "#5a6b4a", fg: "#fff" },
-  cancelled:        { bg: "#c0392b", fg: "#fff" },
-  no_show:          { bg: "#7a3a55", fg: "#fff" },
-  change_requested: { bg: "#d97706", fg: "#fff" },
+  scheduled:        { bg: "#1f6f8b", fg: "#fff" },
+  completed:        { bg: "#1d2d44", fg: "#fff" },
+  cancelled:        { bg: "#e67e22", fg: "#fff" },
+  no_show:          { bg: "#171311", fg: "#fff" },
+  change_requested: { bg: "#d4a017", fg: "#171311" },
 };
 const STATUS_LABELS: Record<AppointmentRow["status"], string> = {
   scheduled:        "Scheduled",
@@ -27,6 +33,13 @@ const STATUS_LABELS: Record<AppointmentRow["status"], string> = {
   cancelled:        "Cancelled",
   no_show:          "No-show",
   change_requested: "Change requested",
+};
+const STATUS_GLYPH: Record<AppointmentRow["status"], string> = {
+  scheduled:        "●",
+  completed:        "✓",
+  cancelled:        "✕",
+  no_show:          "⊘",
+  change_requested: "↻",
 };
 
 function startOfWeekLocal(d: Date): Date {
@@ -549,6 +562,9 @@ export default function DashboardClient({
     });
   }
 
+  const router = useRouter();
+  const [tableError, setTableError] = useState<string | null>(null);
+
   function handleMarkPaid(apptId: string, paid: boolean) {
     // Optimistic update so the checkbox feels instant
     setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? { ...a, paid } : a));
@@ -556,6 +572,47 @@ export default function DashboardClient({
     markApptPaid(apptId, paid).catch(() => {
       // Revert on failure
       setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? { ...a, paid: !paid } : a));
+    });
+  }
+
+  function handleSetRate(apptId: string, rate: number | null, prevRate: number | null) {
+    setTableError(null);
+    // Optimistic: paint the new rate immediately.
+    setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? { ...a, rate } : a));
+    setApptRate(apptId, rate).then((res) => {
+      if (!res.ok) {
+        setTableError(res.error ?? "Rate save failed.");
+        // Revert.
+        setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? { ...a, rate: prevRate } : a));
+        return;
+      }
+      // Force a fresh fetch so every other surface using the same data
+      // (schedule strip, dashboard totals, client roster) reflects the
+      // new rate.
+      router.refresh();
+    });
+  }
+
+  function handleSetStatus(
+    apptId: string,
+    status: AppointmentRow["status"],
+    opts: { cancel_reason?: string | null; cancel_reason_other?: string | null } | undefined,
+    prevAppt: AppointmentRow,
+  ) {
+    setTableError(null);
+    // Optimistic.
+    setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? {
+      ...a,
+      status,
+      ...(opts ? { cancel_reason: opts.cancel_reason ?? null, cancel_reason_other: opts.cancel_reason_other ?? null } : {}),
+    } as AppointmentRow : a));
+    setApptStatus(apptId, status, opts).then((res) => {
+      if (!res.ok) {
+        setTableError(res.error ?? "Status save failed.");
+        setDisplayAppts((prev) => prev.map((a) => a.id === apptId ? prevAppt : a));
+        return;
+      }
+      router.refresh();
     });
   }
 
@@ -714,6 +771,19 @@ export default function DashboardClient({
                   ({sessionAppts.length} sessions)
                 </span>
               </summary>
+            {tableError && (
+              <div style={{
+                marginTop: "0.5rem",
+                padding: "0.3rem 0.55rem",
+                background: "rgba(192,57,43,0.08)",
+                border: "1px solid var(--red)",
+                color: "var(--red)",
+                borderRadius: 3,
+                fontSize: "0.74rem",
+              }}>
+                ⚠ {tableError}
+              </div>
+            )}
             {sessionAppts.length === 0 ? (
               <p className="meta" style={{ marginTop: "0.5rem" }}>No sessions booked for this week.</p>
             ) : (
@@ -741,7 +811,16 @@ export default function DashboardClient({
                           <br /><span className="meta">{sessionDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
                         </td>
                         <td>{a.client_name ?? <span className="meta">{a.personal_label ?? "—"}</span>}</td>
-                        <td>{fmtMoney(a.rate)}</td>
+                        <td>
+                          {a.session_type === "session" ? (
+                            <RateEditor
+                              value={a.rate}
+                              onSave={(next) => handleSetRate(a.id, next, a.rate)}
+                            />
+                          ) : (
+                            <span className="meta">—</span>
+                          )}
+                        </td>
                         <td style={{ textAlign: "center" }}>
                           {a.session_type === "session" ? (
                             <input
@@ -759,18 +838,15 @@ export default function DashboardClient({
                           <div className="meta" style={{ fontSize: "0.7rem", marginBottom: "0.25rem" }}>
                             {sessionDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {fmtDaysAway(sessionDate)}
                           </div>
-                          {a.change_count > 0 ? (
-                            <span className="badge badge-amber">{a.change_count}× changed</span>
-                          ) : (
-                            <span
-                              className="badge"
-                              style={{
-                                background: STATUS_COLORS[a.status].bg,
-                                color: STATUS_COLORS[a.status].fg,
-                                fontWeight: 600,
-                              }}
-                            >{STATUS_LABELS[a.status]}</span>
+                          {a.change_count > 0 && (
+                            <div style={{ marginBottom: "0.25rem" }}>
+                              <span className="badge badge-amber">{a.change_count}× changed</span>
+                            </div>
                           )}
+                          <StatusEditor
+                            appt={a}
+                            onSave={(next, opts) => handleSetStatus(a.id, next, opts, a)}
+                          />
                         </td>
                         <td>
                           {isSession ? (
@@ -1260,6 +1336,217 @@ function SessionDistributionBlock({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── Inline editors for the All Sessions Summary table ────────────────
+
+function RateEditor({
+  value,
+  onSave,
+}: {
+  value: number | null;
+  onSave: (next: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value != null ? String(value) : "");
+  // Keep draft synced when external (optimistic / refresh) updates change
+  // the value prop while we're not editing.
+  useMemo(() => { if (!editing) setDraft(value != null ? String(value) : ""); }, [value, editing]);
+  function commit() {
+    const trimmed = draft.trim();
+    const next = trimmed === "" ? null : Number(trimmed);
+    if (next !== null && (!Number.isFinite(next) || next < 0)) {
+      // Bad input → revert without saving.
+      setDraft(value != null ? String(value) : "");
+      setEditing(false);
+      return;
+    }
+    setEditing(false);
+    if (next !== value) onSave(next);
+  }
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        title="Edit rate"
+        style={{
+          background: "transparent", border: "none", cursor: "pointer",
+          fontFamily: "inherit", fontSize: "inherit",
+          padding: "0.1rem 0.25rem", borderRadius: 2,
+          color: "inherit",
+        }}
+      >
+        {value != null ? `$${value}` : <span className="meta">—</span>}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      type="number"
+      min={0}
+      step={1}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        if (e.key === "Escape") { setDraft(value != null ? String(value) : ""); setEditing(false); }
+      }}
+      style={{
+        width: 76,
+        padding: "0.2rem 0.35rem",
+        fontFamily: "inherit",
+        fontSize: "0.86rem",
+        border: "1px solid var(--rust)",
+        borderRadius: 3,
+      }}
+    />
+  );
+}
+
+function StatusEditor({
+  appt,
+  onSave,
+}: {
+  appt: AppointmentRow;
+  onSave: (
+    next: AppointmentRow["status"],
+    opts?: { cancel_reason?: string | null; cancel_reason_other?: string | null },
+  ) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<AppointmentRow["status"]>(appt.status);
+  const [reason, setReason] = useState<string>((appt as unknown as { cancel_reason?: string | null }).cancel_reason ?? "");
+  const [reasonOther, setReasonOther] = useState<string>((appt as unknown as { cancel_reason_other?: string | null }).cancel_reason_other ?? "");
+  const [err, setErr] = useState<string | null>(null);
+
+  const STATUSES: AppointmentRow["status"][] = ["scheduled", "completed", "cancelled", "no_show", "change_requested"];
+
+  function commit() {
+    setErr(null);
+    const needsReason = draftStatus === "cancelled" || draftStatus === "no_show";
+    if (needsReason && !reason) {
+      setErr("Pick a reason.");
+      return;
+    }
+    if (needsReason && reason === "other" && !reasonOther.trim()) {
+      setErr("Specify the other reason.");
+      return;
+    }
+    setEditing(false);
+    onSave(draftStatus, needsReason ? { cancel_reason: reason, cancel_reason_other: reasonOther } : undefined);
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        title="Edit status"
+        style={{
+          background: STATUS_COLORS[appt.status].bg,
+          color: STATUS_COLORS[appt.status].fg,
+          fontWeight: 600,
+          fontSize: "0.72rem",
+          padding: "0.18rem 0.5rem",
+          borderRadius: 3,
+          border: "none",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          display: "inline-flex", alignItems: "center", gap: "0.3rem",
+        }}
+      >
+        <span style={{ fontSize: "0.78rem" }}>{STATUS_GLYPH[appt.status]}</span>
+        {STATUS_LABELS[appt.status]}
+      </button>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+      <select
+        autoFocus
+        value={draftStatus}
+        onChange={(e) => setDraftStatus(e.target.value as AppointmentRow["status"])}
+        style={{
+          padding: "0.18rem 0.3rem",
+          fontFamily: "inherit",
+          fontSize: "0.78rem",
+          border: "1px solid var(--rust)",
+          borderRadius: 3,
+        }}
+      >
+        {STATUSES.map((s) => (
+          <option key={s} value={s}>{STATUS_GLYPH[s]} {STATUS_LABELS[s]}</option>
+        ))}
+      </select>
+      {(draftStatus === "cancelled" || draftStatus === "no_show") && (
+        <>
+          <select
+            value={reason}
+            onChange={(e) => { setReason(e.target.value); setReasonOther(""); }}
+            style={{
+              padding: "0.18rem 0.3rem",
+              fontFamily: "inherit",
+              fontSize: "0.74rem",
+              border: "1px solid var(--line)",
+              borderRadius: 3,
+            }}
+          >
+            <option value="">— Reason —</option>
+            {CANCEL_REASONS.map((r) => (
+              <option key={r} value={r}>{CANCEL_REASON_LABELS[r as CancelReason]}</option>
+            ))}
+          </select>
+          {reason === "other" && (
+            <input
+              type="text"
+              placeholder="Specify…"
+              value={reasonOther}
+              onChange={(e) => setReasonOther(e.target.value)}
+              style={{
+                padding: "0.18rem 0.35rem",
+                fontFamily: "inherit",
+                fontSize: "0.74rem",
+                border: "1px solid var(--line)",
+                borderRadius: 3,
+              }}
+            />
+          )}
+        </>
+      )}
+      {err && <span style={{ color: "var(--red)", fontSize: "0.7rem" }}>{err}</span>}
+      <div style={{ display: "flex", gap: "0.3rem" }}>
+        <button
+          type="button"
+          onClick={commit}
+          style={{
+            padding: "0.16rem 0.5rem", fontSize: "0.72rem", fontWeight: 600,
+            background: "var(--ink)", color: "var(--paper)",
+            border: "none", borderRadius: 2, cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >Save</button>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setDraftStatus(appt.status);
+            setReason((appt as unknown as { cancel_reason?: string | null }).cancel_reason ?? "");
+            setReasonOther((appt as unknown as { cancel_reason_other?: string | null }).cancel_reason_other ?? "");
+            setErr(null);
+          }}
+          style={{
+            padding: "0.16rem 0.5rem", fontSize: "0.72rem",
+            background: "transparent", color: "var(--muted)",
+            border: "1px solid var(--line)", borderRadius: 2, cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >Cancel</button>
       </div>
     </div>
   );

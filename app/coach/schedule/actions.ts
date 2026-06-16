@@ -334,6 +334,69 @@ export async function markApptPaid(apptId: string, paid: boolean): Promise<Resul
   return { ok: true };
 }
 
+// Inline-edit helpers for the dashboard's All Sessions Summary table.
+// Smaller blast radius than going through saveAppointment (which expects
+// the full edit-panel payload). Same revalidations so the change shows
+// up on the schedule, dashboard totals, and client roster.
+
+export async function setApptRate(apptId: string, rate: number | null): Promise<Result> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  if (rate !== null && (!Number.isFinite(rate) || rate < 0)) {
+    return { ok: false, error: "Rate must be a non-negative number." };
+  }
+  const { error } = await createSupabaseAdmin()
+    .from("appointments")
+    .update({ rate, updated_at: new Date().toISOString() })
+    .eq("id", apptId)
+    .eq("coach_id", me.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/coach/schedule");
+  revalidatePath("/coach");
+  revalidatePath("/coach/clients", "layout");
+  return { ok: true };
+}
+
+export async function setApptStatus(
+  apptId: string,
+  status: AppointmentRow["status"],
+  opts: { cancel_reason?: string | null; cancel_reason_other?: string | null } = {},
+): Promise<Result> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  // Cancelled or no-show requires a reason; mirrors the rule in the
+  // schedule's edit panel so inline edits can't bypass it.
+  const needsReason = status === "cancelled" || status === "no_show";
+  if (needsReason && !opts.cancel_reason) {
+    return { ok: false, error: "Cancellation reason required." };
+  }
+  const payload: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (needsReason) {
+    payload.cancel_reason = opts.cancel_reason;
+    payload.cancel_reason_other =
+      opts.cancel_reason === "other" ? (opts.cancel_reason_other ?? null) : null;
+  } else {
+    // Status moved off cancelled — clear any stale reason fields.
+    payload.cancel_reason = null;
+    payload.cancel_reason_other = null;
+  }
+  const { error } = await createSupabaseAdmin()
+    .from("appointments")
+    .update(payload)
+    .eq("id", apptId)
+    .eq("coach_id", me.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/coach/schedule");
+  revalidatePath("/coach");
+  revalidatePath("/coach/clients", "layout");
+  return { ok: true };
+}
+
 export async function deleteAppointment(apptId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me) return { ok: false, error: "Not signed in." };
