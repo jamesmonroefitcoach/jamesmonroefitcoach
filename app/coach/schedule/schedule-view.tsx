@@ -527,6 +527,18 @@ export default function ScheduleView({
   function saveDraft() {
     if (!draft) return;
     setSaveError(null);
+    // Cancellation / no-show requires a reason. 'Other' requires the
+    // free-text specifier too. Block save until both are filled.
+    if (draft.status === "cancelled" || draft.status === "no_show") {
+      if (!draft.cancel_reason) {
+        setSaveError("Pick a cancellation reason before saving.");
+        return;
+      }
+      if (draft.cancel_reason === "other" && !draft.cancel_reason_other.trim()) {
+        setSaveError("Specify the other reason.");
+        return;
+      }
+    }
     startSave(async () => {
       // Series edit: propagate rate/notes/time to this and all future series appointments
       if (draft.appt_id && seriesScope === "series" && draft.series_id) {
@@ -845,22 +857,27 @@ export default function ScheduleView({
   // Replaces the prior 'completed / scheduled / unpaid' which silently
   // excluded scheduled-unpaid from the 'unpaid' total and ignored
   // cancellation fees entirely.
+  // Per James's 2026-06-15 ask: include no-show in the totals (was being
+  // silently dropped). Paid trumps status — any paid=true row lands in
+  // the Paid bucket regardless of cancelled/no_show. Unpaid cancelled +
+  // unpaid no_show both count as 'cancelled' (lost-revenue bucket); the
+  // no-show count is surfaced separately for visibility.
   const monthTotals = useMemo(() => {
     let paid = 0, unpaid = 0, cancelled = 0;
-    let paidN = 0, unpaidN = 0, cancelledN = 0;
+    let paidN = 0, unpaidN = 0, cancelledN = 0, noShowN = 0;
     monthCache.forEach((a) => {
       if (a.session_type !== "session") return;
-      if (a.status === "no_show") return;
       const rate = a.rate ?? 0;
-      if (a.status === "cancelled") {
-        cancelled += rate; cancelledN += 1;
-      } else if (a.paid) {
+      if (a.status === "no_show") noShowN += 1;
+      if (a.paid) {
         paid += rate; paidN += 1;
+      } else if (a.status === "cancelled" || a.status === "no_show") {
+        cancelled += rate; cancelledN += 1;
       } else {
         unpaid += rate; unpaidN += 1;
       }
     });
-    return { paid, unpaid, cancelled, paidN, unpaidN, cancelledN };
+    return { paid, unpaid, cancelled, paidN, unpaidN, cancelledN, noShowN };
   }, [monthCache]);
 
   // Which clients have at least one non-cancelled session this week
@@ -993,12 +1010,17 @@ export default function ScheduleView({
               )}
               {fetching && <span style={{ marginLeft: "0.25rem", opacity: 0.6 }}>loading…</span>}
             </span>
-            <span className="meta" style={{ marginLeft: "auto" }} title={`paid ${monthTotals.paidN} · unpaid ${monthTotals.unpaidN} · cancelled ${monthTotals.cancelledN}`}>
+            <span className="meta" style={{ marginLeft: "auto" }} title={`paid ${monthTotals.paidN} · unpaid ${monthTotals.unpaidN} · cancelled ${monthTotals.cancelledN}${monthTotals.noShowN > 0 ? ` · no-show ${monthTotals.noShowN}` : ""}`}>
               paid <strong style={{ color: "var(--sage)" }}>{fmtMoney(monthTotals.paid)}</strong>
               {" · "}unpaid <strong style={{ color: "var(--steel)" }}>{fmtMoney(monthTotals.unpaid)}</strong>
               {monthTotals.cancelled > 0 && (
                 <>
                   {" · "}cancelled <strong style={{ color: "var(--rust)" }}>{fmtMoney(monthTotals.cancelled)}</strong>
+                </>
+              )}
+              {monthTotals.noShowN > 0 && (
+                <>
+                  {" · "}<span style={{ color: "var(--rust)", fontWeight: 700 }}>{monthTotals.noShowN} no-show</span>
                 </>
               )}
             </span>
