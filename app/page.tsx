@@ -262,6 +262,26 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── In-the-gym band ─────────────────────────────────── */}
+      {/* Full-bleed coaching shot — James watching a client work
+          through planks with boxing gloves. Drop the file at
+          public/coaching-action.jpg to fill the banner. */}
+      <section className="public-band">
+        <div
+          className="public-band-image"
+          style={{ backgroundImage: "url(/coaching-action.jpg)" }}
+          role="img"
+          aria-label="James coaching a client through a plank holding boxing gloves"
+        >
+          <div className="public-band-overlay">
+            <span className="public-eyebrow" style={{ color: "#f3deba" }}>In the gym</span>
+            <h2 className="public-band-quote">
+              Concentrated, but fun. Your goal is my goal.
+            </h2>
+          </div>
+        </div>
+      </section>
+
       {/* ── Services (what's included) ───────────────────────── */}
       <section id="services" className="public-section">
         <div className="public-section-inner">
