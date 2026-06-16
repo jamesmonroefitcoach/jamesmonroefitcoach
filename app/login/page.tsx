@@ -1,59 +1,22 @@
-import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import LoginForm from "./login-form";
 
-export type ProfileRow = { id: string; full_name: string; email: string | null; role: "coach" | "client" | "admin"; is_admin?: boolean };
+// Coach + client sign-in. Password-only flow now that the testing-only
+// profile picker has been retired.
 
-// Profiles whose DB role may differ from their actual admin status.
-// Ryan Mecca has role='client' (so she appears in the clients list) but
-// retains admin access via is_admin=true.
-const ADMIN_IDS = new Set(["00000000-0000-0000-0000-000000000ad1"]);
-
-const FALLBACK_PROFILES: ProfileRow[] = [
-  { id: "demo-coach", full_name: "James Monroe", email: "coachjamesmonroe@gmail.com", role: "coach" },
-  { id: "demo-admin", full_name: "Ryan Mecca", email: "ramecca0711@gmail.com", role: "client", is_admin: true },
-  { id: "demo-client-abbey", full_name: "Abbey Archer", email: null, role: "client" },
-  { id: "demo-client-acacia", full_name: "Acacia Chan", email: null, role: "client" },
-  { id: "demo-client-jen", full_name: "Jen Loving", email: null, role: "client" }
-];
-
-async function loadProfiles(): Promise<ProfileRow[]> {
-  const hasEnv = hasSupabaseEnv();
-  console.log("[login] hasSupabaseEnv:", hasEnv, "| URL:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 40));
-  if (!hasEnv) return FALLBACK_PROFILES;
-  try {
-    const supabase = createSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, role")
-      .order("role", { ascending: true })
-      .order("full_name", { ascending: true });
-    console.log("[login] profiles query — count:", data?.length, "| error:", error?.message);
-    if (error || !data || data.length === 0) return FALLBACK_PROFILES;
-    // Derive is_admin: check hardcoded set + anyone whose DB role is still 'admin'
-    return data.map((p) => ({
-      ...p,
-      is_admin: ADMIN_IDS.has(p.id) || p.role === "admin" || undefined,
-    })) as ProfileRow[];
-  } catch (e) {
-    console.error("[login] caught exception:", e);
-    return FALLBACK_PROFILES;
-  }
-}
-
-export default async function LoginPage() {
-  const profiles = await loadProfiles();
+export default function LoginPage() {
   return (
     <main className="shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <section className="card" style={{ width: "100%", maxWidth: 520 }}>
+      <section className="card" style={{ width: "100%", maxWidth: 460 }}>
         <span className="badge">Monroe Fit Coach</span>
         <h1 style={{ marginTop: "0.75rem" }}>Sign in</h1>
         <p className="meta" style={{ marginTop: "0.4rem" }}>
-          Pick your profile to continue, or sign in with your email + password if you&rsquo;ve set one at <a href="/account">/account</a>.
+          Sign in with your email and password. If you haven&rsquo;t set one yet,
+          visit <a href="/account">/account</a> after your first sign-in.
         </p>
         <hr className="divider" />
-        <LoginForm profiles={profiles} />
+        <LoginForm />
         <p className="meta" style={{ marginTop: "1rem", fontSize: "0.82rem", textAlign: "center" }}>
-          New here? <a href="/signup">Request an account →</a>
+          New here? <a href="/signup">Request an account &rarr;</a>
         </p>
       </section>
     </main>
