@@ -45,19 +45,6 @@ const OFFERINGS = [
   },
 ];
 
-// Features of the optional coaching app. Same app the public flyer
-// links to via /login — everything's already built.
-const APP_FEATURES = [
-  { title: "Schedule & reschedule",  blurb: "Book new sessions, request a move, see your week at a glance." },
-  { title: "Your programs",          blurb: "Today's workout, the rest of the week, full history — no PDF chasing." },
-  { title: "Log your sets",          blurb: "Reps, loads, RPE. Saved so progress isn't a memory exercise." },
-  { title: "Weekly check-ins",       blurb: "Body comp, sleep, energy, soreness, photos — kept on James's radar." },
-  { title: "Goals & progress",       blurb: "Strength PRs, weekly hours, body comp targets — tracked over time." },
-  { title: "Messaging",              blurb: "Reach James between sessions when something comes up." },
-  { title: "Payments & balance",     blurb: "See what's paid, what's owed, and your rate — no chasing receipts." },
-  { title: "Intake & history",       blurb: "One place for your training history, injuries, and goals." },
-];
-
 // What's actually included with every client — granular deliverables that
 // run alongside whichever offering above they pick.
 const SERVICES = [
@@ -67,7 +54,7 @@ const SERVICES = [
   { title: "Nutrition guidance",          blurb: "Practical fuel + recovery without a meal plan you'll hate." },
   { title: "Weekly check-ins",            blurb: "Body comp, energy, sleep, soreness — all tracked in the app." },
   { title: "Direct messaging access",     blurb: "Reach James between sessions when you need a quick answer." },
-  { title: "Optional coaching app",       blurb: "Schedule, log sets, track progress, see payments — see the section below." },
+  { title: "Optional coaching app",       blurb: "Schedule, reschedule, log your sets, see programs, track payments, and view progress — all in one place. Use it as much or as little as you like." },
 ];
 
 // What the first 90 days look like, set up as a small numbered timeline.
@@ -276,26 +263,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── In-the-gym band ─────────────────────────────────── */}
-      {/* Full-bleed coaching shot — James watching a client work
-          through planks with boxing gloves. Drop the file at
-          public/coaching-action.jpg to fill the banner. */}
-      <section className="public-band">
-        <div
-          className="public-band-image"
-          style={{ backgroundImage: "url(/coaching-action.jpg)" }}
-          role="img"
-          aria-label="James coaching a client through a plank holding boxing gloves"
-        >
-          <div className="public-band-overlay">
-            <span className="public-eyebrow" style={{ color: "#f3deba" }}>In the gym</span>
-            <h2 className="public-band-quote">
-              Concentrated, but fun. Your goal is my goal.
-            </h2>
-          </div>
-        </div>
-      </section>
-
       {/* ── Services (what's included) ───────────────────────── */}
       <section id="services" className="public-section">
         <div className="public-section-inner">
@@ -315,33 +282,6 @@ export default async function HomePage() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ── The app (optional) ──────────────────────────────── */}
-      <section id="app" className="public-section public-section-app">
-        <div className="public-section-inner">
-          <span className="public-eyebrow" style={{ color: "#f3deba" }}>Coaching app</span>
-          <h2 className="public-h2" style={{ color: "var(--bg)" }}>
-            Everything in one place &mdash; if you want it.
-          </h2>
-          <p className="public-p" style={{ color: "rgba(245, 239, 228, 0.85)", maxWidth: "60ch" }}>
-            Optional. Most clients use it, some skip it &mdash; whatever fits how
-            you train. Same app James uses on his side, so when you log a set,
-            request a move, or send a check-in, it lands directly with him.
-          </p>
-          <div className="public-app-grid">
-            {APP_FEATURES.map((f) => (
-              <div key={f.title} className="public-app-feature">
-                <strong className="public-app-feature-title">{f.title}</strong>
-                <p className="public-app-feature-blurb">{f.blurb}</p>
-              </div>
-            ))}
-          </div>
-          <p className="public-p" style={{ color: "rgba(245, 239, 228, 0.7)", fontSize: "0.86rem", marginTop: "1.2rem" }}>
-            Use it as little or as much as you&rsquo;d like. Or stick with text
-            messages &mdash; whichever keeps you training.
-          </p>
         </div>
       </section>
 
@@ -568,7 +508,6 @@ function PublicHeader() {
         <nav className="public-nav">
           <a href="#about">About</a>
           <a href="#offerings">Specialties</a>
-          <a href="#app">App</a>
           <a href="#timeline">Timeline</a>
           <a href="#pricing">Pricing</a>
           <a href="#location">Location</a>
