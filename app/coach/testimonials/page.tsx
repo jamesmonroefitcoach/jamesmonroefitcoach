@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { listAllTestimonials } from "@/app/testimonials/actions";
 import TestimonialsModeration from "./testimonials-moderation";
+import MessagesTabs from "../messages/messages-tabs";
 
 export default async function TestimonialsPage() {
   const user = await getSessionUser();
@@ -11,6 +12,8 @@ export default async function TestimonialsPage() {
   const all = await listAllTestimonials();
 
   return (
+    <>
+    <MessagesTabs />
     <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header>
         <span className="badge">Coach</span>
@@ -23,5 +26,6 @@ export default async function TestimonialsPage() {
       <hr className="divider" />
       <TestimonialsModeration initial={all} />
     </main>
+    </>
   );
 }

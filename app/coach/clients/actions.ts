@@ -146,6 +146,54 @@ export async function quickUpdateClient(
   return { ok: true };
 }
 
+// Convert a prospect row into an actual client profile. Mirrors the
+// minimum subset of fields the clients table cares about (name, contact,
+// notes -> goals) and removes the prospect entry on success so it
+// doesn't show up in the prospects table anymore.
+export async function activateProspect(prospectId: string): Promise<{ ok: boolean; error?: string; clientId?: string }> {
+  const user = await getSessionUser();
+  if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };
+
+  if (!hasSupabaseEnv()) {
+    revalidatePath("/coach/clients");
+    return { ok: true };
+  }
+
+  const supabase = createSupabaseAdmin();
+  const { data: p, error: readErr } = await supabase
+    .from("prospects")
+    .select("*")
+    .eq("id", prospectId)
+    .eq("coach_id", user.id)
+    .maybeSingle();
+  if (readErr || !p) return { ok: false, error: readErr?.message ?? "prospect not found" };
+
+  const newId = crypto.randomUUID();
+  const { error: profileErr } = await supabase.from("profiles").insert({
+    id: newId,
+    full_name: p.full_name,
+    email: p.email,
+    role: "client",
+  });
+  if (profileErr) return { ok: false, error: profileErr.message };
+
+  const detailsRow: Record<string, unknown> = {
+    profile_id: newId,
+    coach_id: user.id,
+    lifecycle: "active",
+    phone: p.phone,
+    notes: p.notes,
+    goals: p.notes ?? null,
+  };
+  await supabase.from("client_details").insert(detailsRow);
+
+  await supabase.from("prospects").delete().eq("id", prospectId).eq("coach_id", user.id);
+
+  revalidatePath("/coach/clients");
+  revalidatePath("/coach");
+  return { ok: true, clientId: newId };
+}
+
 export async function deleteProspect(prospectId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   if (!user || user.role !== "coach") return { ok: false, error: "unauthorized" };

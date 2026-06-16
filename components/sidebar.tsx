@@ -12,8 +12,7 @@ const COACH_NAV: NavLink[] = [
   { href: "/coach/programming", label: "Programming" },  // Build Program + Exercise Library live as subtabs under Programming
   { href: "/coach/clients", label: "Clients" },
   { href: "/coach/goals", label: "Goals" },
-  { href: "/coach/testimonials", label: "Testimonials" },
-  { href: "/coach/messages", label: "Messages" },
+  { href: "/coach/messages", label: "Messages" },        // Testimonials lives as a subtab under Messages
 ];
 
 const CLIENT_NAV: NavLink[] = [
@@ -52,6 +51,7 @@ export default function Sidebar({ user }: { user: SessionUser }) {
   // the top-level link still lights up as active.
   const SECTION_ROUTES: Record<string, string[]> = {
     "/coach/schedule": ["/coach/schedule", "/coach/appointments", "/coach/availability"],
+    "/coach/messages": ["/coach/messages", "/coach/testimonials"],
   };
 
   const navLinks = links.map((link) => {

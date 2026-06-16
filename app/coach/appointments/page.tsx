@@ -5,6 +5,7 @@ import AppointmentsClient from "./appointments-client";
 import ScheduleTabs from "../schedule/schedule-tabs";
 import { listConsultationRequests } from "@/app/consult/actions";
 import ConsultationRequestsPanel from "./consultation-requests-panel";
+import CancellationBacklog from "./cancellation-backlog";
 
 export default async function AppointmentsPage() {
   const user = await getSessionUser();
@@ -42,6 +43,7 @@ export default async function AppointmentsPage() {
       </header>
       <hr className="divider" />
       <ConsultationRequestsPanel initial={consults} />
+      <CancellationBacklog appointments={all} />
       <AppointmentsClient initial={all} history={history} />
     </main>
     </>

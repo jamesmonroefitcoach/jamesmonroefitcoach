@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ClientRow, Prospect } from "@/lib/data";
 import { pastProgramsForClient } from "@/lib/programs";
 import { fmtMoney, fmtDate, fmtSessionAgo, fmtSessionAway } from "@/lib/format";
-import { addProspect, deleteProspect, updateProspect, quickUpdateClient, type ProspectInput } from "./actions";
+import { addProspect, activateProspect, deleteProspect, updateProspect, quickUpdateClient, type ProspectInput } from "./actions";
 import type { NextSessionStatus } from "./page";
 import TierBoardModal from "./tier-board-modal";
 import QuickView from "./quick-view";
@@ -412,6 +412,7 @@ const LIFECYCLE_COLORS: Record<string, { bg: string; color: string }> = {
 };
 
 function InactiveClientRow({ c }: { c: ClientRow }) {
+  const router = useRouter();
   const [lifecycle, setLifecycle] = useState(c.lifecycle);
   const [saving, startSave] = useTransition();
 
@@ -419,6 +420,9 @@ function InactiveClientRow({ c }: { c: ClientRow }) {
     setLifecycle(val as ClientRow["lifecycle"]);
     startSave(async () => {
       await quickUpdateClient(c.id, { lifecycle: val });
+      // Refresh so a promotion to 'active' moves the row into the
+      // active list rather than leaving it stuck in the past section.
+      router.refresh();
     });
   }
 
@@ -446,7 +450,9 @@ function InactiveClientRow({ c }: { c: ClientRow }) {
           value={lifecycle}
           onChange={(e) => handleLifecycleChange(e.target.value)}
           disabled={saving}
+          title="Promote to Active to move this client back into the active section"
         >
+          <option value="active">Active</option>
           <option value="inactive">Inactive</option>
           <option value="paused">Paused</option>
           <option value="prospective">Prospective</option>
@@ -579,6 +585,7 @@ function ProspectRow({ p, onDelete, onSave }: {
           >
             ✎
           </button>
+          <ActivateProspectButton id={p.id} name={p.full_name} />
           <button
             className="btn btn-ghost"
             title="Remove"
@@ -590,6 +597,39 @@ function ProspectRow({ p, onDelete, onSave }: {
         </div>
       </td>
     </tr>
+  );
+}
+
+// Single-click promotion from "potential new client" to a real client
+// profile. Confirms before firing because it's a destructive move —
+// the prospect row goes away and a new profile is created.
+function ActivateProspectButton({ id, name }: { id: string; name: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <button
+      className="btn btn-ghost"
+      title="Activate — create a client profile from this prospect"
+      style={{
+        fontSize: "0.75rem",
+        padding: "0.15rem 0.55rem",
+        lineHeight: 1,
+        color: "var(--sage)",
+        fontWeight: 700,
+        whiteSpace: "nowrap",
+      }}
+      disabled={pending}
+      onClick={() => {
+        if (!confirm(`Convert ${name} to an active client? This creates a new profile.`)) return;
+        start(async () => {
+          const res = await activateProspect(id);
+          if (!res.ok) { alert(res.error ?? "Failed to activate."); return; }
+          router.refresh();
+        });
+      }}
+    >
+      {pending ? "…" : "✓ activate"}
+    </button>
   );
 }
 

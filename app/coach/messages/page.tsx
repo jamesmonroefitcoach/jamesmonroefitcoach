@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { listCoachThreads, listClients } from "@/lib/data";
 import { loadThreadMessages } from "@/lib/messages";
 import MessagesClient from "./messages-client";
+import MessagesTabs from "./messages-tabs";
 
 export default async function CoachMessagesPage({ searchParams }: { searchParams: Promise<{ thread?: string; client?: string }> }) {
   const user = await getSessionUser();
@@ -21,7 +22,9 @@ export default async function CoachMessagesPage({ searchParams }: { searchParams
   const clientPicker = clients.map((c) => ({ id: c.id, full_name: c.full_name }));
 
   return (
-    <main className="shell">
+    <>
+    <MessagesTabs />
+    <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <span className="badge">Messages</span>
@@ -38,5 +41,6 @@ export default async function CoachMessagesPage({ searchParams }: { searchParams
         clients={clientPicker}
       />
     </main>
+    </>
   );
 }

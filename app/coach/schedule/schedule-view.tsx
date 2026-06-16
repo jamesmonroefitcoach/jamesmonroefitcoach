@@ -139,6 +139,33 @@ const ONLINE_COLOR   = { bg: "#1e6a8c", fg: "#ffffff" };
 // scan them at a glance without having to disentangle one signal from
 // another.
 
+// Compact icon + value chip used in the month-header summary row.
+// Tooltip carries the long-form label so the chip stays glanceable.
+function SummaryToken({
+  icon, value, color, title,
+}: {
+  icon: string;
+  value: string;
+  color: string;
+  title: string;
+}) {
+  return (
+    <span
+      title={title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        fontSize: "0.78rem",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span aria-hidden style={{ fontSize: "0.86rem", lineHeight: 1 }}>{icon}</span>
+      <strong style={{ color, fontWeight: 700 }}>{value}</strong>
+    </span>
+  );
+}
+
 function PaymentPill({ paid }: { paid: boolean }) {
   return (
     <span
@@ -1144,26 +1171,45 @@ export default function ScheduleView({
               )}
               {fetching && <span style={{ marginLeft: "0.25rem", opacity: 0.6 }}>loading…</span>}
             </span>
-            <span className="meta" style={{ marginLeft: "auto" }} title={`paid ${monthTotals.paidN} · unpaid ${monthTotals.unpaidN} · cancelled ${monthTotals.cancelledN}${monthTotals.noShowN > 0 ? ` · no-show ${monthTotals.noShowN}` : ""}`}>
-              paid <strong style={{ color: "var(--sage)" }}>{fmtMoney(monthTotals.paid)}</strong>
-              {" · "}unpaid <strong style={{ color: "var(--steel)" }}>{fmtMoney(monthTotals.unpaid)}</strong>
+            {/* Compact token strip — icon + value, tooltip for the
+                long-form label. Reads as a scoreboard rather than a
+                paragraph. */}
+            <span style={{ marginLeft: "auto", display: "inline-flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <SummaryToken
+                icon="💵"
+                value={fmtMoney(monthTotals.paid)}
+                color="var(--sage)"
+                title={`Paid · ${monthTotals.paidN} session${monthTotals.paidN === 1 ? "" : "s"}`}
+              />
+              <SummaryToken
+                icon="⏳"
+                value={fmtMoney(monthTotals.unpaid)}
+                color="var(--steel)"
+                title={`Unpaid · ${monthTotals.unpaidN} session${monthTotals.unpaidN === 1 ? "" : "s"}`}
+              />
               {monthTotals.cancelled > 0 && (
-                <>
-                  {" · "}cancelled <strong style={{ color: "var(--rust)" }}>{fmtMoney(monthTotals.cancelled)}</strong>
-                </>
+                <SummaryToken
+                  icon="✕"
+                  value={fmtMoney(monthTotals.cancelled)}
+                  color="var(--rust)"
+                  title={`Cancelled (fee paid) · ${monthTotals.cancelledN}`}
+                />
               )}
               {monthTotals.noShowN > 0 && (
-                <>
-                  {" · "}<span style={{ color: "var(--rust)", fontWeight: 700 }}>{monthTotals.noShowN} no-show</span>
-                </>
+                <SummaryToken
+                  icon="⊘"
+                  value={String(monthTotals.noShowN)}
+                  color="var(--rust)"
+                  title={`No-show · ${monthTotals.noShowN}`}
+                />
               )}
             </span>
           </>
         )}
       </div>
 
-      {/* ─── Cancellations backlog (collapsible) ─── */}
-      <CancellationBacklog monthCache={monthCache} />
+      {/* Cancellations backlog now lives on /coach/appointments —
+          all the "things to follow up on" sit on one page. */}
 
       {/* ─── Scheduling bar: drag/tap client pills onto the calendar ─── */}
       {view === "week" && (
@@ -1275,123 +1321,95 @@ export default function ScheduleView({
       {/* ─── WEEK VIEW ─── */}
       {view === "week" ? (
         <>
-        {/* Status glyph key — non-colour cue for James (colour-blind).
-            Matches the per-event glyph rendered in the title prefix. */}
-        <div
+        {/* Schedule key — collapsed by default; click "Key" to expand.
+            Smaller chips, plain-text examples of the new bottom-row
+            format ("✓ PAID | PROGRAMMED" etc.) for the colour-blind cue. */}
+        <details
           className="no-print"
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-            marginTop: "1rem",
-            padding: "0.4rem 0.65rem",
+            marginTop: "0.85rem",
             border: "1px solid var(--line)",
             borderRadius: 4,
-            fontSize: "0.72rem",
             background: "var(--paper)",
+            fontSize: "0.7rem",
           }}
         >
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-            Status
-          </span>
-          {([
-            ["scheduled",        "Scheduled"],
-            ["completed",        "Completed"],
-            ["cancelled",        "Cancelled"],
-            ["no_show",          "No-show"],
-            ["change_requested", "Reschedule"],
-          ] as const).map(([key, label]) => (
-            <span
-              key={key}
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-              title={`Block glyph: ${STATUS_GLYPH[key]}`}
-            >
+          <summary
+            style={{
+              cursor: "pointer",
+              padding: "0.32rem 0.65rem",
+              listStyle: "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              fontFamily: "var(--font-heading), Oswald, sans-serif",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              color: "var(--muted)",
+            }}
+          >
+            <span>Key</span>
+            <span style={{ opacity: 0.5, fontSize: "0.6rem" }}>click to expand ▾</span>
+          </summary>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.6rem",
+              padding: "0.45rem 0.65rem 0.55rem",
+              borderTop: "1px solid var(--line)",
+              alignItems: "center",
+            }}
+          >
+            {([
+              ["scheduled",        "Scheduled"],
+              ["completed",        "Completed"],
+              ["cancelled",        "Cancelled"],
+              ["no_show",          "No-show"],
+              ["change_requested", "Reschedule"],
+            ] as const).map(([key, label]) => (
+              <span
+                key={key}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
+                title={`Block glyph: ${STATUS_GLYPH[key]}`}
+              >
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 14, height: 14, borderRadius: 2,
+                  background: STATUS_COLORS[key].bg, color: STATUS_COLORS[key].fg,
+                  fontSize: "0.66rem", fontWeight: 700,
+                }}>{STATUS_GLYPH[key]}</span>
+                <span>{label}</span>
+              </span>
+            ))}
+            <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+            <span style={{ color: "var(--muted)", fontStyle: "italic" }}>
+              Bottom row: <span style={{ color: "var(--ink)", fontWeight: 600 }}>✓ PAID</span>
+              {" | "}
+              <span style={{ color: "var(--ink)", fontWeight: 600 }}>UNPAID</span>
+              {" "}
+              and{" "}
+              <span style={{ color: "var(--ink)", fontWeight: 600 }}>PROGRAMMED</span>
+              {" | "}
+              <span style={{ color: "var(--ink)", fontWeight: 600 }}>NOT PROGRAMMED</span>
+            </span>
+            <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
               <span style={{
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 18, height: 18, borderRadius: 3,
-                background: STATUS_COLORS[key].bg, color: STATUS_COLORS[key].fg,
-                fontSize: "0.78rem", fontWeight: 700,
-              }}>{STATUS_GLYPH[key]}</span>
-              <span>{label}</span>
+                width: 22, height: 14, borderRadius: 2,
+                background: "rgba(255,255,255,0.55)",
+                color: "#5a6b4a",
+                border: "1px solid #5a6b4a",
+                borderLeft: "2px solid #5a6b4a",
+                fontSize: "0.62rem",
+              }}>🏃</span>
+              <span>personal (goal-tagged)</span>
             </span>
-          ))}
-
-          {/* Paid / programmed / personal — three independent signals */}
-          <span className="schedule-legend-sep" style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-            Paid
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 2,
-              padding: "1px 5px 1px 4px", borderRadius: 2,
-              background: "#5a6b4a", color: "#fff",
-              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-            }}>✓ paid</span>
-            <span>received</span>
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 2,
-              padding: "1px 5px 1px 4px", borderRadius: 2,
-              background: "var(--ink)", color: "#fff",
-              border: "1px solid rgba(255,255,255,0.55)",
-              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-            }}>○ owed</span>
-            <span>unpaid</span>
-          </span>
-
-          <span className="schedule-legend-sep" style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-            Programmed
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 2,
-              padding: "1px 5px 1px 4px", borderRadius: 2,
-              background: "#5a6b4a", color: "#fff",
-              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-            }}>✓ prog</span>
-            <span>ready</span>
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 2,
-              padding: "1px 5px 1px 4px", borderRadius: 2,
-              background: "var(--ink)", color: "#f3deba",
-              border: "1px solid #d97706",
-              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-            }}>● draft</span>
-            <span>in progress</span>
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 2,
-              padding: "1px 5px 1px 4px", borderRadius: 2,
-              background: "var(--ink)", color: "#ffd2c8",
-              border: "1px solid #a83d2b",
-              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-            }}>○ needs</span>
-            <span>action</span>
-          </span>
-
-          <span className="schedule-legend-sep" style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
-          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-            Personal
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 18, borderRadius: 2,
-              background: "rgba(255,255,255,0.55)",
-              color: "#5a6b4a",
-              border: "1px solid #5a6b4a",
-              borderLeft: "2px solid #5a6b4a",
-              fontSize: "0.66rem", fontWeight: 600,
-            }}>🏃</span>
-            <span>category-tagged block</span>
-          </span>
-        </div>
+          </div>
+        </details>
 
         <div
           ref={weekScrollRef}
@@ -1832,8 +1850,10 @@ export default function ScheduleView({
                           }
                         </div>
 
-                        {/* Bottom row — three-signal layout for sessions:
-                            $rate · PAID/UNPAID pill   |   program pill */}
+                        {/* Bottom row — flat text. Left: $rate. Right:
+                            "✓ PAID | PROGRAMMED" style line that combines
+                            the three signals without any boxes or icons
+                            beyond the paid check. */}
                         {!isPersonal && (
                           <div style={{
                             display: "flex",
@@ -1842,17 +1862,33 @@ export default function ScheduleView({
                             gap: 4,
                             marginTop: 2,
                             fontSize: "0.62rem",
+                            letterSpacing: "0.04em",
                           }}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
                               <span style={{ opacity: 0.92, fontWeight: 600 }}>
                                 {`$${e.rate ?? "—"}`}
                               </span>
-                              <PaymentPill paid={e.paid} />
                               {e.change_count > 0 && (
                                 <span style={{ opacity: 0.78 }}>·{e.change_count}↺</span>
                               )}
                             </span>
-                            <ProgramPill status={e.program_status} sessionStatus={e.status} />
+                            <span style={{
+                              textTransform: "uppercase",
+                              fontWeight: 600,
+                              opacity: 0.95,
+                              whiteSpace: "nowrap",
+                            }}>
+                              {e.paid && <span style={{ marginRight: 2 }}>✓</span>}
+                              {e.paid ? "paid" : "unpaid"}
+                              <span style={{ margin: "0 4px", opacity: 0.55 }}>|</span>
+                              {e.program_status === "programmed"
+                                ? "programmed"
+                                : e.program_status === "draft"
+                                  ? "draft"
+                                  : e.status === "completed"
+                                    ? "logged"
+                                    : "not programmed"}
+                            </span>
                           </div>
                         )}
 
@@ -2768,93 +2804,6 @@ function miniBtnStyle(color: string, filled: boolean): React.CSSProperties {
     lineHeight: 1.3,
     flex: 1,
   };
-}
-
-// ─── Cancellations backlog dropdown ───────────────────────────────────
-// Compact collapsible that lists cancelled + no-show sessions from the
-// loaded month cache. Sorted newest first, capped at 30 rows. Each row
-// shows date · client · reason. Default closed.
-function CancellationBacklog({ monthCache }: { monthCache: AppointmentRow[] }) {
-  const [open, setOpen] = useState(false);
-  const rows = useMemo(() => {
-    return monthCache
-      .filter((a) =>
-        a.session_type === "session" &&
-        (a.status === "cancelled" || a.status === "no_show")
-      )
-      .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
-      .slice(0, 30);
-  }, [monthCache]);
-
-  if (rows.length === 0) return null;
-  return (
-    <div className="no-print" style={{
-      marginTop: "0.85rem",
-      border: "1px solid var(--line)",
-      borderRadius: 4,
-      overflow: "hidden",
-    }}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", gap: "0.55rem",
-          background: open ? "rgba(0,0,0,0.02)" : "transparent",
-          border: "none",
-          borderBottom: open ? "1px solid var(--line)" : "none",
-          padding: "0.5rem 0.85rem",
-          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-        }}
-      >
-        <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>{open ? "▾" : "▸"}</span>
-        <strong style={{ fontSize: "0.86rem" }}>Cancellations backlog</strong>
-        <span className="meta" style={{ fontSize: "0.72rem" }}>
-          {rows.length} this month (newest first)
-        </span>
-      </button>
-      {open && (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {rows.map((a) => {
-            const ar = a as AppointmentRow & { cancel_reason?: string | null; cancel_reason_other?: string | null };
-            const reason = cancelReasonLabel(ar.cancel_reason, ar.cancel_reason_other);
-            const whenLabel = new Date(a.starts_at).toLocaleString("en-US", {
-              weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-            });
-            const isNoShow = a.status === "no_show";
-            return (
-              <li key={a.id} style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(150px, 200px) minmax(120px, 1fr) 1fr auto",
-                gap: "0.65rem",
-                alignItems: "center",
-                padding: "0.4rem 0.85rem",
-                borderTop: "1px solid var(--line)",
-                fontSize: "0.78rem",
-              }}>
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>{whenLabel}</span>
-                <span>{a.client_name ?? "—"}</span>
-                <span className="meta" style={{ fontSize: "0.74rem" }}>{reason}</span>
-                <span
-                  style={{
-                    fontSize: "0.62rem",
-                    fontWeight: 700,
-                    padding: "0.08rem 0.4rem",
-                    borderRadius: 2,
-                    background: isNoShow ? "#171311" : "#e67e22",
-                    color: "#fff",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={a.paid ? "Cancellation fee was paid" : "No fee charged"}
-                >
-                  {isNoShow ? "⊘ no-show" : "✕ cancelled"}{a.paid ? " · paid" : ""}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 // ─── Personal block edit fields with goal picker + Sleep specifics ────

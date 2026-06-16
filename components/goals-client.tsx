@@ -8,11 +8,9 @@ import {
   createGoal, updateGoal, deleteGoal,
 } from "@/app/goals/actions";
 
-// Goals page — spreadsheet-row layout. One row per goal, columns:
-//   Category · Goal · Kind · Current · Target · Progress · Actions
-// Rows are grouped by category with a colored left-edge accent and a
-// thin category header row above each block. Sub-goals indent under
-// their parent with a ↳ glyph.
+// Simpler goals view — small category sections, each goal as a one-line
+// row with a thin progress bar. Edits expand inline. Replaces the dense
+// spreadsheet layout, which surfaced too many controls at once.
 
 export default function GoalsClient({
   ownerLabel, categories,
@@ -24,27 +22,19 @@ export default function GoalsClient({
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [addingCat, setAddingCat] = useState(false);
-  const [editingCatId, setEditingCatId] = useState<string | null>(null);
-  // Inline-edit state lives per-row keyed by id so multiple edits don't
-  // conflict and the row layout stays stable.
-  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
-  const [addingGoalCatId, setAddingGoalCatId] = useState<string | null>(null);
-  const [addingSubForGoalId, setAddingSubForGoalId] = useState<string | null>(null);
 
-  function refresh() { router.refresh(); }
+  const totalGoals = useMemo(() => categories.reduce((s, c) => s + c.goals.length, 0), [categories]);
 
   function run<T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>): Promise<void> {
     return new Promise((resolve) => {
       start(async () => {
         const res = await p;
         if (!res.ok) setErr(res.error);
-        else { setErr(null); refresh(); }
+        else { setErr(null); router.refresh(); }
         resolve();
       });
     });
   }
-
-  const totalGoals = useMemo(() => categories.reduce((s, c) => s + c.goals.length, 0), [categories]);
 
   return (
     <main className="shell" style={{ paddingTop: "0.75rem" }}>
@@ -52,87 +42,26 @@ export default function GoalsClient({
         <span className="badge">Goals</span>
         <h1 style={{ marginTop: "0.5rem" }}>{ownerLabel}&rsquo;s goals</h1>
         <p className="meta">
-          {totalGoals} goal{totalGoals === 1 ? "" : "s"} across {categories.length} categor{categories.length === 1 ? "y" : "ies"}.
-          Edit, reorder, regroup — everything saves immediately.
+          {totalGoals} goal{totalGoals === 1 ? "" : "s"} in {categories.length} categor{categories.length === 1 ? "y" : "ies"}.
         </p>
       </header>
       <hr className="divider" />
 
-      {err && (
-        <div style={{
-          marginBottom: "0.8rem", padding: "0.5rem 0.75rem",
-          background: "rgba(192,57,43,0.08)", border: "1px solid var(--red)",
-          color: "var(--red)", borderRadius: 4, fontSize: "0.82rem",
-        }}>
-          {err}
-        </div>
-      )}
+      {err && <ErrBox msg={err} />}
 
       {categories.length === 0 ? (
         <p className="meta" style={{ fontStyle: "italic", padding: "0.85rem 0.4rem" }}>
           No categories yet. Add one to get started.
         </p>
       ) : (
-        <div className="table-scroll-wrap" style={{ marginTop: "0.4rem", overflowX: "auto" }}>
-          <table
-            className="table"
-            style={{
-              minWidth: 760,
-              width: "100%",
-              borderCollapse: "separate",
-              borderSpacing: 0,
-              fontSize: "0.86rem",
-            }}
-          >
-            <thead>
-              <tr style={{ background: "rgba(0,0,0,0.025)" }}>
-                <th style={thStyle(120)}>Category</th>
-                <th style={thStyle(0)}>Goal</th>
-                <th style={thStyle(110)}>Kind</th>
-                <th style={thStyle(80)}>Current</th>
-                <th style={thStyle(90)}>Target</th>
-                <th style={thStyle(160)}>Progress</th>
-                <th style={{ ...thStyle(110), textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map((cat) => {
-                const top = cat.goals.filter((g) => !g.parent_goal_id);
-                const subsByParent = new Map<string, GoalRow[]>();
-                for (const g of cat.goals) {
-                  if (g.parent_goal_id) {
-                    const arr = subsByParent.get(g.parent_goal_id) ?? [];
-                    arr.push(g);
-                    subsByParent.set(g.parent_goal_id, arr);
-                  }
-                }
-                return (
-                  <CategoryGroup
-                    key={cat.id}
-                    cat={cat}
-                    topGoals={top}
-                    subsByParent={subsByParent}
-                    isEditingCat={editingCatId === cat.id}
-                    onEditCatOpen={() => setEditingCatId(cat.id)}
-                    onEditCatClose={() => setEditingCatId(null)}
-                    editingGoalId={editingGoalId}
-                    setEditingGoalId={setEditingGoalId}
-                    addingGoalHere={addingGoalCatId === cat.id}
-                    setAddingGoalHere={(b) => setAddingGoalCatId(b ? cat.id : null)}
-                    addingSubForGoalId={addingSubForGoalId}
-                    setAddingSubForGoalId={setAddingSubForGoalId}
-                    onAction={run}
-                    pending={pending}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+          {categories.map((cat) => (
+            <CategoryBlock key={cat.id} cat={cat} onAction={run} pending={pending} />
+          ))}
         </div>
       )}
 
-      {/* Add category */}
-      <div style={{ marginTop: "1rem" }}>
+      <div style={{ marginTop: "1.4rem" }}>
         {addingCat ? (
           <NewCategoryForm
             onCancel={() => setAddingCat(false)}
@@ -154,358 +83,333 @@ export default function GoalsClient({
   );
 }
 
-const thStyle = (minW: number): React.CSSProperties => ({
-  padding: "0.45rem 0.6rem",
-  textAlign: "left",
-  fontSize: "0.7rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "var(--muted)",
-  fontWeight: 700,
-  borderBottom: "1px solid var(--line)",
-  minWidth: minW || undefined,
-  whiteSpace: "nowrap",
-});
+// ── Category block ──────────────────────────────────────────────────
 
-const tdStyle = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-  padding: "0.4rem 0.6rem",
-  borderBottom: "1px solid var(--line)",
-  verticalAlign: "middle",
-  ...extra,
-});
+function CategoryBlock({
+  cat, onAction, pending,
+}: {
+  cat: GoalCategoryWithGoals;
+  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
+  pending: boolean;
+}) {
+  const [editingCat, setEditingCat] = useState(false);
+  const [addingGoal, setAddingGoal] = useState(false);
+  const topGoals = cat.goals.filter((g) => !g.parent_goal_id);
+  const subsByParent = useMemo(() => {
+    const m = new Map<string, GoalRow[]>();
+    for (const g of cat.goals) {
+      if (g.parent_goal_id) {
+        const arr = m.get(g.parent_goal_id) ?? [];
+        arr.push(g);
+        m.set(g.parent_goal_id, arr);
+      }
+    }
+    return m;
+  }, [cat.goals]);
 
-const iconBtnStyle: React.CSSProperties = {
+  return (
+    <section style={{
+      border: "1px solid var(--line)",
+      borderLeft: `4px solid ${cat.color}`,
+      borderRadius: 3,
+      background: "var(--paper)",
+      overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.55rem",
+        padding: "0.55rem 0.9rem",
+        background: `${cat.color}10`,
+        borderBottom: "1px solid var(--line)",
+      }}>
+        {editingCat ? (
+          <CategoryEditForm cat={cat} onClose={() => setEditingCat(false)} onAction={onAction} pending={pending} />
+        ) : (
+          <>
+            <strong style={{
+              color: cat.color,
+              fontFamily: "var(--font-heading), Oswald, sans-serif",
+              fontSize: "0.96rem",
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}>{cat.name}</strong>
+            <span className="meta" style={{ fontSize: "0.72rem" }}>
+              {cat.goals.length} goal{cat.goals.length === 1 ? "" : "s"}
+            </span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: "0.15rem" }}>
+              <button type="button" onClick={() => setEditingCat(true)} title="Edit category" style={iconBtn}>✎</button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`Delete category "${cat.name}" and all its goals?`)) onAction(deleteCategory(cat.id));
+                }}
+                title="Delete category"
+                style={{ ...iconBtn, color: "var(--red)" }}
+              >×</button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Goal rows */}
+      {topGoals.length === 0 ? (
+        <p className="meta" style={{ padding: "0.7rem 0.9rem", fontStyle: "italic", margin: 0 }}>
+          No goals yet.
+        </p>
+      ) : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {topGoals.map((g) => (
+            <GoalListItem
+              key={g.id}
+              goal={g}
+              subs={subsByParent.get(g.id) ?? []}
+              categoryColor={cat.color}
+              categoryId={cat.id}
+              onAction={onAction}
+              pending={pending}
+            />
+          ))}
+        </ul>
+      )}
+
+      {/* Add goal */}
+      <div style={{ borderTop: "1px solid var(--line)", padding: "0.45rem 0.9rem", background: "var(--bg)" }}>
+        {addingGoal ? (
+          <NewGoalForm
+            onCancel={() => setAddingGoal(false)}
+            onSubmit={(input) =>
+              onAction(createGoal({ category_id: cat.id, ...input })).then(() => setAddingGoal(false))
+            }
+            pending={pending}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingGoal(true)}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              fontSize: "0.78rem",
+              color: cat.color,
+              fontWeight: 600,
+            }}
+          >+ add goal</button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Goal row ────────────────────────────────────────────────────────
+
+function GoalListItem({
+  goal, subs, categoryColor, categoryId, onAction, pending,
+}: {
+  goal: GoalRow;
+  subs: GoalRow[];
+  categoryColor: string;
+  categoryId: string;
+  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [addingSub, setAddingSub] = useState(false);
+  const pct = progressPct(goal);
+  const showProgress = pct != null && goal.kind !== "one_time";
+  const isOneTime = goal.kind === "one_time";
+
+  return (
+    <li style={{ borderTop: "1px solid var(--line)", padding: "0.55rem 0.9rem" }}>
+      {editing ? (
+        <GoalEditForm goal={goal} onClose={() => setEditing(false)} onAction={onAction} pending={pending} />
+      ) : (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+            {isOneTime && (
+              <button
+                type="button"
+                onClick={() => onAction(updateGoal(goal.id, { is_achieved: !goal.is_achieved }))}
+                title={goal.is_achieved ? "Mark not done" : "Mark done"}
+                style={{
+                  background: goal.is_achieved ? "var(--sage)" : "transparent",
+                  color: goal.is_achieved ? "#fff" : "var(--muted)",
+                  border: `1px solid ${goal.is_achieved ? "var(--sage)" : "var(--line)"}`,
+                  borderRadius: 3,
+                  width: 16, height: 16,
+                  fontSize: "0.7rem",
+                  cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  flex: "none",
+                }}
+              >{goal.is_achieved ? "✓" : ""}</button>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontWeight: 500,
+                fontSize: "0.92rem",
+                textDecoration: goal.is_achieved && isOneTime ? "line-through" : "none",
+                color: goal.is_achieved && isOneTime ? "var(--muted)" : "var(--ink)",
+              }}>
+                {goal.name}
+              </div>
+              {goal.notes && (
+                <div className="meta" style={{ fontSize: "0.72rem", fontStyle: "italic", marginTop: "0.1rem" }}>
+                  {goal.notes}
+                </div>
+              )}
+            </div>
+            {!isOneTime && (
+              <div style={{
+                textAlign: "right",
+                fontSize: "0.8rem",
+                whiteSpace: "nowrap",
+                color: "var(--muted)",
+              }}>
+                <strong style={{ color: "var(--ink)" }}>{goal.current_value ?? 0}</strong>
+                {" "}/{" "}
+                {targetLabel(goal)}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "0.1rem" }}>
+              <button type="button" onClick={() => setEditing(true)} title="Edit goal" style={iconBtn}>✎</button>
+              <button
+                type="button"
+                onClick={() => { if (confirm(`Delete goal "${goal.name}"?`)) onAction(deleteGoal(goal.id)); }}
+                title="Delete"
+                style={{ ...iconBtn, color: "var(--red)" }}
+              >×</button>
+            </div>
+          </div>
+
+          {/* Progress bar (only for trackable goals) */}
+          {showProgress && (
+            <div style={{
+              marginTop: "0.45rem",
+              height: 4,
+              background: "rgba(0,0,0,0.06)",
+              borderRadius: 999,
+              overflow: "hidden",
+            }}>
+              <div style={{
+                width: `${pct}%`,
+                height: "100%",
+                background: categoryColor,
+              }} />
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Sub-goals */}
+      {subs.length > 0 && (
+        <ul style={{
+          listStyle: "none",
+          padding: "0.4rem 0 0",
+          margin: "0.4rem 0 0 1.1rem",
+          borderLeft: `2px solid ${categoryColor}33`,
+        }}>
+          {subs.map((s) => (
+            <SubGoalItem key={s.id} sub={s} onAction={onAction} />
+          ))}
+        </ul>
+      )}
+
+      {/* Add sub-goal */}
+      <div style={{ marginTop: subs.length > 0 ? "0.4rem" : "0.5rem", paddingLeft: "1.1rem" }}>
+        {addingSub ? (
+          <NewSubGoalForm
+            onCancel={() => setAddingSub(false)}
+            onSubmit={(name) =>
+              onAction(createGoal({
+                category_id: categoryId, parent_goal_id: goal.id, name, kind: "one_time",
+              })).then(() => setAddingSub(false))
+            }
+            pending={pending}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingSub(true)}
+            style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: "0.7rem", color: "var(--muted)" }}
+          >+ sub-goal</button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function SubGoalItem({
+  sub, onAction,
+}: {
+  sub: GoalRow;
+  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
+}) {
+  return (
+    <li style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "0.4rem",
+      padding: "0.2rem 0 0.2rem 0.55rem",
+      fontSize: "0.84rem",
+    }}>
+      <button
+        type="button"
+        onClick={() => onAction(updateGoal(sub.id, { is_achieved: !sub.is_achieved }))}
+        title={sub.is_achieved ? "Mark not done" : "Mark done"}
+        style={{
+          background: sub.is_achieved ? "var(--sage)" : "transparent",
+          color: sub.is_achieved ? "#fff" : "var(--muted)",
+          border: `1px solid ${sub.is_achieved ? "var(--sage)" : "var(--line)"}`,
+          borderRadius: 3,
+          width: 14, height: 14,
+          fontSize: "0.62rem",
+          cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          flex: "none",
+        }}
+      >{sub.is_achieved ? "✓" : ""}</button>
+      <span style={{
+        flex: 1,
+        textDecoration: sub.is_achieved ? "line-through" : "none",
+        color: sub.is_achieved ? "var(--muted)" : "var(--ink)",
+      }}>
+        {sub.name}
+      </span>
+      <button
+        type="button"
+        onClick={() => { if (confirm(`Delete sub-goal "${sub.name}"?`)) onAction(deleteGoal(sub.id)); }}
+        title="Delete"
+        style={{ ...iconBtn, fontSize: "0.78rem", color: "var(--red)" }}
+      >×</button>
+    </li>
+  );
+}
+
+// ── Forms ───────────────────────────────────────────────────────────
+
+const iconBtn: React.CSSProperties = {
   background: "transparent",
   border: "none",
-  padding: "0.12rem 0.35rem",
+  padding: "0.1rem 0.4rem",
   fontSize: "0.86rem",
   lineHeight: 1,
   cursor: "pointer",
   color: "var(--muted)",
 };
 
-// ── Category group ──────────────────────────────────────────────────
-
-function CategoryGroup({
-  cat, topGoals, subsByParent,
-  isEditingCat, onEditCatOpen, onEditCatClose,
-  editingGoalId, setEditingGoalId,
-  addingGoalHere, setAddingGoalHere,
-  addingSubForGoalId, setAddingSubForGoalId,
-  onAction, pending,
-}: {
-  cat: GoalCategoryWithGoals;
-  topGoals: GoalRow[];
-  subsByParent: Map<string, GoalRow[]>;
-  isEditingCat: boolean;
-  onEditCatOpen: () => void;
-  onEditCatClose: () => void;
-  editingGoalId: string | null;
-  setEditingGoalId: (id: string | null) => void;
-  addingGoalHere: boolean;
-  setAddingGoalHere: (b: boolean) => void;
-  addingSubForGoalId: string | null;
-  setAddingSubForGoalId: (id: string | null) => void;
-  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
-  pending: boolean;
-}) {
+function ErrBox({ msg }: { msg: string }) {
   return (
-    <>
-      {/* Category header row */}
-      <tr style={{ background: `${cat.color}10`, borderLeft: `4px solid ${cat.color}` }}>
-        <td colSpan={7} style={{
-          padding: "0.45rem 0.6rem",
-          borderTop: "2px solid var(--line)",
-          borderBottom: "1px solid var(--line)",
-        }}>
-          {isEditingCat ? (
-            <CategoryEditForm cat={cat} onClose={onEditCatClose} onAction={onAction} pending={pending} />
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
-              <span style={{
-                width: 11, height: 11, borderRadius: 2, background: cat.color, flex: "none",
-              }} />
-              <strong style={{ fontSize: "0.92rem", color: cat.color }}>{cat.name}</strong>
-              <span className="meta" style={{ fontSize: "0.72rem" }}>
-                {cat.goals.length} goal{cat.goals.length === 1 ? "" : "s"}
-              </span>
-              <div style={{ marginLeft: "auto", display: "flex", gap: "0.2rem" }}>
-                <button
-                  type="button"
-                  onClick={onEditCatOpen}
-                  title="Edit category"
-                  style={iconBtnStyle}
-                >✎</button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Delete category "${cat.name}" and all its goals?`)) {
-                      onAction(deleteCategory(cat.id));
-                    }
-                  }}
-                  title="Delete category"
-                  style={{ ...iconBtnStyle, color: "var(--red)" }}
-                >×</button>
-              </div>
-            </div>
-          )}
-        </td>
-      </tr>
-
-      {/* Goal rows */}
-      {topGoals.length === 0 ? (
-        <tr>
-          <td colSpan={7} style={{ ...tdStyle({ borderLeft: `4px solid ${cat.color}` }), fontStyle: "italic", color: "var(--muted)" }}>
-            No goals yet in this category.
-          </td>
-        </tr>
-      ) : (
-        topGoals.map((g) => (
-          <GoalRowAndSubs
-            key={g.id}
-            cat={cat}
-            goal={g}
-            subs={subsByParent.get(g.id) ?? []}
-            isEditing={editingGoalId === g.id}
-            onEditOpen={() => setEditingGoalId(g.id)}
-            onEditClose={() => setEditingGoalId(null)}
-            isAddingSub={addingSubForGoalId === g.id}
-            setAddingSub={(b) => setAddingSubForGoalId(b ? g.id : null)}
-            onAction={onAction}
-            pending={pending}
-          />
-        ))
-      )}
-
-      {/* Add-goal row at the bottom of the category */}
-      <tr>
-        <td colSpan={7} style={{ ...tdStyle({ borderLeft: `4px solid ${cat.color}`, padding: "0.3rem 0.6rem" }) }}>
-          {addingGoalHere ? (
-            <NewGoalForm
-              onCancel={() => setAddingGoalHere(false)}
-              onSubmit={(input) =>
-                onAction(createGoal({ category_id: cat.id, ...input })).then(() => setAddingGoalHere(false))
-              }
-              pending={pending}
-            />
-          ) : (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ padding: "0.2rem 0.55rem", fontSize: "0.72rem", color: "var(--muted)" }}
-              onClick={() => setAddingGoalHere(true)}
-            >+ goal</button>
-          )}
-        </td>
-      </tr>
-    </>
+    <div style={{
+      marginBottom: "0.8rem", padding: "0.5rem 0.75rem",
+      background: "rgba(192,57,43,0.08)", border: "1px solid var(--red)",
+      color: "var(--red)", borderRadius: 4, fontSize: "0.82rem",
+    }}>{msg}</div>
   );
 }
-
-// ── Goal row + its sub-goals ────────────────────────────────────────
-
-function GoalRowAndSubs({
-  cat, goal, subs,
-  isEditing, onEditOpen, onEditClose,
-  isAddingSub, setAddingSub,
-  onAction, pending,
-}: {
-  cat: GoalCategoryWithGoals;
-  goal: GoalRow;
-  subs: GoalRow[];
-  isEditing: boolean;
-  onEditOpen: () => void;
-  onEditClose: () => void;
-  isAddingSub: boolean;
-  setAddingSub: (b: boolean) => void;
-  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
-  pending: boolean;
-}) {
-  const pct = progressPct(goal);
-  const showProgress = pct != null && goal.kind !== "one_time";
-  const currentLabel = goal.kind === "one_time"
-    ? (goal.is_achieved ? "✓ done" : "open")
-    : (goal.current_value ?? 0).toString() + (goal.target_unit ? ` ${goal.target_unit}` : "");
-  const tgtLabel = targetLabel(goal);
-
-  if (isEditing) {
-    return (
-      <tr>
-        <td colSpan={7} style={{ ...tdStyle({ borderLeft: `4px solid ${cat.color}` }) }}>
-          <GoalEditForm goal={goal} onClose={onEditClose} onAction={onAction} pending={pending} />
-        </td>
-      </tr>
-    );
-  }
-
-  return (
-    <>
-      <tr>
-        <td style={{ ...tdStyle({ borderLeft: `4px solid ${cat.color}` }) }}>
-          <span className="meta" style={{ fontSize: "0.74rem" }}>
-            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: cat.color, marginRight: "0.35rem", verticalAlign: "middle" }} />
-            {cat.name}
-          </span>
-        </td>
-        <td style={tdStyle()}>
-          <span style={{ fontWeight: 500 }}>
-            {goal.name}
-            {goal.is_achieved && (
-              <span style={{ marginLeft: "0.4rem", color: "var(--sage)", fontSize: "0.72rem" }}>✓</span>
-            )}
-          </span>
-          {goal.notes && (
-            <div className="meta" style={{ fontSize: "0.7rem", marginTop: "0.15rem", fontStyle: "italic" }}>
-              {goal.notes}
-            </div>
-          )}
-        </td>
-        <td style={{ ...tdStyle({ whiteSpace: "nowrap" }), fontSize: "0.78rem", color: "var(--muted)" }}>
-          {kindLabel(goal.kind)}
-        </td>
-        <td style={{ ...tdStyle({ whiteSpace: "nowrap" }), fontWeight: 600 }}>
-          {currentLabel}
-        </td>
-        <td style={{ ...tdStyle({ whiteSpace: "nowrap" }) }}>
-          {tgtLabel}
-        </td>
-        <td style={tdStyle()}>
-          {showProgress ? (
-            <div style={{
-              height: 6, background: "rgba(0,0,0,0.06)",
-              borderRadius: 999, overflow: "hidden", minWidth: 100,
-            }}>
-              <div style={{
-                width: `${pct}%`, height: "100%", background: cat.color,
-              }} />
-            </div>
-          ) : (
-            <span className="meta" style={{ fontSize: "0.72rem" }}>—</span>
-          )}
-        </td>
-        <td style={{ ...tdStyle({ whiteSpace: "nowrap", textAlign: "right" }) }}>
-          {goal.kind === "one_time" && (
-            <button
-              type="button"
-              title={goal.is_achieved ? "Mark not done" : "Mark done"}
-              onClick={() => onAction(updateGoal(goal.id, { is_achieved: !goal.is_achieved }))}
-              style={{ ...iconBtnStyle, color: goal.is_achieved ? "var(--muted)" : "var(--sage)" }}
-            >{goal.is_achieved ? "↺" : "✓"}</button>
-          )}
-          <button
-            type="button"
-            onClick={onEditOpen}
-            title="Edit goal"
-            style={iconBtnStyle}
-          >✎</button>
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm(`Delete goal "${goal.name}"?`)) onAction(deleteGoal(goal.id));
-            }}
-            title="Delete goal"
-            style={{ ...iconBtnStyle, color: "var(--red)" }}
-          >×</button>
-        </td>
-      </tr>
-
-      {/* Sub-goals indented under parent */}
-      {subs.map((s) => (
-        <SubGoalRow
-          key={s.id}
-          cat={cat}
-          sub={s}
-          onAction={onAction}
-        />
-      ))}
-
-      {/* Add-sub row */}
-      <tr>
-        <td colSpan={7} style={{ ...tdStyle({ borderLeft: `4px solid ${cat.color}`, padding: "0.25rem 0.6rem 0.3rem 2.5rem" }) }}>
-          {isAddingSub ? (
-            <NewSubGoalForm
-              onCancel={() => setAddingSub(false)}
-              onSubmit={(name) =>
-                onAction(createGoal({
-                  category_id: cat.id, parent_goal_id: goal.id, name, kind: "one_time",
-                })).then(() => setAddingSub(false))
-              }
-              pending={pending}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAddingSub(true)}
-              style={{ ...iconBtnStyle, fontSize: "0.7rem", color: "var(--muted)" }}
-            >+ sub-goal</button>
-          )}
-        </td>
-      </tr>
-    </>
-  );
-}
-
-function SubGoalRow({
-  cat, sub, onAction,
-}: {
-  cat: GoalCategoryWithGoals;
-  sub: GoalRow;
-  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
-}) {
-  return (
-    <tr style={{ background: "rgba(0,0,0,0.015)" }}>
-      <td style={{ ...tdStyle({ borderLeft: `4px solid ${cat.color}` }) }}>
-        <span className="meta" style={{ fontSize: "0.72rem", color: "var(--muted)" }}>↳ sub</span>
-      </td>
-      <td style={{ ...tdStyle({ paddingLeft: "1.8rem" }) }}>
-        <span style={{ fontSize: "0.82rem" }}>
-          {sub.name}
-          {sub.is_achieved && (
-            <span style={{ marginLeft: "0.4rem", color: "var(--sage)", fontSize: "0.7rem" }}>✓</span>
-          )}
-        </span>
-      </td>
-      <td style={{ ...tdStyle({ whiteSpace: "nowrap" }), fontSize: "0.74rem", color: "var(--muted)" }}>
-        {kindLabel(sub.kind)}
-      </td>
-      <td style={{ ...tdStyle({ whiteSpace: "nowrap" }), fontSize: "0.78rem" }}>
-        {sub.is_achieved ? "✓ done" : "open"}
-      </td>
-      <td style={{ ...tdStyle({ whiteSpace: "nowrap" }), fontSize: "0.78rem", color: "var(--muted)" }}>
-        —
-      </td>
-      <td style={tdStyle()}>
-        <span className="meta" style={{ fontSize: "0.7rem" }}>—</span>
-      </td>
-      <td style={{ ...tdStyle({ whiteSpace: "nowrap", textAlign: "right" }) }}>
-        <button
-          type="button"
-          title={sub.is_achieved ? "Mark not done" : "Mark done"}
-          onClick={() => onAction(updateGoal(sub.id, { is_achieved: !sub.is_achieved }))}
-          style={{ ...iconBtnStyle, fontSize: "0.78rem", color: sub.is_achieved ? "var(--muted)" : "var(--sage)" }}
-        >{sub.is_achieved ? "↺" : "✓"}</button>
-        <button
-          type="button"
-          onClick={() => { if (confirm(`Delete sub-goal "${sub.name}"?`)) onAction(deleteGoal(sub.id)); }}
-          title="Delete"
-          style={{ ...iconBtnStyle, fontSize: "0.78rem", color: "var(--red)" }}
-        >×</button>
-      </td>
-    </tr>
-  );
-}
-
-function kindLabel(kind: GoalKind): string {
-  switch (kind) {
-    case "weekly_hours": return "wk hours";
-    case "weekly_count": return "wk count";
-    case "per_night":    return "per night";
-    case "pr":           return "PR";
-    case "one_time":     return "milestone";
-  }
-}
-
-// ── Category forms ──────────────────────────────────────────────────
 
 function CategoryEditForm({
   cat, onClose, onAction, pending,
@@ -518,7 +422,7 @@ function CategoryEditForm({
   const [name, setName] = useState(cat.name);
   const [color, setColor] = useState(cat.color);
   return (
-    <div style={{ display: "flex", gap: "0.3rem", alignItems: "center", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: "0.3rem", alignItems: "center", flexWrap: "wrap", flex: 1 }}>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -591,8 +495,6 @@ function NewCategoryForm({
   );
 }
 
-// ── Goal forms ──────────────────────────────────────────────────────
-
 function GoalEditForm({
   goal, onClose, onAction, pending,
 }: {
@@ -611,17 +513,17 @@ function GoalEditForm({
   const [notes, setNotes] = useState(goal.notes ?? "");
 
   const inputStyle: React.CSSProperties = {
-    padding: "0.22rem 0.4rem",
+    padding: "0.28rem 0.45rem",
     border: "1px solid var(--line)",
     borderRadius: 4,
-    fontSize: "0.78rem",
+    fontSize: "0.82rem",
     fontFamily: "inherit",
-    background: "#fff",
+    background: "var(--bg)",
     minWidth: 0,
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -642,7 +544,7 @@ function GoalEditForm({
         <input placeholder="Current" value={current} onChange={(e) => setCurrent(e.target.value)} style={inputStyle} />
       </div>
       <input
-        placeholder="Notes"
+        placeholder="Notes (optional)"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         style={{ ...inputStyle, width: "100%" }}
@@ -693,28 +595,19 @@ function NewGoalForm({
   const [name, setName] = useState("");
   const [kind, setKind] = useState<GoalKind>("weekly_hours");
   const [target, setTarget] = useState("");
-  const [low, setLow] = useState("");
-  const [high, setHigh] = useState("");
   const [unit, setUnit] = useState("hr");
   const inputStyle: React.CSSProperties = {
-    padding: "0.24rem 0.4rem",
+    padding: "0.28rem 0.45rem",
     border: "1px solid var(--line)",
     borderRadius: 4,
-    fontSize: "0.78rem",
+    fontSize: "0.82rem",
     fontFamily: "inherit",
-    background: "#fff",
+    background: "var(--bg)",
     minWidth: 0,
   };
-
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", gap: "0.25rem" }}>
-      <input
-        autoFocus
-        placeholder="Goal name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        style={{ ...inputStyle, gridColumn: "1 / -1" }}
-      />
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 90px 70px auto auto", gap: "0.3rem", alignItems: "center" }}>
+      <input autoFocus placeholder="Goal name" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
       <select value={kind} onChange={(e) => setKind(e.target.value as GoalKind)} style={inputStyle}>
         <option value="weekly_hours">Weekly hrs</option>
         <option value="weekly_count">Weekly ct</option>
@@ -723,33 +616,23 @@ function NewGoalForm({
         <option value="one_time">One-time</option>
       </select>
       <input placeholder="Target" value={target} onChange={(e) => setTarget(e.target.value)} style={inputStyle} />
-      <input placeholder="Low" value={low} onChange={(e) => setLow(e.target.value)} style={inputStyle} />
-      <input placeholder="High" value={high} onChange={(e) => setHigh(e.target.value)} style={inputStyle} />
       <input placeholder="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} style={inputStyle} />
-      <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.3rem", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          className="btn btn-primary"
-          style={{ padding: "0.22rem 0.6rem", fontSize: "0.76rem" }}
-          disabled={pending || !name.trim()}
-          onClick={() => {
-            const toNum = (v: string) => v.trim() === "" ? null : Number(v);
-            onSubmit({
-              name, kind,
-              target_value: toNum(target),
-              target_range_low: toNum(low),
-              target_range_high: toNum(high),
-              target_unit: unit.trim() || null,
-            });
-          }}
-        >Add</button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{ padding: "0.22rem 0.55rem", fontSize: "0.76rem" }}
-          onClick={onCancel}
-        >×</button>
-      </div>
+      <button
+        type="button"
+        className="btn btn-primary"
+        style={{ padding: "0.28rem 0.7rem", fontSize: "0.76rem" }}
+        disabled={pending || !name.trim()}
+        onClick={() => {
+          const toNum = (v: string) => v.trim() === "" ? null : Number(v);
+          onSubmit({ name, kind, target_value: toNum(target), target_unit: unit.trim() || null });
+        }}
+      >Add</button>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        style={{ padding: "0.28rem 0.55rem", fontSize: "0.76rem" }}
+        onClick={onCancel}
+      >×</button>
     </div>
   );
 }
@@ -769,19 +652,19 @@ function NewSubGoalForm({
         placeholder="Sub-goal"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        style={{ padding: "0.18rem 0.35rem", border: "1px solid var(--line)", borderRadius: 4, fontSize: "0.78rem", flex: 1, minWidth: 0 }}
+        style={{ padding: "0.2rem 0.4rem", border: "1px solid var(--line)", borderRadius: 4, fontSize: "0.78rem", flex: 1, minWidth: 0 }}
       />
       <button
         type="button"
         className="btn btn-primary"
-        style={{ padding: "0.16rem 0.45rem", fontSize: "0.7rem" }}
+        style={{ padding: "0.18rem 0.5rem", fontSize: "0.72rem" }}
         disabled={pending || !name.trim()}
         onClick={() => onSubmit(name)}
       >+</button>
       <button
         type="button"
         className="btn btn-ghost"
-        style={{ padding: "0.16rem 0.4rem", fontSize: "0.7rem" }}
+        style={{ padding: "0.18rem 0.45rem", fontSize: "0.72rem" }}
         onClick={onCancel}
       >×</button>
     </div>
