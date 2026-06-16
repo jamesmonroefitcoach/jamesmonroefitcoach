@@ -1369,3 +1369,111 @@ th.tbl-sticky-last {
   .public-section { padding: 2.6rem 0; }
 }
 
+/* ─────────────────────────────────────────────────────────────────
+ * Phone tier (<480px) — additional reflows on top of the 640px and
+ * 700px media queries above. The base mobile layouts already stack
+ * one-column; this tier reins in headings, spacing, badges, and a
+ * couple of in-app grids that can crowd on a narrow viewport. Per
+ * the brief: resize only — no structural changes to dropdowns or
+ * visualisations.
+ * ───────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  /* Public landing — tighten hero rhythm */
+  .public-header-inner { padding: 0.55rem 0; gap: 0.5rem; }
+  .public-brand-text { font-size: 0.92rem; letter-spacing: 0.06em; }
+  .public-hero { padding: 2.2rem 0 2.4rem; }
+  .public-headline { font-size: clamp(1.7rem, 8.5vw, 2.6rem); max-width: none; }
+  .public-sub { font-size: 0.96rem; max-width: none; margin-bottom: 1.3rem; }
+  .public-cta-row { gap: 0.7rem; }
+  .public-cta { padding: 0.78rem 1.05rem; font-size: 0.86rem; }
+
+  /* Accepting-clients badge — wrap to two lines instead of overflowing,
+     drop the inline-block "max-content" width that caused the cutoff. */
+  .public-availability {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.2rem;
+    column-gap: 0.45rem;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .public-availability strong { white-space: nowrap; }
+
+  /* Sections — give them a hair more breathing room top-to-bottom */
+  .public-section { padding: 2.2rem 0; }
+  .public-h2 { font-size: clamp(1.45rem, 6.5vw, 1.95rem); margin-bottom: 1rem; }
+  .public-eyebrow { margin-bottom: 0.55rem; }
+
+  /* Pricing — single column, drop the highlight shadow that exaggerates
+     the featured card on narrow viewports */
+  .public-pricing-grid { grid-template-columns: 1fr; }
+  .public-price.is-featured { box-shadow: none; }
+
+  /* Location — bring the map a hair shorter so it doesn't dominate */
+  .public-location-map, .public-location-map iframe { min-height: 220px; }
+
+  /* Services — keep the row but tighten dot + title */
+  .public-service-dot { width: 22px; height: 22px; font-size: 0.78rem; }
+  .public-service-title { font-size: 0.88rem; }
+
+  /* Timeline — bump the marker rail in so number+label don't clip */
+  .public-timeline { padding-left: 0.95rem; }
+  .public-timeline-item { grid-template-columns: 36px 1fr; gap: 0.55rem; padding: 0.55rem 0.7rem; }
+  .public-timeline-mark { font-size: 1.25rem; }
+  .public-timeline-title { font-size: 0.96rem; }
+
+  /* Before/after row — keep the toggle readable when label wraps */
+  .public-result-toggle { grid-template-columns: 34px 1fr 18px; gap: 0.6rem; padding: 0.75rem 0.8rem; }
+  .public-result-index { font-size: 0.94rem; }
+
+  /* Footer — let the address line wrap onto its own row cleanly */
+  .public-footer-inner { gap: 0.35rem; font-size: 0.8rem; }
+  .public-footer-spacer { display: none; }
+
+  /* Consult modal — keep padding from eating the whole width */
+  .public-modal { padding: 1.2rem 1rem 1.1rem; }
+  .public-modal-form > h3 { font-size: 1.25rem !important; }
+  .public-field input,
+  .public-field textarea,
+  .public-field select { font-size: 0.92rem; padding: 0.5rem 0.6rem; }
+
+  /* ── In-app phone tier ─────────────────────────────────────── */
+
+  /* Page header rows — keep the badge + title from colliding with the
+     trailing controls (the dashboard's date pill, etc.). */
+  .page-hdr h1 { font-size: 1.45rem; }
+
+  /* Card padding tightens a touch so the content has more horizontal room */
+  .card { padding: 0.85rem; }
+
+  /* Stat tiles — three-up tables become two-up at 480px; below 360px
+     they can stack to one column without losing legibility. */
+  .grid-stats { grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+  .stat-value { font-size: 1.4rem; }
+
+  /* Testimonials moderation — the inline edit form has a fixed 3-col
+     "name / subtitle / sort" row and a 2-col "before / after" row.
+     At <480px both stack to one column so inputs don't compress. */
+  .test-mod-edit-row,
+  .test-mod-image-row { grid-template-columns: 1fr !important; }
+
+  /* Consult-request panel filter chips wrap nicely already; just shrink
+     padding so a row of six chips fits without horizontal scroll. */
+  .consult-filter-chip { padding: 0.18rem 0.55rem !important; font-size: 0.72rem !important; }
+
+  /* Schedule legend strip — already wraps. Hide the divider rules at
+     phone widths so the chips read as one continuous flow. */
+  .schedule-legend-sep { display: none; }
+}
+
+/* Extra-small tier (<360px) — just keep things from breaking */
+@media (max-width: 360px) {
+  .public-headline { font-size: 1.6rem; }
+  .public-brand-text { display: none; }
+  .grid-stats { grid-template-columns: 1fr; }
+}
+

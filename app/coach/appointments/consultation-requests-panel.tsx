@@ -129,6 +129,7 @@ export default function ConsultationRequestsPanel({
               <button
                 key={f}
                 type="button"
+                className="consult-filter-chip"
                 onClick={() => setFilter(f)}
                 style={{
                   background: filter === f ? "var(--ink)" : "transparent",

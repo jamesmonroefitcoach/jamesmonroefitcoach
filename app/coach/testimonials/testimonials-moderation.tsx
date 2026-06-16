@@ -320,7 +320,7 @@ function EditForm({
 
   return (
     <div style={{ marginTop: "0.7rem", display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 90px", gap: "0.45rem" }}>
+      <div className="test-mod-edit-row" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 90px", gap: "0.45rem" }}>
         <label style={col}>
           <span style={lbl}>Display name</span>
           <input
@@ -360,7 +360,7 @@ function EditForm({
         />
       </label>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
+      <div className="test-mod-image-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
         <label style={col}>
           <span style={lbl}>Before image URL</span>
           <input

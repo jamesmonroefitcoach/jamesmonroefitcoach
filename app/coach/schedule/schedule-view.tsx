@@ -1317,7 +1317,7 @@ export default function ScheduleView({
           ))}
 
           {/* Paid / programmed / personal — three independent signals */}
-          <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+          <span className="schedule-legend-sep" style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
           <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
             Paid
           </span>
@@ -1341,7 +1341,7 @@ export default function ScheduleView({
             <span>unpaid</span>
           </span>
 
-          <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+          <span className="schedule-legend-sep" style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
           <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
             Programmed
           </span>
@@ -1375,7 +1375,7 @@ export default function ScheduleView({
             <span>action</span>
           </span>
 
-          <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+          <span className="schedule-legend-sep" style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
           <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
             Personal
           </span>
