@@ -870,64 +870,66 @@ th.tbl-sticky-last {
   color: var(--ink);
 }
 
-/* Results / before-after */
+/* Results / before-after — consolidated row: photos left, text right */
 .public-results-stack {
   margin-top: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 1rem;
 }
 .public-result {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 3px;
-  overflow: hidden;
+  padding: 0.8rem;
 }
-.public-result-toggle {
-  width: 100%;
+.public-result-row {
   display: grid;
-  grid-template-columns: 44px 1fr 24px;
+  grid-template-columns: minmax(0, 280px) 1fr;
+  gap: 1.2rem;
   align-items: center;
-  gap: 0.85rem;
-  text-align: left;
-  padding: 0.9rem 1rem;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  color: var(--ink);
 }
-.public-result-toggle:hover { background: var(--paper); }
-.public-result-index {
-  font-family: var(--font-heading), "Oswald", sans-serif;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--rust);
-}
-.public-result-label { display: flex; flex-direction: column; gap: 0.15rem; }
-.public-result-label strong { font-weight: 600; font-size: 0.98rem; }
-.public-result-label span { color: var(--muted); font-size: 0.86rem; }
-.public-result-chev {
-  font-family: var(--font-heading), "Oswald", sans-serif;
-  font-size: 1.3rem;
-  color: var(--rust);
-  text-align: center;
-}
-.public-result-body {
+.public-result-photos {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-  padding: 0.6rem;
-  background: var(--paper);
-  border-top: 1px solid var(--line);
-  /* Cap the photo pair so the case doesn't dominate the page on
-     desktop — a 520px row leaves each photo around 250px wide. */
-  max-width: 520px;
-  margin: 0 auto;
+  gap: 0.45rem;
 }
+.public-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.public-result-index {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--rust);
+}
+.public-result-title {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.public-result-summary {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 50ch;
+}
+
 @media (max-width: 640px) {
-  .public-result-body { grid-template-columns: 1fr; max-width: 340px; }
+  .public-result-row {
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+  }
+  .public-result-photos { max-width: 320px; }
 }
+
 .public-photo {
   position: relative;
   aspect-ratio: 4 / 5;
@@ -953,12 +955,12 @@ th.tbl-sticky-last {
 }
 .public-photo-tag {
   position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
+  top: 0.4rem;
+  left: 0.4rem;
   background: var(--ink);
   color: var(--bg);
-  padding: 0.18rem 0.5rem;
-  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.62rem;
   letter-spacing: 0.1em;
   border-radius: 2px;
 }

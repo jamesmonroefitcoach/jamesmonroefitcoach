@@ -401,8 +401,7 @@ export default async function HomePage() {
           <span className="public-eyebrow">Client results</span>
           <h2 className="public-h2">Real before &amp; afters.</h2>
           <p className="public-p public-p-meta">
-            Click any case to open it. PLACEHOLDER — swap with real photos
-            when James approves which to publish.
+            Real clients, real arcs &mdash; published with permission.
           </p>
           <div className="public-results-stack">
             {renderedBeforeAfters.map((b, i) => {
