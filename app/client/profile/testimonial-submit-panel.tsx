@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { submitTestimonial, type Testimonial, type TestimonialStatus } from "@/app/testimonials/actions";
+import { submitTestimonialWithFiles } from "@/app/testimonials/actions";
+import type { Testimonial, TestimonialStatus } from "@/app/testimonials/types";
 
-// Client-side testimonial submitter + status of prior submissions.
-// Lives on the client profile page. Anything they write goes to James for
-// approval before it can appear publicly — the status pill makes that
-// crystal clear.
+// Client-side testimonial submitter — now backed by multipart form-data
+// so clients can attach multiple before / after photos directly instead
+// of pasting URLs they hosted elsewhere.
 
 const STATUS_LABELS: Record<TestimonialStatus, string> = {
   new:      "Awaiting James",
@@ -27,28 +27,28 @@ export default function TestimonialSubmitPanel({ mine }: { mine: Testimonial[] }
   const router = useRouter();
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
-  const [body, setBody] = useState("");
-  const [meta, setMeta] = useState("");
-  const [before, setBefore] = useState("");
-  const [after, setAfter] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
+  const [afterFiles, setAfterFiles] = useState<File[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (pending) return;
+    const fd = new FormData(e.currentTarget);
+    // FormData will pick up the named <input type="file" multiple> blobs
+    // automatically. We just need to fire the server action.
     setErr(null);
     start(async () => {
-      const res = await submitTestimonial({
-        body, meta_line: meta,
-        before_image_url: before,
-        after_image_url: after,
-      });
+      const res = await submitTestimonialWithFiles(fd);
       if (!res.ok) { setErr(res.error); return; }
-      setBody(""); setMeta(""); setBefore(""); setAfter("");
+      formRef.current?.reset();
+      setBeforeFiles([]);
+      setAfterFiles([]);
       setDone(true);
       router.refresh();
-      setTimeout(() => { setDone(false); setOpen(false); }, 2200);
+      setTimeout(() => { setDone(false); setOpen(false); }, 2400);
     });
   }
 
@@ -68,11 +68,11 @@ export default function TestimonialSubmitPanel({ mine }: { mine: Testimonial[] }
 
       <p className="meta" style={{ fontSize: "0.86rem", marginBottom: "0.6rem" }}>
         Your words help future clients decide. James reviews each one before it goes public on
-        the website — no surprise publishing.
+        the website &mdash; no surprise publishing.
       </p>
 
       {open && (
-        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "0.4rem" }}>
+        <form ref={formRef} onSubmit={submit} encType="multipart/form-data" style={{ display: "flex", flexDirection: "column", gap: "0.7rem", marginTop: "0.4rem" }}>
           {done && (
             <div style={{
               padding: "0.55rem 0.75rem",
@@ -97,8 +97,7 @@ export default function TestimonialSubmitPanel({ mine }: { mine: Testimonial[] }
           <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
             <span style={labelStyle}>Your feedback</span>
             <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
+              name="body"
               rows={5}
               required
               placeholder="What's coaching with James been like? What changed? What would you tell a friend thinking about reaching out?"
@@ -109,39 +108,29 @@ export default function TestimonialSubmitPanel({ mine }: { mine: Testimonial[] }
           <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
             <span style={labelStyle}>Short subtitle <em>(optional)</em></span>
             <input
-              value={meta}
-              onChange={(e) => setMeta(e.target.value)}
+              name="meta_line"
               placeholder='e.g. "Down 18 lb · Deadlift 365" or "Boxing — sparring ready"'
               style={inputStyle}
             />
           </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-              <span style={labelStyle}>Before photo URL <em>(optional)</em></span>
-              <input
-                type="url"
-                value={before}
-                onChange={(e) => setBefore(e.target.value)}
-                placeholder="https://…"
-                style={inputStyle}
-              />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-              <span style={labelStyle}>After photo URL <em>(optional)</em></span>
-              <input
-                type="url"
-                value={after}
-                onChange={(e) => setAfter(e.target.value)}
-                placeholder="https://…"
-                style={inputStyle}
-              />
-            </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem" }}>
+            <FileGroup
+              label="Before photos"
+              name="before_files"
+              files={beforeFiles}
+              onChange={setBeforeFiles}
+            />
+            <FileGroup
+              label="After photos"
+              name="after_files"
+              files={afterFiles}
+              onChange={setAfterFiles}
+            />
           </div>
 
-          <p className="meta" style={{ fontSize: "0.76rem", marginTop: "0.2rem" }}>
-            Paste image links if you already have them online. (Direct upload coming soon — for now,
-            you can also just write the feedback and send photos to James separately.)
+          <p className="meta" style={{ fontSize: "0.76rem", marginTop: "0.1rem" }}>
+            Pick as many photos as you want from each side. Up to 8 MB per image. Anything you upload goes to James first &mdash; nothing publishes without his approval.
           </p>
 
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
@@ -155,7 +144,7 @@ export default function TestimonialSubmitPanel({ mine }: { mine: Testimonial[] }
               type="submit"
               className="btn btn-primary"
               disabled={pending}
-            >{pending ? "Sending…" : "Send to James"}</button>
+            >{pending ? "Uploading…" : "Send to James"}</button>
           </div>
         </form>
       )}
@@ -196,6 +185,42 @@ export default function TestimonialSubmitPanel({ mine }: { mine: Testimonial[] }
             ))}
           </ul>
         </div>
+      )}
+    </div>
+  );
+}
+
+function FileGroup({
+  label, name, files, onChange,
+}: {
+  label: string;
+  name: string;
+  files: File[];
+  onChange: (next: File[]) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+      <span style={labelStyle}>{label} <em>(optional)</em></span>
+      <input
+        type="file"
+        name={name}
+        accept="image/*"
+        multiple
+        onChange={(e) => onChange(Array.from(e.currentTarget.files ?? []))}
+        style={{
+          fontSize: "0.82rem",
+          padding: "0.35rem 0.4rem",
+          border: "1px dashed var(--line)",
+          borderRadius: 3,
+          background: "var(--bg)",
+        }}
+      />
+      {files.length > 0 && (
+        <ul className="meta" style={{ fontSize: "0.72rem", margin: "0.15rem 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 1 }}>
+          {files.map((f, i) => (
+            <li key={i}>· {f.name} <span style={{ opacity: 0.7 }}>({Math.round(f.size / 1024)} KB)</span></li>
+          ))}
+        </ul>
       )}
     </div>
   );

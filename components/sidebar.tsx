@@ -116,15 +116,15 @@ export default function Sidebar({ user }: { user: SessionUser }) {
               >
                 Account
               </Link>
-              <Link
-                href="/"
+              <a
+                href="https://jamesmonroefitcoach.vercel.app/"
                 target="_blank"
                 rel="noopener"
                 className="sidebar-link"
                 onClick={() => setMobileOpen(false)}
               >
-                View website ↗
-              </Link>
+                Open Website ↗
+              </a>
               <button
                 className="sidebar-link"
                 style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer" }}
@@ -221,16 +221,24 @@ export default function Sidebar({ user }: { user: SessionUser }) {
             >
               Account
             </Link>
-            <Link
-              href="/"
+            <a
+              href="https://jamesmonroefitcoach.vercel.app/"
               target="_blank"
               rel="noopener"
-              className="btn btn-ghost"
-              style={{ marginTop: "0.35rem", width: "100%", color: "#d4c9bb", borderColor: "#3a322d", textAlign: "center" }}
+              style={{
+                display: "block",
+                marginTop: "0.7rem",
+                textAlign: "center",
+                color: "#a3927a",
+                fontSize: "0.8rem",
+                textDecoration: "underline",
+                textDecorationColor: "#3a322d",
+                textUnderlineOffset: "3px",
+              }}
               title="Open the public site in a new tab"
             >
-              View website ↗
-            </Link>
+              Open Website ↗
+            </a>
             <button
               className="btn btn-ghost"
               style={{ marginTop: "0.35rem", width: "100%", color: "#d4c9bb", borderColor: "#3a322d" }}

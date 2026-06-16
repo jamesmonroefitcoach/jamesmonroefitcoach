@@ -3,12 +3,16 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  type Testimonial,
-  type TestimonialStatus,
   setTestimonialStatus,
   updateTestimonial,
   deleteTestimonial,
 } from "@/app/testimonials/actions";
+import {
+  type Testimonial,
+  type TestimonialStatus,
+  allBeforeUrls,
+  allAfterUrls,
+} from "@/app/testimonials/types";
 
 const STATUS_LABELS: Record<TestimonialStatus, string> = {
   new:      "Pending",
@@ -177,10 +181,13 @@ function TestimonialCard({
         lineHeight: 1.55,
       }}>{t.body}</blockquote>
 
-      {(t.before_image_url || t.after_image_url) && (
-        <div style={{ marginTop: "0.5rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
-          <PhotoPreview url={t.before_image_url} label="Before" />
-          <PhotoPreview url={t.after_image_url}  label="After"  />
+      {/* Image grid — collapses legacy single-URL + new array columns
+          into one flat list per side. Each side renders all attached
+          photos as small tiles so James can scan the set. */}
+      {(allBeforeUrls(t).length > 0 || allAfterUrls(t).length > 0) && (
+        <div style={{ marginTop: "0.5rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+          <PhotoStrip urls={allBeforeUrls(t)} label="Before" />
+          <PhotoStrip urls={allAfterUrls(t)}  label="After"  />
         </div>
       )}
 
@@ -262,43 +269,65 @@ function TestimonialCard({
   );
 }
 
-function PhotoPreview({ url, label }: { url: string | null; label: string }) {
-  if (!url) {
+function PhotoStrip({ urls, label }: { urls: string[]; label: string }) {
+  if (urls.length === 0) {
     return (
-      <div style={{
-        aspectRatio: "4 / 5",
-        background: "repeating-linear-gradient(45deg, var(--paper) 0 10px, #efe6d3 10px 20px)",
-        border: "1px dashed var(--line)",
-        borderRadius: 2,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "var(--muted)",
-        fontSize: "0.74rem",
-      }}>(no {label.toLowerCase()})</div>
+      <div>
+        <span style={{
+          display: "inline-block",
+          marginBottom: "0.25rem",
+          background: "var(--ink)",
+          color: "var(--bg)",
+          padding: "0.12rem 0.42rem",
+          fontSize: "0.66rem",
+          letterSpacing: "0.08em",
+          borderRadius: 2,
+        }}>{label.toUpperCase()}</span>
+        <div style={{
+          aspectRatio: "4 / 5",
+          background: "repeating-linear-gradient(45deg, var(--paper) 0 10px, #efe6d3 10px 20px)",
+          border: "1px dashed var(--line)",
+          borderRadius: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--muted)",
+          fontSize: "0.74rem",
+        }}>(no {label.toLowerCase()})</div>
+      </div>
     );
   }
   return (
-    <div style={{
-      position: "relative",
-      aspectRatio: "4 / 5",
-      border: "1px solid var(--line)",
-      borderRadius: 2,
-      overflow: "hidden",
-      background: "var(--bg)",
-    }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt={`${label} photo`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+    <div>
       <span style={{
-        position: "absolute",
-        top: 6, left: 6,
+        display: "inline-block",
+        marginBottom: "0.25rem",
         background: "var(--ink)",
         color: "var(--bg)",
         padding: "0.12rem 0.42rem",
         fontSize: "0.66rem",
         letterSpacing: "0.08em",
         borderRadius: 2,
-      }}>{label.toUpperCase()}</span>
+      }}>{label.toUpperCase()} · {urls.length}</span>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: urls.length > 1 ? "repeat(auto-fill, minmax(80px, 1fr))" : "1fr",
+        gap: "0.3rem",
+      }}>
+        {urls.map((u, i) => (
+          <a key={i} href={u} target="_blank" rel="noopener" style={{
+            display: "block",
+            aspectRatio: "4 / 5",
+            border: "1px solid var(--line)",
+            borderRadius: 2,
+            overflow: "hidden",
+            background: "var(--bg)",
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={u} alt={`${label} ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

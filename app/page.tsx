@@ -5,6 +5,7 @@ import ConsultModal from "@/app/consult/consult-modal";
 import BeforeAfterToggle from "@/app/consult/before-after-toggle";
 import Portrait from "@/app/consult/portrait";
 import { listPublicTestimonials } from "@/app/testimonials/actions";
+import { allBeforeUrls, allAfterUrls } from "@/app/testimonials/types";
 
 // Public flyer / landing page for James Monroe Fit Coach.
 //
@@ -160,9 +161,16 @@ export default async function HomePage() {
   // Approved & published testimonials shown first; fall back to PLACEHOLDER
   // set when there are zero so a fresh deploy still looks complete.
   const approvedTestimonials = await listPublicTestimonials();
-  const approvedBeforeAfters = approvedTestimonials.filter(
-    (t) => t.before_image_url && t.after_image_url,
-  );
+  // Pull the first before / after URL out of each row's combined set
+  // (legacy single-URL + new array column). A row qualifies for the
+  // results grid only if it has at least one of each.
+  const approvedBeforeAfters = approvedTestimonials
+    .map((t) => ({
+      t,
+      before: allBeforeUrls(t)[0],
+      after:  allAfterUrls(t)[0],
+    }))
+    .filter((r) => r.before && r.after);
   const renderedTestimonials = approvedTestimonials.length > 0
     ? approvedTestimonials.map((t) => ({
         quote: t.body,
@@ -171,11 +179,11 @@ export default async function HomePage() {
       }))
     : TESTIMONIALS;
   const renderedBeforeAfters = approvedBeforeAfters.length > 0
-    ? approvedBeforeAfters.map((t) => ({
+    ? approvedBeforeAfters.map(({ t, before, after }) => ({
         label: t.display_name || t.submitted_name,
         summary: t.meta_line ?? t.body.slice(0, 120),
-        beforeSrc: t.before_image_url ?? undefined,
-        afterSrc: t.after_image_url ?? undefined,
+        beforeSrc: before,
+        afterSrc:  after,
       }))
     : BEFORE_AFTER;
 
