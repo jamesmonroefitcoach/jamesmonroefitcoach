@@ -81,12 +81,29 @@ function sleepBlockLabel(starts_at: string, ends_at: string): string {
   return `Sleep ${compactTimeLabel(s)}–${compactTimeLabel(e)} · ${durLabel}`;
 }
 
+// Colour-blind-safe palette (deuteranopia + protanopia friendly). Chosen
+// for high luminance separation as well as hue so two adjacent blocks
+// are distinguishable even when the hues collapse. Each status also
+// pairs with a glyph in StatusIcon so colour is never the only signal.
+//   scheduled        teal           — neutral upcoming
+//   completed        dark navy      — far apart from cancelled in luminance
+//   cancelled        bright orange  — high-luminance warning, distinct from teal
+//   no_show          black-ink      — clear 'this didn't happen' visually
+//   change_requested gold           — high-attention amber
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
-  scheduled:        { bg: "#5b6d7a", fg: "#fff" },
-  completed:        { bg: "#5a6b4a", fg: "#fff" },
-  cancelled:        { bg: "#c0392b", fg: "#fff" },
-  no_show:          { bg: "#7a3a55", fg: "#fff" },
-  change_requested: { bg: "#d97706", fg: "#fff" }
+  scheduled:        { bg: "#1f6f8b", fg: "#fff" },
+  completed:        { bg: "#1d2d44", fg: "#fff" },
+  cancelled:        { bg: "#e67e22", fg: "#fff" },
+  no_show:          { bg: "#171311", fg: "#fff" },
+  change_requested: { bg: "#d4a017", fg: "#171311" }
+};
+
+const STATUS_GLYPH: Record<AppointmentRow["status"], string> = {
+  scheduled:        "●",
+  completed:        "✓",
+  cancelled:        "✕",
+  no_show:          "⊘",
+  change_requested: "↻",
 };
 
 const PERSONAL_COLOR = { bg: "#3a342f", fg: "#f5efe4" };
@@ -1505,14 +1522,15 @@ export default function ScheduleView({
                           padding: "0.25rem 0.4rem 0.25rem 0.55rem",
                           borderRadius: 3,
                           fontSize: "0.74rem",
-                          // Left-edge paid/unpaid/cancelled accent — same colors
-                          // as the dashboard chart segments (sage/steel/rust).
-                          // Lets a coach scan paid vs unpaid at a glance.
+                          // Left-edge accent — colour-blind-safe luminance steps
+                          // (dark navy = paid, bright teal = unpaid, bright
+                          // orange = cancelled). Status glyph in the header
+                          // is the redundant non-colour signal.
                           borderLeft:
                             e.session_type !== "session" ? "none"
-                            : cancelled ? "3px solid var(--rust)"
-                            : e.paid ? "3px solid var(--sage)"
-                            : "3px solid var(--steel)",
+                            : cancelled ? "4px solid #e67e22"
+                            : e.paid ? "4px solid #1d2d44"
+                            : "4px solid #5ab1c4",
                           border: cancelled && e.session_type !== "session" ? "1px dashed rgba(255,255,255,0.5)" : undefined,
                           opacity: cancelled ? 0.85 : 1,
                           boxShadow: touchDraggingApptId === e.id
@@ -1531,7 +1549,13 @@ export default function ScheduleView({
                         }}
                       >
                         <div style={{ fontWeight: 700, textDecoration: cancelled ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {e.status === "change_requested" && <span style={{ marginRight: 3 }}>↻</span>}
+                          {/* Status glyph: colour-blind users get a clear
+                              non-colour signal of the appointment's state. */}
+                          {e.session_type === "session" && (
+                            <span style={{ marginRight: 3, fontSize: "0.78rem" }}>
+                              {STATUS_GLYPH[e.status]}
+                            </span>
+                          )}
                           {e.session_type === "personal"
                             ? `⛔ ${e.personal_label ?? "Personal"}`
                             : eventClient?.lifecycle === "online"
