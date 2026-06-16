@@ -130,19 +130,21 @@ const TESTIMONIALS = [
 const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterSrc?: string }[] = [
   {
     label: "Body recomposition — Austin client",
-    summary: "Strength + recomp focus. Same shirt, leaner build, less softness around the midsection.",
+    summary: "Strength + recomp focus. Leaner build, less softness, more confidence — same person, different season.",
     beforeSrc: "/results/client-1-before.jpg",
     afterSrc: "/results/client-1-after.jpg",
   },
   {
     label: "Lean-out — Austin client",
-    summary: "Strength + recomp. Visible torso definition, tighter waist after consistent training.",
+    summary: "Strength + recomp. Visible torso definition and tighter waist after consistent programming.",
     beforeSrc: "/results/client-2-before.jpg",
     afterSrc: "/results/client-2-after.jpg",
   },
   {
-    label: "PLACEHOLDER — Third client story",
-    summary: "Open slot — share another transformation here.",
+    label: "Strength + lean-out — Austin client",
+    summary: "Dropped body fat while keeping muscle mass. Clear waist taper and visible abs.",
+    beforeSrc: "/results/client-3-before.jpg",
+    afterSrc: "/results/client-3-after.jpg",
   },
 ];
 
