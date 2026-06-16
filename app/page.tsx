@@ -130,17 +130,19 @@ const TESTIMONIALS = [
 const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterSrc?: string }[] = [
   {
     label: "Body recomposition — Austin client",
-    summary: "Working with James through Hyde Park Gym. Strength + recomp focus.",
+    summary: "Strength + recomp focus. Same shirt, leaner build, less softness around the midsection.",
     beforeSrc: "/results/client-1-before.jpg",
     afterSrc: "/results/client-1-after.jpg",
   },
   {
-    label: "PLACEHOLDER — Postpartum return",
-    summary: "F / 32 — rebuilt deadlift and pull-up over 16 weeks.",
+    label: "Lean-out — Austin client",
+    summary: "Strength + recomp. Visible torso definition, tighter waist after consistent training.",
+    beforeSrc: "/results/client-2-before.jpg",
+    afterSrc: "/results/client-2-after.jpg",
   },
   {
-    label: "PLACEHOLDER — Tactical prep",
-    summary: "M / 26 — passed selection on first attempt after 6 months.",
+    label: "PLACEHOLDER — Third client story",
+    summary: "Open slot — share another transformation here.",
   },
 ];
 
