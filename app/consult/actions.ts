@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
+import {
+  OFFERING_KEYS, EXPERIENCE_LEVELS,
+  type OfferingKey,
+} from "./offerings";
 
 export type ConsultStatus = "new" | "contacted" | "booked" | "dismissed";
 
@@ -18,7 +22,13 @@ export type ConsultationRequest = {
   resolved_at: string | null;
   resolved_by: string | null;
   coach_notes: string | null;
+  offerings_interest: string[] | null;
+  goals_text: string | null;
+  injuries_text: string | null;
+  experience_level: string | null;
+  availability_text: string | null;
 };
+
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -35,6 +45,11 @@ export async function submitConsultationRequest(input: {
   phone?: string;
   message?: string;
   source?: string;
+  offerings_interest?: string[];
+  goals_text?: string;
+  injuries_text?: string;
+  experience_level?: string;
+  availability_text?: string;
 }): Promise<Result> {
   const name = (input.name ?? "").trim();
   const email = (input.email ?? "").trim().toLowerCase();
@@ -47,9 +62,29 @@ export async function submitConsultationRequest(input: {
   if (name.length > 120 || email.length > 200) return { ok: false, error: "Input too long." };
   if (message && message.length > 2000) return { ok: false, error: "Message too long." };
 
+  // Optional intake fields — filter to known keys so an attacker can't stuff
+  // arbitrary strings into the array, and cap each free-text field length.
+  const offerings = Array.isArray(input.offerings_interest)
+    ? input.offerings_interest
+        .map((s) => String(s).trim())
+        .filter((s): s is OfferingKey => (OFFERING_KEYS as readonly string[]).includes(s))
+    : [];
+  const goalsText = (input.goals_text ?? "").trim().slice(0, 1000) || null;
+  const injuriesText = (input.injuries_text ?? "").trim().slice(0, 1000) || null;
+  const availabilityText = (input.availability_text ?? "").trim().slice(0, 500) || null;
+  const experienceLevel = (input.experience_level ?? "").trim();
+  const experience = (EXPERIENCE_LEVELS as readonly string[]).includes(experienceLevel)
+    ? experienceLevel
+    : null;
+
   const sb = createSupabaseAdmin();
   const { error } = await sb.from("consultation_requests").insert({
     name, email, phone, message, source, status: "new",
+    offerings_interest: offerings.length > 0 ? offerings : null,
+    goals_text: goalsText,
+    injuries_text: injuriesText,
+    experience_level: experience,
+    availability_text: availabilityText,
   });
 
   if (error) return { ok: false, error: error.message };

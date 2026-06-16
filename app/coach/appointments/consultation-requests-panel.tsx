@@ -8,6 +8,12 @@ import {
   setConsultationRequestStatus,
   deleteConsultationRequest,
 } from "@/app/consult/actions";
+import {
+  OFFERING_LABELS,
+  EXPERIENCE_LABELS,
+  type OfferingKey,
+  type ExperienceLevel,
+} from "@/app/consult/offerings";
 
 // Collapsible panel listing public-form submissions. Newest first, with
 // triage buttons so James can flip a row to Contacted / Booked / Dismissed.
@@ -218,14 +224,52 @@ function ConsultRow({
             <a href={`tel:${row.phone.replace(/\D/g, "")}`} style={{ color: "var(--rust)" }}>{row.phone}</a>
           )}
         </div>
+        {/* Structured intake fields */}
+        {row.offerings_interest && row.offerings_interest.length > 0 && (
+          <div style={{ marginTop: "0.4rem", display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+            {row.offerings_interest.map((k) => (
+              <span key={k} style={{
+                display: "inline-flex",
+                background: "rgba(168,61,43,0.08)",
+                border: "1px solid var(--rust)",
+                color: "var(--rust)",
+                fontSize: "0.7rem",
+                padding: "0.1rem 0.4rem",
+                borderRadius: 2,
+                fontFamily: "var(--font-heading), Oswald, sans-serif",
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}>{OFFERING_LABELS[k as OfferingKey] ?? k}</span>
+            ))}
+          </div>
+        )}
+        {(row.experience_level || row.availability_text) && (
+          <div className="meta" style={{ marginTop: "0.3rem", fontSize: "0.78rem", display: "flex", gap: "0.7rem", flexWrap: "wrap" }}>
+            {row.experience_level && (
+              <span><strong style={{ color: "var(--ink)" }}>Experience:</strong> {EXPERIENCE_LABELS[row.experience_level as ExperienceLevel] ?? row.experience_level}</span>
+            )}
+            {row.availability_text && (
+              <span><strong style={{ color: "var(--ink)" }}>Trains:</strong> {row.availability_text}</span>
+            )}
+          </div>
+        )}
+        {row.goals_text && (
+          <div style={{ marginTop: "0.35rem", fontSize: "0.86rem", lineHeight: 1.5 }}>
+            <strong style={{ display: "block", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: "0.1rem" }}>Goals</strong>
+            <span style={{ whiteSpace: "pre-wrap" }}>{row.goals_text}</span>
+          </div>
+        )}
+        {row.injuries_text && (
+          <div style={{ marginTop: "0.3rem", fontSize: "0.86rem", lineHeight: 1.5 }}>
+            <strong style={{ display: "block", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: "0.1rem" }}>Injuries</strong>
+            <span style={{ whiteSpace: "pre-wrap" }}>{row.injuries_text}</span>
+          </div>
+        )}
         {row.message && (
-          <p style={{
-            marginTop: "0.4rem",
-            fontSize: "0.88rem",
-            lineHeight: 1.5,
-            color: "var(--ink)",
-            whiteSpace: "pre-wrap",
-          }}>{row.message}</p>
+          <div style={{ marginTop: "0.4rem", fontSize: "0.86rem", lineHeight: 1.5 }}>
+            <strong style={{ display: "block", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: "0.1rem" }}>Notes</strong>
+            <span style={{ whiteSpace: "pre-wrap", color: "var(--ink)" }}>{row.message}</span>
+          </div>
         )}
       </div>
 

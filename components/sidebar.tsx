@@ -115,6 +115,15 @@ export default function Sidebar({ user }: { user: SessionUser }) {
               >
                 Account
               </Link>
+              <Link
+                href="/"
+                target="_blank"
+                rel="noopener"
+                className="sidebar-link"
+                onClick={() => setMobileOpen(false)}
+              >
+                View website ↗
+              </Link>
               <button
                 className="sidebar-link"
                 style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer" }}
@@ -210,6 +219,16 @@ export default function Sidebar({ user }: { user: SessionUser }) {
               style={{ marginTop: "0.5rem", width: "100%", color: "#d4c9bb", borderColor: "#3a322d", textAlign: "center" }}
             >
               Account
+            </Link>
+            <Link
+              href="/"
+              target="_blank"
+              rel="noopener"
+              className="btn btn-ghost"
+              style={{ marginTop: "0.35rem", width: "100%", color: "#d4c9bb", borderColor: "#3a322d", textAlign: "center" }}
+              title="Open the public site in a new tab"
+            >
+              View website ↗
             </Link>
             <button
               className="btn btn-ghost"

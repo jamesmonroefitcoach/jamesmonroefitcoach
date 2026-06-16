@@ -31,6 +31,78 @@ const OFFERINGS = [
   },
 ];
 
+// What's actually included with every client — granular deliverables that
+// run alongside whichever offering above they pick.
+const SERVICES = [
+  { title: "Custom weekly programming",  blurb: "Built around your gym, schedule, and goals — not pulled from a template." },
+  { title: "Form review & cueing",       blurb: "Live in person, or video review for online clients." },
+  { title: "Movement & mobility screen",  blurb: "Identify weak links before they become injuries." },
+  { title: "Nutrition guidance",          blurb: "Practical fuel + recovery without a meal plan you'll hate." },
+  { title: "Weekly check-ins",            blurb: "Body comp, energy, sleep, soreness — all tracked in the app." },
+  { title: "Direct messaging access",     blurb: "Reach James between sessions when you need a quick answer." },
+];
+
+// What the first 90 days look like, set up as a small numbered timeline.
+const TIMELINE = [
+  {
+    label: "Week 1",
+    title: "Assessment & first programming block",
+    blurb: "Movement screen, baseline lifts, history. Your first week of programming lands in the app the day we finish.",
+  },
+  {
+    label: "Weeks 2-4",
+    title: "Pattern + progression",
+    blurb: "Dial in form on the big movements. Reps & loads progress on a real schedule. Weekly check-ins start.",
+  },
+  {
+    label: "Weeks 5-8",
+    title: "Build phase",
+    blurb: "Strength, capacity, and body comp targets begin to compound. We adjust based on what's actually working for you.",
+  },
+  {
+    label: "Weeks 9-12",
+    title: "Performance & next chapter",
+    blurb: "Test the lifts, reassess, set the next 90-day target. Most clients renew here — many stay for years.",
+  },
+];
+
+const PRICING = [
+  {
+    name: "Hybrid / Online",
+    price: "$220",
+    cadence: "per month",
+    bullets: [
+      "Custom weekly programming",
+      "Form-review video feedback",
+      "Weekly check-ins + messaging",
+      "Train at your gym, on your schedule",
+    ],
+  },
+  {
+    name: "1:1 In-Person",
+    price: "$80–110",
+    cadence: "per session",
+    featured: true,
+    bullets: [
+      "Programming + hands-on coaching",
+      "Custom weekly plan included",
+      "2-3 sessions/week typical",
+      "Packages discount per session",
+    ],
+  },
+  {
+    name: "Tactical / Athlete Prep",
+    price: "Custom",
+    cadence: "by quote",
+    bullets: [
+      "Selection / event-specific build",
+      "Programming + check-ins",
+      "Optional in-person blocks",
+      "Set timeline & milestones",
+    ],
+  },
+];
+
 const TESTIMONIALS = [
   {
     quote: "James got me back to deadlifting heavy after two surgeries thought I'd never lift again.",
@@ -140,6 +212,83 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── Services (what's included) ───────────────────────── */}
+      <section id="services" className="public-section">
+        <div className="public-section-inner">
+          <span className="public-eyebrow">What&rsquo;s included</span>
+          <h2 className="public-h2">Every plan runs on the same foundation.</h2>
+          <p className="public-p public-p-meta">
+            Whatever format you pick, these are the things you get from day one.
+          </p>
+          <div className="public-services-grid">
+            {SERVICES.map((s) => (
+              <div key={s.title} className="public-service">
+                <span className="public-service-dot" aria-hidden>✓</span>
+                <div>
+                  <strong className="public-service-title">{s.title}</strong>
+                  <p className="public-service-blurb">{s.blurb}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Timeline ─────────────────────────────────────────── */}
+      <section id="timeline" className="public-section public-section-tinted">
+        <div className="public-section-inner">
+          <span className="public-eyebrow">Timeline &amp; expectations</span>
+          <h2 className="public-h2">What the first 90 days look like.</h2>
+          <p className="public-p public-p-meta">
+            Real progress is paced. Here&rsquo;s how the early arc tends to run.
+          </p>
+          <ol className="public-timeline">
+            {TIMELINE.map((t, i) => (
+              <li key={i} className="public-timeline-item">
+                <span className="public-timeline-mark">{(i + 1).toString().padStart(2, "0")}</span>
+                <div>
+                  <span className="public-timeline-label">{t.label}</span>
+                  <h3 className="public-timeline-title">{t.title}</h3>
+                  <p className="public-timeline-blurb">{t.blurb}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* ── Pricing ──────────────────────────────────────────── */}
+      <section id="pricing" className="public-section">
+        <div className="public-section-inner">
+          <span className="public-eyebrow">Pricing</span>
+          <h2 className="public-h2">Straightforward, no upsells.</h2>
+          <p className="public-p public-p-meta">
+            PLACEHOLDER — confirm with James before flyer prints. Rate ranges
+            reflect typical packages; final rate is set on the consult.
+          </p>
+          <div className="public-pricing-grid">
+            {PRICING.map((p) => (
+              <div
+                key={p.name}
+                className={`public-price${p.featured ? " is-featured" : ""}`}
+              >
+                {p.featured && <span className="public-price-tag">Most clients pick this</span>}
+                <h3 className="public-price-name">{p.name}</h3>
+                <div className="public-price-row">
+                  <span className="public-price-amount">{p.price}</span>
+                  <span className="public-price-cadence">{p.cadence}</span>
+                </div>
+                <ul className="public-price-list">
+                  {p.bullets.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Before / After ───────────────────────────────────── */}
       <section id="results" className="public-section">
         <div className="public-section-inner">
@@ -176,8 +325,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Rate / consult CTA ───────────────────────────────── */}
-      <section id="rate" className="public-section">
+      {/* ── Consult CTA ──────────────────────────────────────── */}
+      <section id="start" className="public-section public-section-tinted">
         <div className="public-section-inner public-rate-block">
           <span className="public-eyebrow">Getting started</span>
           <h2 className="public-h2">First call is free.</h2>
@@ -187,7 +336,7 @@ export default async function HomePage() {
             confirmed after that call.
           </p>
           <div className="public-cta-row">
-            <ConsultModal triggerLabel="Request your free consultation" source="rate" />
+            <ConsultModal triggerLabel="Request your free consultation" source="bottom" />
           </div>
         </div>
       </section>
@@ -217,8 +366,10 @@ function PublicHeader() {
         <nav className="public-nav">
           <a href="#about">About</a>
           <a href="#offerings">Offerings</a>
+          <a href="#services">Services</a>
+          <a href="#timeline">Timeline</a>
+          <a href="#pricing">Pricing</a>
           <a href="#results">Results</a>
-          <a href="#rate">Rate</a>
           <Link href="/login" className="public-nav-signin">Sign in</Link>
         </nav>
       </div>

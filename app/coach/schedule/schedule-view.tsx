@@ -132,6 +132,91 @@ function categoryEmoji(categoryName: string | null | undefined): string {
 }
 const ONLINE_COLOR   = { bg: "#1e6a8c", fg: "#ffffff" };
 
+// ─── three-signal pills ─────────────────────────────────────────────
+// On the schedule, every session carries three independent facts: status
+// (background colour + glyph), paid (left pill below), and programmed
+// (right pill below). Each fact gets its own visual slot so James can
+// scan them at a glance without having to disentangle one signal from
+// another.
+
+function PaymentPill({ paid }: { paid: boolean }) {
+  return (
+    <span
+      title={paid ? "Paid" : "Unpaid"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 2,
+        fontSize: "0.58rem",
+        fontWeight: 700,
+        letterSpacing: "0.05em",
+        textTransform: "uppercase",
+        padding: "1px 5px 1px 4px",
+        borderRadius: 2,
+        background: paid ? "#5a6b4a" : "transparent",
+        color: paid ? "#fff" : "#fff",
+        border: paid ? "1px solid #5a6b4a" : "1px solid rgba(255,255,255,0.55)",
+      }}
+    >
+      <span aria-hidden style={{ fontSize: "0.66rem", lineHeight: 1 }}>
+        {paid ? "✓" : "○"}
+      </span>
+      {paid ? "paid" : "owed"}
+    </span>
+  );
+}
+
+function ProgramPill({
+  status,
+  sessionStatus,
+}: {
+  status: "programmed" | "draft" | "needs_programming" | "n/a";
+  sessionStatus: AppointmentRow["status"];
+}) {
+  // Completed historicals with no file still show as "logged" rather than
+  // "needs" — the workout already happened, so it isn't action-pending.
+  const effective: "programmed" | "draft" | "needs" | "logged" =
+    status === "programmed" ? "programmed"
+      : status === "draft" ? "draft"
+      : sessionStatus === "completed" ? "logged"
+      : "needs";
+
+  const cfg = {
+    programmed: { label: "prog", glyph: "✓", bg: "#5a6b4a", fg: "#fff", bd: "#5a6b4a", solid: true  },
+    draft:      { label: "draft", glyph: "●", bg: "transparent", fg: "#f3deba", bd: "#d97706", solid: false },
+    needs:      { label: "needs", glyph: "○", bg: "transparent", fg: "#ffd2c8", bd: "#a83d2b", solid: false },
+    logged:     { label: "logged", glyph: "✓", bg: "transparent", fg: "rgba(255,255,255,0.85)", bd: "rgba(255,255,255,0.45)", solid: false },
+  }[effective];
+
+  return (
+    <span
+      title={
+        effective === "programmed" ? "Program ready"
+          : effective === "draft" ? "Draft program — not finalized"
+          : effective === "needs" ? "Needs programming"
+          : "Historical session — no program file"
+      }
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 2,
+        fontSize: "0.58rem",
+        fontWeight: 700,
+        letterSpacing: "0.05em",
+        textTransform: "uppercase",
+        padding: "1px 5px 1px 4px",
+        borderRadius: 2,
+        background: cfg.bg,
+        color: cfg.fg,
+        border: `1px solid ${cfg.bd}`,
+      }}
+    >
+      <span aria-hidden style={{ fontSize: "0.66rem", lineHeight: 1 }}>{cfg.glyph}</span>
+      {cfg.label}
+    </span>
+  );
+}
+
 // ─── side-panel form state ──────────────────────────────────────────
 type Draft = {
   appt_id?: string;
@@ -1207,7 +1292,7 @@ export default function ScheduleView({
           }}
         >
           <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
-            Status key
+            Status
           </span>
           {([
             ["scheduled",        "Scheduled"],
@@ -1230,6 +1315,82 @@ export default function ScheduleView({
               <span>{label}</span>
             </span>
           ))}
+
+          {/* Paid / programmed / personal — three independent signals */}
+          <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+            Paid
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 2,
+              padding: "1px 5px 1px 4px", borderRadius: 2,
+              background: "#5a6b4a", color: "#fff",
+              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+            }}>✓ paid</span>
+            <span>received</span>
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 2,
+              padding: "1px 5px 1px 4px", borderRadius: 2,
+              background: "var(--ink)", color: "#fff",
+              border: "1px solid rgba(255,255,255,0.55)",
+              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+            }}>○ owed</span>
+            <span>unpaid</span>
+          </span>
+
+          <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+            Programmed
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 2,
+              padding: "1px 5px 1px 4px", borderRadius: 2,
+              background: "#5a6b4a", color: "#fff",
+              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+            }}>✓ prog</span>
+            <span>ready</span>
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 2,
+              padding: "1px 5px 1px 4px", borderRadius: 2,
+              background: "var(--ink)", color: "#f3deba",
+              border: "1px solid #d97706",
+              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+            }}>● draft</span>
+            <span>in progress</span>
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 2,
+              padding: "1px 5px 1px 4px", borderRadius: 2,
+              background: "var(--ink)", color: "#ffd2c8",
+              border: "1px solid #a83d2b",
+              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+            }}>○ needs</span>
+            <span>action</span>
+          </span>
+
+          <span style={{ width: 1, alignSelf: "stretch", background: "var(--line)" }} />
+          <span className="meta" style={{ fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+            Personal
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 26, height: 18, borderRadius: 2,
+              background: "rgba(255,255,255,0.55)",
+              color: "#5a6b4a",
+              border: "1px solid #5a6b4a",
+              borderLeft: "2px solid #5a6b4a",
+              fontSize: "0.66rem", fontWeight: 600,
+            }}>🏃</span>
+            <span>category-tagged block</span>
+          </span>
         </div>
 
         <div
@@ -1508,10 +1669,18 @@ export default function ScheduleView({
                   {morningContinuations.map((c) => {
                     const e = new Date(c.ends_at);
                     const heightPx = Math.max(14, pxFromTop(e));
-                    const personalGoalColor = c.session_type === "personal"
-                      ? goalColorById.get((c as { goal_id?: string | null }).goal_id ?? "")
+                    const isPersonal = c.session_type === "personal";
+                    const personalGoalId = isPersonal
+                      ? (c as { goal_id?: string | null }).goal_id ?? null
+                      : null;
+                    const personalGoalColor = personalGoalId
+                      ? goalColorById.get(personalGoalId)
                       : undefined;
-                    const color = personalGoalColor ?? PERSONAL_COLOR.bg;
+                    const catName = personalGoalId ? goalCategoryNameById.get(personalGoalId) : null;
+                    const emoji = catName ? categoryEmoji(catName) : null;
+                    const color = personalGoalColor ?? "#7a6f63";
+                    // Quiet continuation — matches the daytime personal style
+                    // so the eye reads them as the same kind of object.
                     return (
                       <div
                         key={`cont-${c.id}`}
@@ -1523,29 +1692,26 @@ export default function ScheduleView({
                           left: 4,
                           right: 4,
                           height: heightPx,
-                          background: color,
-                          color: "#fff",
-                          padding: "0.2rem 0.4rem 0.2rem 0.5rem",
+                          background: "rgba(255,255,255,0.55)",
+                          color,
+                          padding: "0.18rem 0.4rem 0.18rem 0.45rem",
                           borderRadius: "0 0 3px 3px",
-                          borderLeft: `3px solid ${color}`,
+                          border: `1px solid ${color}`,
+                          borderTop: "none",
+                          borderLeft: `2px solid ${color}`,
                           fontSize: "0.7rem",
-                          opacity: 0.85,
+                          opacity: 0.95,
                           cursor: "pointer",
                           overflow: "hidden",
                           zIndex: 2,
-                          boxShadow: "0 1px 0 rgba(0,0,0,0.15)",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontWeight: 700, fontSize: "0.66rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, fontSize: "0.66rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           <span title="continues from previous day">↩</span>
-                          {(() => {
-                            const goalId = (c as { goal_id?: string | null }).goal_id;
-                            const catName = goalId ? goalCategoryNameById.get(goalId) : null;
-                            return catName ? <span>{categoryEmoji(catName)}</span> : null;
-                          })()}
+                          {emoji && <span>{emoji}</span>}
                           <span>{c.personal_label ?? "continued"}</span>
                         </div>
-                        <div style={{ fontSize: "0.62rem", opacity: 0.85 }}>
+                        <div style={{ fontSize: "0.62rem", opacity: 0.8 }}>
                           ends {e.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                         </div>
                       </div>
@@ -1562,17 +1728,38 @@ export default function ScheduleView({
                     const widthPct = 100 / e.lanes;
                     const leftPct = e.lane * widthPct;
                     const eventClient = e.client_id ? clients.find((c) => c.id === e.client_id) : null;
-                    // Personal blocks: prefer the goal-category color when one's
-                    // been tagged; otherwise the muted default. Sessions keep
-                    // their status-driven palette.
-                    const personalGoalColor = e.session_type === "personal"
-                      ? goalColorById.get((e as { goal_id?: string | null }).goal_id ?? "")
+                    const isPersonal = e.session_type === "personal";
+
+                    // Personal block — quiet treatment: transparent fill with a
+                    // 1px coloured outline + coloured text in the category hue.
+                    // Sits over the time slot like a note rather than a slab so
+                    // sessions stay the dominant visual.
+                    const personalGoalId = isPersonal
+                      ? (e as { goal_id?: string | null }).goal_id ?? null
+                      : null;
+                    const personalCatColor = personalGoalId
+                      ? goalColorById.get(personalGoalId)
                       : undefined;
-                    const colors = e.session_type === "personal"
-                      ? (personalGoalColor ? { bg: personalGoalColor, fg: "#fff" } : PERSONAL_COLOR)
-                      : eventClient?.lifecycle === "online" ? ONLINE_COLOR
+                    const personalCatName = personalGoalId
+                      ? goalCategoryNameById.get(personalGoalId)
+                      : null;
+                    const personalEmoji = personalCatName
+                      ? categoryEmoji(personalCatName)
+                      : "⛔";
+                    const personalColor = personalCatColor ?? "#7a6f63";
+
+                    const sessionColors = eventClient?.lifecycle === "online"
+                      ? ONLINE_COLOR
                       : STATUS_COLORS[e.status];
                     const cancelled = e.status === "cancelled";
+
+                    // Three-signal session palette:
+                    //   STATUS    → background colour + glyph at title start
+                    //   PAID      → small pill in the bottom row (filled = paid)
+                    //   PROGRAMMED→ small pill on the right (filled = ready)
+                    // Left-edge stripe is uniform with the status background so
+                    // it no longer competes for the paid signal.
+
                     return (
                       <div
                         key={e.id}
@@ -1582,9 +1769,6 @@ export default function ScheduleView({
                         onTouchStart={(ev) => onEventTouchStart(ev, e.id)}
                         onTouchMove={onEventTouchMove}
                         onTouchEnd={(ev) => {
-                          // If a long-press drag fired, suppress the
-                          // synthetic click that would otherwise open the
-                          // edit panel.
                           if (eventTouchRef.current?.dragging) {
                             ev.preventDefault();
                           }
@@ -1592,97 +1776,98 @@ export default function ScheduleView({
                         }}
                         onTouchCancel={onEventTouchCancel}
                         onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}
-                        title={`${e.client_name ?? e.personal_label ?? "—"} — ${e.status}${e.session_type === "session" ? ` · ${e.paid ? "paid" : "unpaid"}` : ""}${e.change_count > 0 ? ` (Moved ${e.change_count}×)` : ""}`}
+                        title={
+                          isPersonal
+                            ? `${e.personal_label ?? "Personal"} — ${e.status}`
+                            : `${e.client_name ?? "—"} — ${e.status} · ${e.paid ? "paid" : "unpaid"} · ${e.program_status === "programmed" ? "programmed" : e.program_status === "draft" ? "draft program" : "needs programming"}${e.change_count > 0 ? ` (Moved ${e.change_count}×)` : ""}`
+                        }
                         style={{
                           position: "absolute",
                           top,
                           left: `calc(${leftPct}% + 2px)`,
                           width: `calc(${widthPct}% - 4px)`,
                           height: heightPx - 2,
-                          background: colors.bg,
-                          color: colors.fg,
-                          padding: "0.25rem 0.4rem 0.25rem 0.55rem",
+                          // Quiet personal: transparent ground w/ thin outline.
+                          background: isPersonal ? "rgba(255,255,255,0.55)" : sessionColors.bg,
+                          color: isPersonal ? personalColor : sessionColors.fg,
+                          padding: isPersonal
+                            ? "0.18rem 0.4rem 0.18rem 0.45rem"
+                            : "0.25rem 0.4rem 0.25rem 0.55rem",
                           borderRadius: 3,
                           fontSize: "0.74rem",
-                          // Left-edge accent — colour-blind-safe luminance steps
-                          // (dark navy = paid, bright teal = unpaid, bright
-                          // orange = cancelled). Status glyph in the header
-                          // is the redundant non-colour signal.
-                          borderLeft:
-                            e.session_type !== "session" ? "none"
-                            : cancelled ? "4px solid #e67e22"
-                            : e.paid ? "4px solid #1d2d44"
-                            : "4px solid #5ab1c4",
-                          border: cancelled && e.session_type !== "session" ? "1px dashed rgba(255,255,255,0.5)" : undefined,
+                          borderLeft: isPersonal
+                            ? `2px solid ${personalColor}`
+                            : `4px solid ${cancelled ? "#e67e22" : sessionColors.bg}`,
+                          border: isPersonal ? `1px solid ${personalColor}` : undefined,
                           opacity: cancelled ? 0.85 : 1,
                           boxShadow: touchDraggingApptId === e.id
                             ? "0 4px 14px rgba(0,0,0,0.4)"
-                            : "0 1px 0 rgba(0,0,0,0.15)",
+                            : isPersonal ? "none" : "0 1px 0 rgba(0,0,0,0.15)",
                           outline: touchDraggingApptId === e.id ? "2px solid #fff" : undefined,
                           transform: touchDraggingApptId === e.id ? "scale(1.04)" : undefined,
                           transition: "transform 0.1s, box-shadow 0.1s",
                           cursor: "grab",
                           overflow: "hidden",
-                          // Allow the parent's touchmove to capture the
-                          // long-press drag without the browser intercepting
-                          // it as a scroll once dragging begins.
                           touchAction: touchDraggingApptId === e.id ? "none" : "pan-y",
                           zIndex: touchDraggingApptId === e.id ? 4 : 2,
                         }}
                       >
-                        <div style={{ fontWeight: 700, textDecoration: cancelled ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {/* Status glyph: colour-blind users get a clear
-                              non-colour signal of the appointment's state. */}
-                          {e.session_type === "session" && (
+                        <div style={{
+                          fontWeight: isPersonal ? 600 : 700,
+                          textDecoration: cancelled ? "line-through" : "none",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}>
+                          {!isPersonal && (
                             <span style={{ marginRight: 3, fontSize: "0.78rem" }}>
                               {STATUS_GLYPH[e.status]}
                             </span>
                           )}
-                          {e.session_type === "personal"
-                            ? (() => {
-                                // Category emoji top-left as a non-colour cue
-                                // (James is colour-blind). Untagged personal
-                                // blocks fall back to ⛔.
-                                const goalId = (e as { goal_id?: string | null }).goal_id;
-                                const catName = goalId ? goalCategoryNameById.get(goalId) : null;
-                                const emoji = catName ? categoryEmoji(catName) : "⛔";
-                                return `${emoji} ${e.personal_label ?? "Personal"}`;
-                              })()
+                          {isPersonal
+                            ? `${personalEmoji} ${e.personal_label ?? "Personal"}`
                             : eventClient?.lifecycle === "online"
                               ? `${e.call_type === "video" ? "🎥" : e.call_type === "voice" ? "📞" : "🌐"} ${e.client_name ?? "Client"}`
                               : (e.client_name ?? "Client")
                           }
                         </div>
-                        <div style={{ opacity: 0.9, display: "flex", justifyContent: "space-between", gap: 4, fontSize: "0.7rem" }}>
-                          <span>
-                            {e.session_type === "session" ? (
-                              <>
+
+                        {/* Bottom row — three-signal layout for sessions:
+                            $rate · PAID/UNPAID pill   |   program pill */}
+                        {!isPersonal && (
+                          <div style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 4,
+                            marginTop: 2,
+                            fontSize: "0.62rem",
+                          }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+                              <span style={{ opacity: 0.92, fontWeight: 600 }}>
                                 {`$${e.rate ?? "—"}`}
-                                {/* paid checkmark next to the rate; unpaid stays
-                                    blank so the bare $ implies "owed" */}
-                                {e.paid && (
-                                  <span style={{ marginLeft: 3, fontSize: "0.62rem", opacity: 0.95 }} title="Paid">
-                                    ✓
-                                  </span>
-                                )}
-                              </>
-                            ) : ""}
-                            {e.change_count > 0 ? <span style={{ marginLeft: 6 }}>Moved {e.change_count}×</span> : null}
-                          </span>
-                          {e.session_type === "session" ? (
-                            <span style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.04em",
-                              color: e.program_status === "programmed" ? "var(--sage)"
-                                : e.program_status === "draft" ? "var(--amber)"
-                                : e.status === "completed" ? "var(--sage)"
-                                : undefined,
-                            }}>
-                              {e.program_status === "programmed" ? "✓ prog"
-                                : e.program_status === "draft" ? "● draft"
-                                : e.status === "completed" ? "✓ hist · no file"
-                                : "● need"}
+                              </span>
+                              <PaymentPill paid={e.paid} />
+                              {e.change_count > 0 && (
+                                <span style={{ opacity: 0.78 }}>·{e.change_count}↺</span>
+                              )}
                             </span>
-                          ) : null}
-                        </div>
+                            <ProgramPill status={e.program_status} sessionStatus={e.status} />
+                          </div>
+                        )}
+
+                        {/* Personal: tiny meta line if there's room (>32px) */}
+                        {isPersonal && heightPx > 32 && (
+                          <div style={{
+                            fontSize: "0.62rem",
+                            opacity: 0.75,
+                            marginTop: 1,
+                            color: personalColor,
+                          }}>
+                            {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            {e.change_count > 0 && ` · moved ${e.change_count}×`}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

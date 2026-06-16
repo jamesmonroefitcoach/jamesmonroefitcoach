@@ -893,6 +893,196 @@ th.tbl-sticky-last {
 }
 .public-quote-cite strong { color: var(--ink); font-weight: 600; }
 
+/* Services strip */
+.public-services-grid {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem 1.3rem;
+}
+.public-service {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.25rem 0.55rem 0;
+}
+.public-service-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--rust);
+  color: var(--bg);
+  font-size: 0.9rem;
+  font-weight: 700;
+  flex: none;
+}
+.public-service-title {
+  display: block;
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 0.94rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.public-service-blurb {
+  margin: 0.18rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* Timeline */
+.public-timeline {
+  margin: 1.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  border-left: 2px solid var(--rust);
+  padding-left: 1.2rem;
+}
+.public-timeline-item {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 0.8rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  position: relative;
+}
+.public-timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -1.45rem;
+  top: 1.05rem;
+  width: 12px;
+  height: 12px;
+  background: var(--rust);
+  border-radius: 50%;
+  border: 3px solid var(--paper);
+}
+.public-timeline-mark {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--rust);
+  line-height: 1;
+  text-align: left;
+}
+.public-timeline-label {
+  display: block;
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+.public-timeline-title {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-transform: none;
+  margin: 0 0 0.3rem;
+  color: var(--ink);
+}
+.public-timeline-blurb {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Pricing */
+.public-pricing-grid {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.public-price {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1rem 1.05rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  position: relative;
+}
+.public-price.is-featured {
+  border-color: var(--rust);
+  border-width: 2px;
+  box-shadow: 0 6px 18px rgba(168, 61, 43, 0.12);
+}
+.public-price-tag {
+  position: absolute;
+  top: -10px;
+  left: 1rem;
+  background: var(--rust);
+  color: var(--bg);
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.5rem;
+  border-radius: 2px;
+}
+.public-price-name {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.public-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+.public-price-amount {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: 2rem;
+  color: var(--ink);
+  letter-spacing: 0.005em;
+}
+.public-price-cadence {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-heading), "Oswald", sans-serif;
+}
+.public-price-list {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.public-price-list li {
+  position: relative;
+  padding-left: 1.1rem;
+}
+.public-price-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--rust);
+  font-weight: 700;
+}
+
 /* Rate block */
 .public-rate-block {
   max-width: 720px;
@@ -975,7 +1165,8 @@ th.tbl-sticky-last {
 }
 .public-field > span em { color: var(--muted); font-style: normal; opacity: 0.7; text-transform: none; letter-spacing: 0; }
 .public-field input,
-.public-field textarea {
+.public-field textarea,
+.public-field select {
   width: 100%;
   background: var(--paper);
   border: 1px solid var(--line);
@@ -986,12 +1177,76 @@ th.tbl-sticky-last {
   font-size: 0.94rem;
 }
 .public-field input:focus,
-.public-field textarea:focus {
+.public-field textarea:focus,
+.public-field select:focus {
   outline: 2px solid var(--rust);
   outline-offset: 1px;
   border-color: var(--rust);
 }
-.public-field textarea { resize: vertical; min-height: 88px; }
+.public-field textarea { resize: vertical; min-height: 64px; }
+
+/* Modal wide variant (taller intake form) */
+.public-modal-wide {
+  width: min(640px, 100%);
+}
+.public-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.7rem;
+}
+@media (max-width: 520px) {
+  .public-field-grid { grid-template-columns: 1fr; }
+}
+
+/* Fieldset for the offerings checkbox group */
+.public-fieldset {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 3px;
+  margin: 0;
+  padding: 0.55rem 0.7rem 0.7rem;
+}
+.public-fieldset > legend {
+  color: var(--muted);
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.74rem;
+  padding: 0 0.3rem;
+}
+.public-fieldset > legend em {
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: normal;
+  opacity: 0.7;
+}
+.public-checkgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 0.5rem;
+  margin-top: 0.35rem;
+}
+@media (max-width: 520px) {
+  .public-checkgrid { grid-template-columns: 1fr; }
+}
+.public-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg);
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.public-check input { margin: 0.18rem 0 0; accent-color: var(--rust); }
+.public-check:hover { border-color: var(--rust); }
+.public-check.is-checked {
+  border-color: var(--rust);
+  background: rgba(168, 61, 43, 0.07);
+}
 .public-modal-row { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 0.35rem; }
 .public-modal-error {
   background: rgba(192, 57, 43, 0.08);
