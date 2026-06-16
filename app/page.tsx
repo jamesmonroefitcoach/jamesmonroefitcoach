@@ -345,7 +345,7 @@ export default async function HomePage() {
           <span className="public-eyebrow">Where we train</span>
           <h2 className="public-h2">Hyde Park Gym &mdash; Austin, TX.</h2>
           <p className="public-p public-p-meta">
-            Old-school iron house in central Austin. Free racks, real plates, the kind of room you can actually train in.
+            Old-school iron house in central Austin.
           </p>
 
           <div className="public-location-grid">
@@ -374,7 +374,10 @@ export default async function HomePage() {
                 </a>
               </div>
               <p className="public-p" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
-                Free parking on-site. Day-passes available if you want to try the room before signing up.
+                Free parking on-site. <strong>Free 7-day trial</strong> available — try the room before
+                signing up. Gym membership is <strong>$79/month</strong> (no commitment, no initiation fee),
+                <strong> $15</strong> for a single-visit day pass, or <strong>$90</strong> for a
+                10-visit punch card good for 6 months.
               </p>
             </div>
 
