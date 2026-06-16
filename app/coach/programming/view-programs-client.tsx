@@ -565,14 +565,32 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
 
   // Sessions: every active client appears. Programs: only those flagged via
   // the + on the Client Roster.
-  const sessionBlocks = filtered;
+  // Ordering: flagged clients first (so 'needs at-home programming' floats
+  // to the top), then by next session time (earliest first; clients with
+  // no upcoming session sort last via Infinity sentinel). Mirrored across
+  // both the Sessions section and the bottom Client list view.
+  const sortByFlaggedThenNext = (a: ClientProgramBlock, b: ClientProgramBlock) => {
+    if (a.needsAtHomeProgramming !== b.needsAtHomeProgramming) {
+      return a.needsAtHomeProgramming ? -1 : 1;
+    }
+    const aNext = a.nextSession ? new Date(a.nextSession.starts_at).getTime() : Infinity;
+    const bNext = b.nextSession ? new Date(b.nextSession.starts_at).getTime() : Infinity;
+    return aNext - bNext;
+  };
+  const sessionBlocks = [...filtered].sort(sortByFlaggedThenNext);
   const programBlocks = filtered.filter((b) => b.needsAtHomeProgramming);
+  const rosterBlocks = [...filtered].sort(sortByFlaggedThenNext);
 
   // Upcoming sessions across all clients for the next 7 days, sorted by time.
   // Uses 'filtered' so the top-level client search narrows this list too.
   const weekSessions = useMemo(() => {
-    const now = Date.now();
-    const cutoff = now + 7 * 86_400_000;
+    // Anchor 'this week' to the START of today (00:00 local) instead of
+    // 'now' so anything still on the books for today shows up regardless
+    // of what time it is. Cutoff = +7 days from that anchor.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const anchor = startOfToday.getTime();
+    const cutoff = anchor + 7 * 86_400_000;
     type WeekSession = {
       key: string;
       clientId: string;
@@ -588,7 +606,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
     for (const b of filtered) {
       for (const s of b.upcomingSessions) {
         const t = new Date(s.starts_at).getTime();
-        if (t < now || t > cutoff) continue;
+        if (t < anchor || t > cutoff) continue;
         out.push({
           key: `${b.clientId}-${s.id}`,
           clientId: b.clientId,
@@ -720,7 +738,7 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
           <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>No matching clients.</p>
         ) : (
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            {filtered.map((b) => <ClientRosterRow key={`r-${b.clientId}`} block={b} />)}
+            {rosterBlocks.map((b) => <ClientRosterRow key={`r-${b.clientId}`} block={b} />)}
           </div>
         )
       )}

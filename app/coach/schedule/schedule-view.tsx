@@ -107,6 +107,29 @@ const STATUS_GLYPH: Record<AppointmentRow["status"], string> = {
 };
 
 const PERSONAL_COLOR = { bg: "#3a342f", fg: "#f5efe4" };
+
+// Per-category emoji for personal blocks. Gives James a non-colour
+// cue in the block's top-left corner since hue alone isn't reliable
+// for him. Match is case-insensitive substring on the category name
+// so 'Body Mastery' picks up 💪 etc. Default fallback covers any new
+// category the coach adds without a known keyword.
+const PERSONAL_CATEGORY_EMOJI: { match: RegExp; emoji: string }[] = [
+  { match: /sleep/i,             emoji: "🌙" },
+  { match: /cook|food|meal/i,    emoji: "🍳" },
+  { match: /piano|music|song/i,  emoji: "🎹" },
+  { match: /cardio|run/i,        emoji: "🏃" },
+  { match: /body|train|gym|lift/i, emoji: "💪" },
+  { match: /business|biz|admin/i, emoji: "💼" },
+  { match: /read|book|study/i,   emoji: "📚" },
+  { match: /family|friend|social/i, emoji: "👥" },
+  { match: /chore|clean|house/i, emoji: "🧹" },
+  { match: /travel|drive|commute/i, emoji: "🚗" },
+];
+function categoryEmoji(categoryName: string | null | undefined): string {
+  if (!categoryName) return "📌";
+  const match = PERSONAL_CATEGORY_EMOJI.find((m) => m.match.test(categoryName));
+  return match?.emoji ?? "📌";
+}
 const ONLINE_COLOR   = { bg: "#1e6a8c", fg: "#ffffff" };
 
 // ─── side-panel form state ──────────────────────────────────────────
@@ -260,6 +283,15 @@ export default function ScheduleView({
     const m = new Map<string, string>();
     for (const cat of goalCategories) {
       for (const g of cat.goals) m.set(g.id, cat.color);
+    }
+    return m;
+  }, [goalCategories]);
+  // Index goal_id → category NAME so block render can pull the right
+  // category emoji for the top-left non-colour cue.
+  const goalCategoryNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const cat of goalCategories) {
+      for (const g of cat.goals) m.set(g.id, cat.name);
     }
     return m;
   }, [goalCategories]);
@@ -1464,6 +1496,11 @@ export default function ScheduleView({
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontWeight: 700, fontSize: "0.66rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           <span title="continues from previous day">↩</span>
+                          {(() => {
+                            const goalId = (c as { goal_id?: string | null }).goal_id;
+                            const catName = goalId ? goalCategoryNameById.get(goalId) : null;
+                            return catName ? <span>{categoryEmoji(catName)}</span> : null;
+                          })()}
                           <span>{c.personal_label ?? "continued"}</span>
                         </div>
                         <div style={{ fontSize: "0.62rem", opacity: 0.85 }}>
@@ -1560,7 +1597,15 @@ export default function ScheduleView({
                             </span>
                           )}
                           {e.session_type === "personal"
-                            ? `⛔ ${e.personal_label ?? "Personal"}`
+                            ? (() => {
+                                // Category emoji top-left as a non-colour cue
+                                // (James is colour-blind). Untagged personal
+                                // blocks fall back to ⛔.
+                                const goalId = (e as { goal_id?: string | null }).goal_id;
+                                const catName = goalId ? goalCategoryNameById.get(goalId) : null;
+                                const emoji = catName ? categoryEmoji(catName) : "⛔";
+                                return `${emoji} ${e.personal_label ?? "Personal"}`;
+                              })()
                             : eventClient?.lifecycle === "online"
                               ? `${e.call_type === "video" ? "🎥" : e.call_type === "voice" ? "📞" : "🌐"} ${e.client_name ?? "Client"}`
                               : (e.client_name ?? "Client")

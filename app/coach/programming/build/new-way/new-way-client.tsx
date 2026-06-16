@@ -443,18 +443,24 @@ export default function NewWayClient({
       )}
 
       {/* Step 3 — session */}
-      {clientId && type === "session" && (
+      {clientId && type === "session" && (() => {
+        const pickedClient = clients.find((c) => c.id === clientId);
+        const clientLabel = pickedClient?.full_name ?? "this client";
+        // Order sessions by start time ascending so the next upcoming
+        // session is at the top of the list.
+        const orderedAppts = [...appts].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+        return (
         <section className="card" style={{ padding: "1rem 1.15rem" }}>
-          <StepLabel n={3} label="Pick a session — or start new" />
+          <StepLabel n={3} label={`Pick a session for ${clientLabel} — or start new`} />
           {loading ? (
             <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>Loading sessions…</p>
-          ) : appts.length === 0 ? (
+          ) : orderedAppts.length === 0 ? (
             <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>
               No upcoming sessions for this client.
             </p>
           ) : (
             <ul style={{ listStyle: "none", margin: "0.6rem 0 0", padding: 0, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-              {appts.map((a) => {
+              {orderedAppts.map((a) => {
                 const when = new Date(a.starts_at);
                 const whenLabel = when.toLocaleString("en-US", {
                   weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
@@ -468,9 +474,12 @@ export default function NewWayClient({
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                     padding: "0.55rem 0.7rem", border: "1px solid var(--line)", borderRadius: 4,
                   }}>
-                    <span>
-                      <strong style={{ fontSize: "0.9rem" }}>{whenLabel}</strong>
-                      <StatusInline status={a.program_status} />
+                    <span style={{ display: "flex", flexDirection: "column", gap: "0.1rem" }}>
+                      <span style={{ display: "flex", gap: "0.4rem", alignItems: "baseline" }}>
+                        <strong style={{ fontSize: "0.9rem" }}>{whenLabel}</strong>
+                        <StatusInline status={a.program_status} />
+                      </span>
+                      <span className="meta" style={{ fontSize: "0.72rem" }}>{clientLabel}</span>
                     </span>
                     <button
                       type="button"
@@ -496,7 +505,8 @@ export default function NewWayClient({
             </button>
           </div>
         </section>
-      )}
+        );
+      })()}
 
       {/* Recovery banner — shown when localStorage holds prior WIP backups
           for the picked client. Each '+ New program' click moves the
