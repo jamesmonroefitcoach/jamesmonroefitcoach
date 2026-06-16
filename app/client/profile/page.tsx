@@ -3,6 +3,8 @@ import { getSessionUser } from "@/lib/session";
 import { getClient } from "@/lib/data";
 import { fmtMoney, fmtDate } from "@/lib/format";
 import IntakeFormDisplay from "@/components/intake-form-display";
+import { listMyTestimonials } from "@/app/testimonials/actions";
+import TestimonialSubmitPanel from "./testimonial-submit-panel";
 
 // Client's view of their own profile. Mirrors what James sees on his side
 // EXCEPT for coach-internal classification: tier, test_rate, monthly
@@ -12,6 +14,7 @@ export default async function ClientProfilePage() {
   if (!user) redirect("/login");
   if (user.role !== "client") redirect("/");
   const me = await getClient(user.id);
+  const myTestimonials = await listMyTestimonials();
 
   const balance = me?.balance_owed ?? 0;
   const weightDelta =
@@ -117,6 +120,9 @@ export default async function ClientProfilePage() {
           emptyText="No intake form on file yet."
         />
       </div>
+
+      {/* Submit a testimonial — James reviews before publishing */}
+      <TestimonialSubmitPanel mine={myTestimonials} />
     </main>
   );
 }

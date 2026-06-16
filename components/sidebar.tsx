@@ -12,6 +12,7 @@ const COACH_NAV: NavLink[] = [
   { href: "/coach/programming", label: "Programming" },  // Build Program + Exercise Library live as subtabs under Programming
   { href: "/coach/clients", label: "Clients" },
   { href: "/coach/goals", label: "Goals" },
+  { href: "/coach/testimonials", label: "Testimonials" },
   { href: "/coach/messages", label: "Messages" },
 ];
 

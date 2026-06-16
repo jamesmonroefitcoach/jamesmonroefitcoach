@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import ConsultModal from "@/app/consult/consult-modal";
 import BeforeAfterToggle from "@/app/consult/before-after-toggle";
+import { listPublicTestimonials } from "@/app/testimonials/actions";
 
 // Public flyer / landing page for James Monroe Fit Coach.
 //
@@ -12,22 +13,34 @@ import BeforeAfterToggle from "@/app/consult/before-after-toggle";
 // CTA opens a modal that posts via submitConsultationRequest, landing in
 // /coach/appointments under "Consultation requests".
 
+// James's six specialties. Each maps to a real coaching focus he takes
+// clients in for — strength training is the core; boxing, body recomp,
+// nutrition, recovery are the surrounding pillars; coaching-coaching is
+// the meta offering for trainers wanting to sharpen their own craft.
 const OFFERINGS = [
   {
-    title: "1:1 In-Person Coaching",
-    blurb: "Programming, hands-on cueing, and accountability inside the gym.",
+    title: "Strength",
+    blurb: "Progressive overload, real lifts, real loading. Built so you peak — and keep peaking.",
   },
   {
-    title: "Hybrid / At-Home Programming",
-    blurb: "Custom weekly plan delivered through the app — train when life allows.",
+    title: "Boxing",
+    blurb: "Footwork, hands, conditioning, sparring prep. Whether you compete or just want sharper movement.",
   },
   {
-    title: "Tactical Strength & Endurance",
-    blurb: "Built for first responders, military, and athletes preparing for selection.",
+    title: "Body Recomposition",
+    blurb: "Lose fat and add muscle at the same time — paced for the long haul, not crash dieting.",
   },
   {
-    title: "Movement Restoration",
-    blurb: "Rebuild from injury with progressive loading and joint-by-joint screening.",
+    title: "Nutrition",
+    blurb: "Practical fueling, recovery, and meal structure. No restrictive plan you can't keep up with.",
+  },
+  {
+    title: "Recovery",
+    blurb: "Mobility, sleep, stress, return-from-injury. The unsexy work that lets you train hard for years.",
+  },
+  {
+    title: "Coaching Training",
+    blurb: "For trainers and coaches: years of experience shared 1:1 to sharpen your skill, programming, and eye.",
   },
 ];
 
@@ -66,39 +79,31 @@ const TIMELINE = [
   },
 ];
 
+// One-rate pricing, plus the free consult. Keep it simple — James can
+// adjust packages on the consult call rather than try to encode every
+// permutation on the flyer.
 const PRICING = [
   {
-    name: "Hybrid / Online",
-    price: "$220",
-    cadence: "per month",
+    name: "Free consultation",
+    price: "Free",
+    cadence: "20 minutes",
     bullets: [
-      "Custom weekly programming",
-      "Form-review video feedback",
-      "Weekly check-ins + messaging",
-      "Train at your gym, on your schedule",
+      "Hear your goals + history",
+      "See if we're a fit",
+      "No pitch, no pressure",
+      "Book the first session if it clicks",
     ],
   },
   {
-    name: "1:1 In-Person",
-    price: "$80–110",
-    cadence: "per session",
+    name: "1:1 Session",
+    price: "$100",
+    cadence: "per hour",
     featured: true,
     bullets: [
-      "Programming + hands-on coaching",
-      "Custom weekly plan included",
-      "2-3 sessions/week typical",
-      "Packages discount per session",
-    ],
-  },
-  {
-    name: "Tactical / Athlete Prep",
-    price: "Custom",
-    cadence: "by quote",
-    bullets: [
-      "Selection / event-specific build",
-      "Programming + check-ins",
-      "Optional in-person blocks",
-      "Set timeline & milestones",
+      "Strength, boxing, recomp — pick the focus",
+      "Programming built in",
+      "In-person at Hyde Park Gym, Austin",
+      "Packages available — ask on the consult",
     ],
   },
 ];
@@ -144,6 +149,28 @@ export default async function HomePage() {
     redirect("/client");
   }
 
+  // Approved & published testimonials shown first; fall back to PLACEHOLDER
+  // set when there are zero so a fresh deploy still looks complete.
+  const approvedTestimonials = await listPublicTestimonials();
+  const approvedBeforeAfters = approvedTestimonials.filter(
+    (t) => t.before_image_url && t.after_image_url,
+  );
+  const renderedTestimonials = approvedTestimonials.length > 0
+    ? approvedTestimonials.map((t) => ({
+        quote: t.body,
+        name: t.display_name || t.submitted_name,
+        meta: t.meta_line ?? "",
+      }))
+    : TESTIMONIALS;
+  const renderedBeforeAfters = approvedBeforeAfters.length > 0
+    ? approvedBeforeAfters.map((t) => ({
+        label: t.display_name || t.submitted_name,
+        summary: t.meta_line ?? t.body.slice(0, 120),
+        beforeSrc: t.before_image_url ?? undefined,
+        afterSrc: t.after_image_url ?? undefined,
+      }))
+    : BEFORE_AFTER;
+
   return (
     <main className="public-shell">
       <PublicHeader />
@@ -151,6 +178,7 @@ export default async function HomePage() {
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="public-hero">
         <div className="public-hero-inner">
+          <AvailabilityBadge />
           <span className="public-eyebrow">Monroe Fit Coach</span>
           <h1 className="public-headline">
             Train under a coach who actually shows up.
@@ -196,11 +224,14 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Offerings ────────────────────────────────────────── */}
+      {/* ── Specialties ─────────────────────────────────────── */}
       <section id="offerings" className="public-section public-section-tinted">
         <div className="public-section-inner">
-          <span className="public-eyebrow">Offerings</span>
-          <h2 className="public-h2">Pick the format that fits this season.</h2>
+          <span className="public-eyebrow">Specialties</span>
+          <h2 className="public-h2">What James coaches.</h2>
+          <p className="public-p public-p-meta">
+            Six focus areas. Most clients overlap two or three — pick whichever pulls you in.
+          </p>
           <div className="public-offerings-grid">
             {OFFERINGS.map((o) => (
               <div key={o.title} className="public-offering">
@@ -261,10 +292,10 @@ export default async function HomePage() {
       <section id="pricing" className="public-section">
         <div className="public-section-inner">
           <span className="public-eyebrow">Pricing</span>
-          <h2 className="public-h2">Straightforward, no upsells.</h2>
+          <h2 className="public-h2">One rate. No upsells.</h2>
           <p className="public-p public-p-meta">
-            PLACEHOLDER — confirm with James before flyer prints. Rate ranges
-            reflect typical packages; final rate is set on the consult.
+            Start with the free 20-minute consult. If we click, sessions are
+            a flat $100 per hour. Packages available — ask on the call.
           </p>
           <div className="public-pricing-grid">
             {PRICING.map((p) => (
@@ -272,7 +303,7 @@ export default async function HomePage() {
                 key={p.name}
                 className={`public-price${p.featured ? " is-featured" : ""}`}
               >
-                {p.featured && <span className="public-price-tag">Most clients pick this</span>}
+                {p.featured && <span className="public-price-tag">Standard rate</span>}
                 <h3 className="public-price-name">{p.name}</h3>
                 <div className="public-price-row">
                   <span className="public-price-amount">{p.price}</span>
@@ -289,6 +320,58 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── Location ─────────────────────────────────────────── */}
+      <section id="location" className="public-section public-section-tinted">
+        <div className="public-section-inner">
+          <span className="public-eyebrow">Where we train</span>
+          <h2 className="public-h2">Hyde Park Gym &mdash; Austin, TX.</h2>
+          <p className="public-p public-p-meta">
+            Old-school iron house in central Austin. Free racks, real plates, the kind of room you can actually train in.
+          </p>
+
+          <div className="public-location-grid">
+            <div className="public-location-meta">
+              <div className="public-location-block">
+                <span className="public-location-label">Address</span>
+                <a
+                  href="https://maps.google.com/?q=Hyde+Park+Gym+Austin+TX"
+                  target="_blank"
+                  rel="noopener"
+                  className="public-location-link"
+                >
+                  4125 Guadalupe St<br />
+                  Austin, TX 78751
+                </a>
+              </div>
+              <div className="public-location-block">
+                <span className="public-location-label">Gym website</span>
+                <a
+                  href="https://hydeparkgym.com"
+                  target="_blank"
+                  rel="noopener"
+                  className="public-location-link"
+                >
+                  hydeparkgym.com ↗
+                </a>
+              </div>
+              <p className="public-p" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
+                Free parking on-site. Day-passes available if you want to try the room before signing up.
+              </p>
+            </div>
+
+            <div className="public-location-map">
+              <iframe
+                title="Hyde Park Gym map"
+                src="https://www.google.com/maps?q=Hyde+Park+Gym+Austin+TX&output=embed"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Before / After ───────────────────────────────────── */}
       <section id="results" className="public-section">
         <div className="public-section-inner">
@@ -299,9 +382,20 @@ export default async function HomePage() {
             when James approves which to publish.
           </p>
           <div className="public-results-stack">
-            {BEFORE_AFTER.map((b, i) => (
-              <BeforeAfterToggle key={i} label={b.label} summary={b.summary} index={i} />
-            ))}
+            {renderedBeforeAfters.map((b, i) => {
+              const beforeSrc = (b as { beforeSrc?: string }).beforeSrc;
+              const afterSrc = (b as { afterSrc?: string }).afterSrc;
+              return (
+                <BeforeAfterToggle
+                  key={i}
+                  label={b.label}
+                  summary={b.summary}
+                  index={i}
+                  beforeSrc={beforeSrc}
+                  afterSrc={afterSrc}
+                />
+              );
+            })}
           </div>
         </div>
       </section>
@@ -312,12 +406,12 @@ export default async function HomePage() {
           <span className="public-eyebrow">Testimonials</span>
           <h2 className="public-h2">In their words.</h2>
           <div className="public-testimonial-grid">
-            {TESTIMONIALS.map((t, i) => (
+            {renderedTestimonials.map((t, i) => (
               <figure key={i} className="public-testimonial">
                 <blockquote className="public-quote">&ldquo;{t.quote}&rdquo;</blockquote>
                 <figcaption className="public-quote-cite">
                   <strong>{t.name}</strong>
-                  <span>{t.meta}</span>
+                  {t.meta && <span>{t.meta}</span>}
                 </figcaption>
               </figure>
             ))}
@@ -346,12 +440,29 @@ export default async function HomePage() {
         <div className="public-footer-inner">
           <span>© {new Date().getFullYear()} Monroe Fit Coach.</span>
           <span className="public-footer-spacer">·</span>
-          <span>PLACEHOLDER — city, contact email</span>
+          <span>Hyde Park Gym &mdash; 4125 Guadalupe St, Austin, TX</span>
           <span className="public-footer-spacer">·</span>
           <Link href="/login" className="public-footer-signin">Coach &amp; client sign-in</Link>
         </div>
       </footer>
     </main>
+  );
+}
+
+// "Accepting clients — N hrs/week available" pill anchored above the hero
+// headline. Tweak HOURS_AVAILABLE in app/consult/availability.ts to keep
+// the badge honest as James fills the schedule. The badge has two visual
+// states: "open" (sage with a pulse dot) and "limited" / "full" (muted).
+function AvailabilityBadge() {
+  const HOURS_AVAILABLE = 30;          // PLACEHOLDER — adjust as James fills up
+  const ACCEPTING = HOURS_AVAILABLE > 0;
+  return (
+    <div className="public-availability" data-state={ACCEPTING ? "open" : "closed"}>
+      <span className="public-availability-dot" aria-hidden />
+      {ACCEPTING
+        ? <>Accepting new clients &mdash; <strong>~{HOURS_AVAILABLE} hrs/week</strong> open this season</>
+        : <>Currently full &mdash; waitlist open</>}
+    </div>
   );
 }
 
@@ -365,10 +476,10 @@ function PublicHeader() {
         </Link>
         <nav className="public-nav">
           <a href="#about">About</a>
-          <a href="#offerings">Offerings</a>
-          <a href="#services">Services</a>
+          <a href="#offerings">Specialties</a>
           <a href="#timeline">Timeline</a>
           <a href="#pricing">Pricing</a>
+          <a href="#location">Location</a>
           <a href="#results">Results</a>
           <Link href="/login" className="public-nav-signin">Sign in</Link>
         </nav>
