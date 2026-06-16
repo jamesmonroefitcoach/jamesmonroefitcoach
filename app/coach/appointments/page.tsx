@@ -3,6 +3,8 @@ import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForWeek, listAppointmentsForMonth, startOfWeek, listChangeRequestHistory } from "@/lib/data";
 import AppointmentsClient from "./appointments-client";
 import ScheduleTabs from "../schedule/schedule-tabs";
+import { listConsultationRequests } from "@/app/consult/actions";
+import ConsultationRequestsPanel from "./consultation-requests-panel";
 
 export default async function AppointmentsPage() {
   const user = await getSessionUser();
@@ -14,11 +16,12 @@ export default async function AppointmentsPage() {
   const prevMonth = new Date();
   prevMonth.setMonth(prevMonth.getMonth() - 1);
 
-  const [week, monthA, monthB, history] = await Promise.all([
+  const [week, monthA, monthB, history, consults] = await Promise.all([
     listAppointmentsForWeek(user.id, weekStart),
     listAppointmentsForMonth(user.id, prevMonth),
     listAppointmentsForMonth(user.id, thisMonth),
     listChangeRequestHistory(user.id),
+    listConsultationRequests(),
   ]);
 
   const seen = new Set<string>();
@@ -38,6 +41,7 @@ export default async function AppointmentsPage() {
         <p className="meta">Approve change requests, mark completed/no-show, and review history.</p>
       </header>
       <hr className="divider" />
+      <ConsultationRequestsPanel initial={consults} />
       <AppointmentsClient initial={all} history={history} />
     </main>
     </>
