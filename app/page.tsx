@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import ConsultModal from "@/app/consult/consult-modal";
 import BeforeAfterToggle from "@/app/consult/before-after-toggle";
+import Portrait from "@/app/consult/portrait";
 import { listPublicTestimonials } from "@/app/testimonials/actions";
 
 // Public flyer / landing page for James Monroe Fit Coach.
@@ -126,10 +127,12 @@ const TESTIMONIALS = [
   },
 ];
 
-const BEFORE_AFTER = [
+const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterSrc?: string }[] = [
   {
-    label: "PLACEHOLDER — 12-week fat loss",
-    summary: "M / 38 — down 22 lb, added 2 reps to every working set.",
+    label: "Body recomposition — Austin client",
+    summary: "Working with James through Hyde Park Gym. Strength + recomp focus.",
+    beforeSrc: "/results/client-1-before.jpg",
+    afterSrc: "/results/client-1-after.jpg",
   },
   {
     label: "PLACEHOLDER — Postpartum return",
@@ -200,25 +203,37 @@ export default async function HomePage() {
         <div className="public-section-inner public-two-col">
           <div>
             <span className="public-eyebrow">About</span>
-            <h2 className="public-h2">Coaching that travels with you.</h2>
+            <h2 className="public-h2">To move is to live, and to live is to move.</h2>
             <p className="public-p">
-              PLACEHOLDER — Bio paragraph. Background, certifications, what
-              James cares about, who he works best with. (Swap when James sends
-              copy.)
+              Born and raised in Portland, Oregon, James grew up playing
+              sports from soccer to wrestling. He started weight training at
+              twelve and later took up boxing, Muay Thai, and yoga. Over the
+              years he&rsquo;s worked with clients from eight to eighty —
+              physique competitors, recreational athletes, and people coming
+              back from injury — helping them lose body fat, gain muscle,
+              and lead more active lives.
             </p>
             <p className="public-p">
-              PLACEHOLDER — Second paragraph: philosophy, training style, what
-              a first month looks like.
+              He got into coaching because of family members and close
+              friends who struggled to build healthy habits and lose weight.
+              His sessions are concentrated, but also fun and enjoyable —
+              your goal is his goal. Whether you want to compete, recover,
+              or just feel like yourself again, the plan gets built around
+              you.
             </p>
           </div>
           <div className="public-card public-card-portrait">
-            <div className="public-portrait-placeholder">
-              <span>PLACEHOLDER — portrait</span>
-            </div>
+            {/* Drop the portrait file at public/james-portrait.jpg and
+                the hatched placeholder is replaced automatically. */}
+            <Portrait
+              src="/james-portrait.jpg"
+              alt="James Monroe"
+              fallback="Drop public/james-portrait.jpg"
+            />
             <ul className="public-credit-list">
-              <li>PLACEHOLDER — Certification 1</li>
-              <li>PLACEHOLDER — Certification 2</li>
-              <li>PLACEHOLDER — 10+ years coaching</li>
+              <li>Hyde Park Gym &mdash; Austin, TX</li>
+              <li>Strength, boxing, Muay Thai, yoga background</li>
+              <li>Ages 8 to 80 &mdash; recreational to competitive</li>
             </ul>
           </div>
         </div>
@@ -442,7 +457,15 @@ export default async function HomePage() {
           <span className="public-footer-spacer">·</span>
           <span>Hyde Park Gym &mdash; 4125 Guadalupe St, Austin, TX</span>
           <span className="public-footer-spacer">·</span>
-          <Link href="/login" className="public-footer-signin">Coach &amp; client sign-in</Link>
+          <a href="tel:+15034846052" className="public-footer-signin" style={{ marginLeft: 0 }}>
+            (503) 484-6052
+          </a>
+          <span className="public-footer-spacer">·</span>
+          <a href="mailto:coachjamesmonroe@gmail.com" className="public-footer-signin" style={{ marginLeft: 0 }}>
+            coachjamesmonroe@gmail.com
+          </a>
+          <span className="public-footer-spacer">·</span>
+          <Link href="/login" className="public-footer-signin">Sign in</Link>
         </div>
       </footer>
     </main>
