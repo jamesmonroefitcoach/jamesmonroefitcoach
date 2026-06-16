@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ClientRow, Prospect } from "@/lib/data";
 import { pastProgramsForClient } from "@/lib/programs";
@@ -191,6 +192,12 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
     regular_frequency: c.regular_frequency ?? "",
   });
   const [saving, startSave] = useTransition();
+  // Surfaces a failure if the server save returns ok:false. Previously
+  // the result was discarded and the editor closed silently, so rate
+  // changes that the server rejected (e.g. a transient RLS error)
+  // looked like they saved.
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const router = useRouter();
 
   // Monthly sessions: regular_frequency stores sessions/month; per-week is auto-calculated
   const formMonthly = c.form_data?.["Sessions per month (preferred)"] ?? c.form_data?.["Sessions per month"] ?? null;
@@ -200,13 +207,27 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
     : null;
 
   function saveEdit() {
+    setSaveError(null);
+    // Validate parsed rate before we send.
+    const parsedRate = draft.session_rate !== "" ? parseFloat(draft.session_rate) : null;
+    if (parsedRate !== null && (isNaN(parsedRate) || parsedRate < 0)) {
+      setSaveError("Session rate must be a non-negative number.");
+      return;
+    }
     startSave(async () => {
-      await quickUpdateClient(c.id, {
+      const res = await quickUpdateClient(c.id, {
         tier: draft.tier || null,
-        session_rate: draft.session_rate !== "" ? parseFloat(draft.session_rate) : null,
+        session_rate: parsedRate,
         regular_frequency: draft.regular_frequency || null,
       });
+      if (!res.ok) {
+        setSaveError(res.error ?? "Save failed — try again.");
+        return;
+      }
       setEditing(false);
+      // Force the server component to re-fetch so the row's displayed
+      // rate updates immediately instead of waiting for a manual reload.
+      router.refresh();
     });
   }
 
@@ -228,6 +249,20 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
             </div>
             <strong style={{ fontSize: "0.88rem" }}>{c.full_name}</strong>
           </div>
+          {saveError && (
+            <div style={{
+              marginTop: "0.35rem",
+              padding: "0.25rem 0.45rem",
+              background: "rgba(192,57,43,0.08)",
+              border: "1px solid var(--red)",
+              color: "var(--red)",
+              borderRadius: 3,
+              fontSize: "0.72rem",
+              maxWidth: 220,
+            }}>
+              ⚠ {saveError}
+            </div>
+          )}
         </td>
         {/* Goal — read-only */}
         <td className="meta" style={{ fontSize: "0.82rem", maxWidth: 160 }}>{c.goals ?? "—"}</td>
