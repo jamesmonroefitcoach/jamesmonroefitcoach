@@ -2664,6 +2664,14 @@ function GoalProgressStrip({
     actionKind: "fill" | "reorg",
     t: typeof trackedCats[number],
   ) {
+    // Reorg wipes future blocks for the goal before re-planning;
+    // confirm so we don't accidentally drop manually-placed work.
+    if (actionKind === "reorg") {
+      const ok = confirm(
+        `Reorg "${t.cat.name}"? This will DELETE every future ${t.cat.name} block this week and re-plan from scratch. Existing client sessions are unaffected.`
+      );
+      if (!ok) return;
+    }
     setActErr(null);
     startBusy(async () => {
       const { res } = await runFor(actionKind, t);
@@ -2673,6 +2681,13 @@ function GoalProgressStrip({
   }
 
   function doAllAction(actionKind: "fill" | "reorg") {
+    if (actionKind === "reorg") {
+      const names = trackedCats.map((t) => t.cat.name).join(", ");
+      const ok = confirm(
+        `Reorg ALL? This will DELETE every future block this week for ${trackedCats.length} categor${trackedCats.length === 1 ? "y" : "ies"} (${names}) and re-plan each from scratch. Existing client sessions are unaffected.`
+      );
+      if (!ok) return;
+    }
     setActErr(null);
     startBusy(async () => {
       // Sequential, not parallel — a single coach is one user and

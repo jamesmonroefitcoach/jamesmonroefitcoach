@@ -156,22 +156,37 @@ function scheduleSleep(weekStart: Date, busy: AppointmentLite[], targetPerNight:
   return out;
 }
 
-/** Piano — Tue + Thu 12:00–13:00 priority, then exact-1-hr gaps
- *  between weekday client sessions. */
+/** Piano — Tue + Thu 12:00–13:00 priority, then evening after the day's
+ *  last client session (preferred), then between-session gaps but only
+ *  when the gap is at least 2 hours so the piano hour has buffer on
+ *  both sides. Never crammed into a tight 60-min gap. */
 function schedulePiano(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
   const out: Slot[] = [];
+  const now = new Date();
+  const taken = new Set<number>();
+  const tryAdd = (s: Date, e: Date): boolean => {
+    if (s < now) return false;
+    if (taken.has(s.getTime())) return false;
+    if (isBusy(s, e, busy)) return false;
+    out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+    taken.add(s.getTime());
+    return true;
+  };
+
+  // 1) Tue + Thu 12:00–13:00 priority. Day index is 0-based from
+  //    weekStart (Monday), so Tue=1, Thu=3.
   for (const day of [1, 3]) {
+    if (out.length >= targetHours) break;
     const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 12);
     const e = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 13);
-    if (s < new Date()) continue;
-    if (!isBusy(s, e, busy)) out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+    tryAdd(s, e);
   }
-  const remainingHrs = Math.max(0, targetHours - out.length);
-  if (remainingHrs <= 0) return out;
+  if (out.length >= targetHours) return out;
 
-  // No weekend rule difference — scan all 7 days for 1-hr session gaps.
+  // Build per-day client-session lists ahead of the next two passes.
+  type Day = { day: number; todays: AppointmentLite[]; dayEnd: Date };
+  const days: Day[] = [];
   for (let day = 0; day < 7; day++) {
-    if (out.length - 2 >= remainingHrs) break;
     const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
     const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 22);
     const todays = busy
@@ -180,13 +195,39 @@ function schedulePiano(weekStart: Date, busy: AppointmentLite[], targetHours: nu
         return t >= dayStart && t < dayEnd && b.session_type === "session";
       })
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    for (let i = 0; i < todays.length - 1; i++) {
-      const gapStart = new Date(todays[i].ends_at);
-      const gapEnd = new Date(todays[i + 1].starts_at);
+    days.push({ day, todays, dayEnd });
+  }
+
+  // 2) Preferred: evening after the day's last client session ends.
+  //    Tries the hour starting at last-session-end, then bumps in 30 min
+  //    increments up to 21:00 looking for a clear hour.
+  for (const d of days) {
+    if (out.length >= targetHours) break;
+    if (d.todays.length === 0) continue;
+    const last = d.todays[d.todays.length - 1];
+    let candStart = new Date(last.ends_at);
+    const limit = setLocalHours(new Date(weekStart.getTime() + d.day * 86_400_000), 21);
+    while (candStart.getTime() + 60 * 60_000 <= limit.getTime()) {
+      const candEnd = new Date(candStart.getTime() + 60 * 60_000);
+      if (tryAdd(candStart, candEnd)) break;
+      candStart = new Date(candStart.getTime() + 30 * 60_000);
+    }
+  }
+  if (out.length >= targetHours) return out;
+
+  // 3) Between-session gaps — only if the gap is >= 2 hr. Drop the
+  //    block in at the START of the gap so there's still 1 hr of
+  //    buffer before the next client.
+  for (const d of days) {
+    if (out.length >= targetHours) break;
+    for (let i = 0; i < d.todays.length - 1; i++) {
+      if (out.length >= targetHours) break;
+      const gapStart = new Date(d.todays[i].ends_at);
+      const gapEnd = new Date(d.todays[i + 1].starts_at);
       const gapMin = (gapEnd.getTime() - gapStart.getTime()) / 60_000;
-      if (gapMin === 60 && gapStart > new Date() && !isBusy(gapStart, gapEnd, busy)) {
-        out.push({ startsAt: gapStart.toISOString(), endsAt: gapEnd.toISOString() });
-      }
+      if (gapMin < 120) continue;
+      const candEnd = new Date(gapStart.getTime() + 60 * 60_000);
+      tryAdd(gapStart, candEnd);
     }
   }
   return out;
@@ -198,45 +239,61 @@ function schedulePiano(weekStart: Date, busy: AppointmentLite[], targetHours: nu
 function scheduleCook(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
   const out: Slot[] = [];
   let scheduled = 0;
+  // Three priority bands: afternoon (13-18), evening (18-22),
+  // morning (06-12) only as a last resort. Cook in the AM should
+  // be rare.
+  const bands: { label: string; start: number; end: number }[] = [
+    { label: "afternoon", start: 13, end: 18 },
+    { label: "evening",   start: 18, end: 22 },
+    { label: "morning",   start: 6,  end: 12 },
+  ];
+
   type DayGap = { day: number; gapStart: Date; gapEnd: Date };
-  const gaps: DayGap[] = [];
-  for (let day = 0; day < 7; day++) {
-    const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
-    const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 22);
-    const todays = busy
-      .filter((b) => {
-        const t = new Date(b.starts_at);
-        return t >= dayStart && t < dayEnd;
-      })
-      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    let cursor = dayStart;
-    for (const a of todays) {
-      const aStart = new Date(a.starts_at);
-      if (aStart > cursor) gaps.push({ day, gapStart: cursor, gapEnd: aStart });
-      const aEnd = new Date(a.ends_at);
-      if (aEnd > cursor) cursor = aEnd;
+
+  function gapsInBand(start: number, end: number): DayGap[] {
+    const gaps: DayGap[] = [];
+    for (let day = 0; day < 7; day++) {
+      const bandStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), start);
+      const bandEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), end);
+      const todays = busy
+        .filter((b) => {
+          const t = new Date(b.starts_at);
+          return t >= bandStart && t < bandEnd;
+        })
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+      let cursor = bandStart;
+      for (const a of todays) {
+        const aStart = new Date(a.starts_at);
+        if (aStart > cursor) gaps.push({ day, gapStart: cursor, gapEnd: aStart });
+        const aEnd = new Date(a.ends_at);
+        if (aEnd > cursor) cursor = aEnd;
+      }
+      if (cursor < bandEnd) gaps.push({ day, gapStart: cursor, gapEnd: bandEnd });
     }
-    if (cursor < dayEnd) gaps.push({ day, gapStart: cursor, gapEnd: dayEnd });
+    // Largest gap first within the band.
+    gaps.sort((a, b) =>
+      (b.gapEnd.getTime() - b.gapStart.getTime()) - (a.gapEnd.getTime() - a.gapStart.getTime())
+    );
+    return gaps;
   }
-  // Sort gaps largest first.
-  gaps.sort((a, b) =>
-    (b.gapEnd.getTime() - b.gapStart.getTime()) - (a.gapEnd.getTime() - a.gapStart.getTime())
-  );
-  for (const g of gaps) {
+
+  for (const band of bands) {
     if (scheduled >= targetHours) break;
-    if (g.gapStart < new Date()) continue;
-    const lengthHr = (g.gapEnd.getTime() - g.gapStart.getTime()) / 3_600_000;
-    if (lengthHr < 1) continue;
-    // Cap at the remaining-to-goal so we never overshoot the weekly
-    // target. If <1hr remains, skip — we don't book sub-hour cook blocks.
-    const remaining = targetHours - scheduled;
-    if (remaining < 1) break;
-    const useHr = Math.min(remaining, lengthHr >= 2 ? 2 : 1);
-    const s = g.gapStart;
-    const e = new Date(s.getTime() + useHr * 3_600_000);
-    if (!isBusy(s, e, busy)) {
-      out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
-      scheduled += useHr;
+    const gaps = gapsInBand(band.start, band.end);
+    for (const g of gaps) {
+      if (scheduled >= targetHours) break;
+      if (g.gapStart < new Date()) continue;
+      const lengthHr = (g.gapEnd.getTime() - g.gapStart.getTime()) / 3_600_000;
+      if (lengthHr < 1) continue;
+      const remaining = targetHours - scheduled;
+      if (remaining < 1) break;
+      const useHr = Math.min(remaining, lengthHr >= 2 ? 2 : 1);
+      const s = g.gapStart;
+      const e = new Date(s.getTime() + useHr * 3_600_000);
+      if (!isBusy(s, e, busy)) {
+        out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+        scheduled += useHr;
+      }
     }
   }
   return out;
@@ -304,11 +361,23 @@ function makeHalfHours(hStart: number, hEnd: number): { h: number; m: number }[]
   return out;
 }
 
-/** Body Mastery — fits into 1-hr and 30-min gaps between client sessions
- *  (gym holes). 60 min = full workout; 30 min = single-exercise focus. */
+/** Body Mastery — gym holes between client sessions OR after the last
+ *  client session of the day. 60 min = full workout; 30 min = single-
+ *  exercise focus. */
 function scheduleBodyMastery(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
   const out: Slot[] = [];
   let scheduledHrs = 0;
+  const taken = new Set<number>();
+  const tryAdd = (s: Date, hr: number): boolean => {
+    if (taken.has(s.getTime())) return false;
+    const e = new Date(s.getTime() + hr * 3_600_000);
+    if (isBusy(s, e, busy)) return false;
+    out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+    taken.add(s.getTime());
+    scheduledHrs += hr;
+    return true;
+  };
+
   for (let day = 0; day < 7; day++) {
     if (scheduledHrs >= targetHours) break;
     const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
@@ -319,74 +388,111 @@ function scheduleBodyMastery(weekStart: Date, busy: AppointmentLite[], targetHou
         return t >= dayStart && t < dayEnd && b.session_type === "session";
       })
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    if (todays.length < 2) continue; // need gaps between sessions
+
+    // Between-session gaps.
     for (let i = 0; i < todays.length - 1; i++) {
       if (scheduledHrs >= targetHours) break;
       const gapStart = new Date(todays[i].ends_at);
       const gapEnd = new Date(todays[i + 1].starts_at);
       const gapMin = (gapEnd.getTime() - gapStart.getTime()) / 60_000;
       if (gapStart < new Date()) continue;
-      // Cap at remaining-to-goal so we don't overshoot the target.
-      // Prefer 1 hr if both gap + remaining allow; otherwise 0.5 hr.
       const remaining = targetHours - scheduledHrs;
       if (remaining < 0.5) break;
       let useHr = 0;
       if (gapMin >= 60 && remaining >= 1) useHr = 1;
       else if (gapMin >= 30) useHr = 0.5;
       else continue;
-      const s = gapStart;
-      const e = new Date(s.getTime() + useHr * 3_600_000);
-      if (!isBusy(s, e, busy)) {
-        out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
-        scheduledHrs += useHr;
+      tryAdd(gapStart, useHr);
+    }
+    if (scheduledHrs >= targetHours) break;
+
+    // After the day's last session — up to 1 hr if the day still has
+    // room before 21:00. Works on light-load days where there's only
+    // one client session and no between-gap.
+    if (todays.length > 0) {
+      const last = todays[todays.length - 1];
+      const afterStart = new Date(last.ends_at);
+      if (afterStart >= new Date()) {
+        const remaining = targetHours - scheduledHrs;
+        if (remaining >= 0.5) {
+          const useHr = remaining >= 1 ? 1 : 0.5;
+          const afterEnd = new Date(afterStart.getTime() + useHr * 3_600_000);
+          if (afterEnd <= dayEnd) tryAdd(afterStart, useHr);
+        }
       }
     }
   }
   return out;
 }
 
-/** Business — 30 min daily, all 7 days (no weekend rule difference).
- *  Tries to slot into a free 30 min hole between client sessions;
- *  falls back to 19:00 if none. */
+/** Business — 1 hr blocks. Tries between-session gaps first, then
+ *  afternoon (13-18), then evening (18-22). Never schedules before
+ *  the first client session of the day. */
 function scheduleBusiness(weekStart: Date, busy: AppointmentLite[], targetHours: number): Slot[] {
   const out: Slot[] = [];
   let scheduledHrs = 0;
+  const now = new Date();
+  const taken = new Set<number>();
+
+  const tryAdd = (s: Date): boolean => {
+    if (s < now) return false;
+    if (taken.has(s.getTime())) return false;
+    const e = new Date(s.getTime() + 60 * 60_000);
+    if (isBusy(s, e, busy)) return false;
+    out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
+    taken.add(s.getTime());
+    scheduledHrs += 1;
+    return true;
+  };
+
   for (let day = 0; day < 7; day++) {
     if (scheduledHrs >= targetHours) break;
-    const dayStart = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 6);
-    const dayEnd = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 23);
+    const dayBase = new Date(weekStart.getTime() + day * 86_400_000);
+    const dayStart = setLocalHours(dayBase, 6);
+    const dayEnd = setLocalHours(dayBase, 22);
     const todays = busy
       .filter((b) => {
         const t = new Date(b.starts_at);
         return t >= dayStart && t < dayEnd && b.session_type === "session";
       })
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    let slotted = false;
+    // No-client-day fallback uses 13:00 (afternoon kickoff) so we don't
+    // accidentally book the AM block on a day where no client was set
+    // to anchor "after first session".
+    const firstSessionStart = todays.length > 0
+      ? new Date(todays[0].starts_at)
+      : setLocalHours(dayBase, 13);
+
+    let placedToday = false;
+
+    // 1) Between-session gap >= 60 min after the first client.
     for (let i = 0; i < todays.length - 1; i++) {
       const gapStart = new Date(todays[i].ends_at);
       const gapEnd = new Date(todays[i + 1].starts_at);
       const gapMin = (gapEnd.getTime() - gapStart.getTime()) / 60_000;
-      if (gapMin >= 30 && gapStart > new Date()) {
-        const s = gapStart;
-        const e = new Date(s.getTime() + 30 * 60_000);
-        if (!isBusy(s, e, busy)) {
-          out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
-          scheduledHrs += 0.5;
-          slotted = true;
-          break;
-        }
-      }
+      if (gapMin < 60) continue;
+      if (gapStart < firstSessionStart) continue;
+      if (tryAdd(gapStart)) { placedToday = true; break; }
     }
-    if (!slotted) {
-      // Fallback: 19:00–19:30 same day.
-      const s = setLocalHours(new Date(weekStart.getTime() + day * 86_400_000), 19);
-      const e = setLocalHours(s, 19, 30);
-      e.setMinutes(30);
-      if (s < new Date()) continue;
-      if (!isBusy(s, e, busy)) {
-        out.push({ startsAt: s.toISOString(), endsAt: e.toISOString() });
-        scheduledHrs += 0.5;
-      }
+    if (placedToday) continue;
+
+    // 2) Afternoon (13-18) — only if it's after the first client session
+    //    of the day (the "no AM before sessions" rule).
+    for (let hr = 13; hr <= 17; hr++) {
+      const s = setLocalHours(dayBase, hr);
+      if (s < firstSessionStart) continue;
+      const e = new Date(s.getTime() + 60 * 60_000);
+      if (e > dayEnd) break;
+      if (tryAdd(s)) { placedToday = true; break; }
+    }
+    if (placedToday) continue;
+
+    // 3) Evening (18-21).
+    for (let hr = 18; hr <= 21; hr++) {
+      const s = setLocalHours(dayBase, hr);
+      const e = new Date(s.getTime() + 60 * 60_000);
+      if (e > dayEnd) break;
+      if (tryAdd(s)) { placedToday = true; break; }
     }
   }
   return out;
@@ -431,23 +537,39 @@ export async function autoFillCategoryForWeek(
   const primaryGoal = category.goals[0];
   if (!primaryGoal) return { ok: false, error: "Category has no goals to tag." };
 
-  const slots = scheduleByCategoryName(category.name, ws, appts, targetWeekly);
-  if (slots.length === 0) {
-    // Count existing future blocks for this category so the message can
-    // tell the user which is true: already booked vs. genuinely no room.
-    const futureExisting = appts.filter((a) => {
-      if (a.session_type !== "personal") return false;
-      if (!a.goal_id) return false;
-      if (!category.goals.some((g) => g.id === a.goal_id)) return false;
-      return new Date(a.starts_at) > new Date();
-    }).length;
-    if (futureExisting >= targetWeekly) {
-      return { ok: false, error: `Already booked ${futureExisting} for this week (target ${targetWeekly}).` };
-    }
+  // Count what's already on the calendar this week for this goal so the
+  // scheduler only adds the delta. Hours-kind goals sum durations; count-
+  // kind goals tally appointments. Per-night (Sleep) gets the count.
+  const goalIds = new Set(category.goals.map((g) => g.id));
+  const weekEndMs = ws.getTime() + 7 * 86_400_000;
+  let existingHours = 0;
+  let existingCount = 0;
+  for (const a of appts) {
+    if (a.session_type !== "personal") continue;
+    const gid = (a as { goal_id?: string | null }).goal_id;
+    if (!gid || !goalIds.has(gid)) continue;
+    const startMs = new Date(a.starts_at).getTime();
+    if (startMs < ws.getTime() || startMs >= weekEndMs) continue;
+    existingHours += Math.max(0, (new Date(a.ends_at).getTime() - startMs) / 3_600_000);
+    existingCount += 1;
+  }
+  const kind = primaryGoal.kind;
+  const existingForKind =
+    kind === "weekly_count" || kind === "per_night" ? existingCount : existingHours;
+  const remainingTarget = Math.max(0, targetWeekly - existingForKind);
+  if (remainingTarget <= 0) {
     return {
       ok: false,
-      error: futureExisting > 0
-        ? `Booked ${futureExisting}/${targetWeekly}; no free preferred slots for the rest. Try Reorg or move existing appointments.`
+      error: `Already at goal (${Math.round(existingForKind * 10) / 10} / ${targetWeekly}). Nothing to add.`,
+    };
+  }
+
+  const slots = scheduleByCategoryName(category.name, ws, appts, remainingTarget);
+  if (slots.length === 0) {
+    return {
+      ok: false,
+      error: existingForKind > 0
+        ? `Booked ${Math.round(existingForKind * 10) / 10}/${targetWeekly}; no free preferred slots for the rest. Try Reorg or move existing appointments.`
         : "No free slots match the rules for this category this week.",
     };
   }
