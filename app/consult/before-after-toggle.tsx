@@ -1,9 +1,8 @@
 "use client";
 
 // Consolidated client result row. Photo pair on the left (before + after,
-// labelled), label + summary on the right. Always visible — no toggle —
-// so the page reads as a real "look what's possible" strip rather than a
-// collapsed FAQ list. Drops to a stacked layout on phone.
+// labelled), label + summary on the right. Always visible. Drops to a
+// stacked layout on phone.
 
 export default function BeforeAfterToggle({
   label,
@@ -11,26 +10,32 @@ export default function BeforeAfterToggle({
   index,
   beforeSrc,
   afterSrc,
+  fit = "cover",
 }: {
   label: string;
   summary: string;
   index: number;
   beforeSrc?: string;
   afterSrc?: string;
+  // "cover" crops to the 4/5 frame, head anchored at top. "contain"
+  // letterboxes so the full body shows (useful when feet/legs would
+  // otherwise get clipped).
+  fit?: "cover" | "contain";
 }) {
+  const photoClass = "public-photo" + (fit === "contain" ? " is-contain" : "");
   return (
     <div className="public-result">
       <div className="public-result-row">
         <div className="public-result-photos">
-          <div className="public-photo">
+          <div className={photoClass}>
             {beforeSrc
-              ? <img src={beforeSrc} alt={`${label} — before`} />
+              ? <img src={beforeSrc} alt={`${label} - before`} />
               : <span>BEFORE</span>}
             <span className="public-photo-tag">BEFORE</span>
           </div>
-          <div className="public-photo">
+          <div className={photoClass}>
             {afterSrc
-              ? <img src={afterSrc} alt={`${label} — after`} />
+              ? <img src={afterSrc} alt={`${label} - after`} />
               : <span>AFTER</span>}
             <span className="public-photo-tag">AFTER</span>
           </div>

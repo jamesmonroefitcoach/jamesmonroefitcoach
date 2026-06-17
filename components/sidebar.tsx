@@ -37,6 +37,12 @@ export default function Sidebar({ user }: { user: SessionUser }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // /preview is the marketing site rendered inside an app tab. The
+  // sidebar would be useless overhead there, so suppress it entirely.
+  if (pathname === "/preview" || pathname?.startsWith("/preview/")) {
+    return null;
+  }
+
   const links = user.role === "coach" ? COACH_NAV : user.role === "client" ? CLIENT_NAV : ADMIN_NAV;
 
   function signOut() {

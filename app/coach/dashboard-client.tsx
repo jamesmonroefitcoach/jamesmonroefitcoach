@@ -848,8 +848,13 @@ export default function DashboardClient({
                             {sessionDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {fmtDaysAway(sessionDate)}
                           </div>
                           {a.change_count > 0 && (
-                            <div style={{ marginBottom: "0.25rem" }}>
-                              <span className="badge badge-amber">{a.change_count}× changed</span>
+                            <div style={{
+                              marginBottom: "0.25rem",
+                              fontSize: "0.72rem",
+                              color: "var(--muted)",
+                              fontStyle: "italic",
+                            }}>
+                              {a.change_count}× changed
                             </div>
                           )}
                           <StatusEditor
