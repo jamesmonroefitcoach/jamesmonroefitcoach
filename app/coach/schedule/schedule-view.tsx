@@ -2376,7 +2376,7 @@ export default function ScheduleView({
               </div>
             </div>
 
-            {!draft.appt_id && draft.session_type === "session" ? (
+            {!draft.appt_id ? (
               <div style={{ background: "rgba(0,0,0,0.025)", padding: "0.6rem 0.7rem", borderRadius: 3, border: "1px solid var(--line)" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.85rem" }}>
                   <input type="checkbox" checked={draft.repeat_enabled} onChange={(e) => setDraft({ ...draft, repeat_enabled: e.target.checked })} />
@@ -2396,7 +2396,7 @@ export default function ScheduleView({
                       <input className="input" type="number" min={2} max={52} value={draft.repeat_count} onChange={(e) => setDraft({ ...draft, repeat_count: Number(e.target.value) || 0 })} style={{ marginTop: "0.25rem" }} />
                     </div>
                     <p className="meta" style={{ fontSize: "0.72rem", gridColumn: "1 / span 2", margin: 0 }}>
-                      Creates {Math.max(1, draft.repeat_count)} sessions starting {new Date(draft.starts_at).toLocaleDateString()}, every {draft.repeat_cadence === 1 ? "week" : "other week"}. Cancel any one without affecting the rest, or use "Cancel series" later to drop the lot.
+                      Creates {Math.max(1, draft.repeat_count)} {draft.session_type === "personal" ? "blocks" : "sessions"} starting {new Date(draft.starts_at).toLocaleDateString()}, every {draft.repeat_cadence === 1 ? "week" : "other week"}. Cancel any one without affecting the rest, or use &quot;Cancel series&quot; later to drop the lot.
                     </p>
                   </div>
                 ) : null}
@@ -2557,6 +2557,46 @@ function GoalProgressStrip({
     return out;
   }, [goalCategories]);
 
+  // Sleep stats — special case because Sleep uses per_night, not the
+  // weekly_hours/weekly_count that trackedCats handles. Compute the
+  // total hours of sleep on the calendar this week, the avg per night,
+  // and the per-night + weekly targets so we can render a chip beside
+  // the trackedCats chips at the bottom of the schedule page.
+  const sleepStats = useMemo(() => {
+    const sleepCat = goalCategories.find((c) => /sleep/i.test(c.name));
+    if (!sleepCat) return null;
+    const goalIds = new Set(sleepCat.goals.map((g) => g.id));
+    const primary = sleepCat.goals.find((g) => g.kind === "per_night")
+      ?? sleepCat.goals[0];
+    const perNightTarget = (primary?.target_value
+      ?? primary?.target_range_high
+      ?? primary?.target_range_low
+      ?? 8) as number;
+    const weeklyTarget = perNightTarget * 7;
+
+    let totalHr = 0;
+    let nights = 0;
+    for (const a of appts) {
+      if (a.session_type !== "personal") continue;
+      const goalId = (a as { goal_id?: string | null }).goal_id;
+      if (!goalId || !goalIds.has(goalId)) continue;
+      const startMs = new Date(a.starts_at).getTime();
+      if (startMs < weekStart.getTime() || startMs >= weekEndMs) continue;
+      const endMs = new Date(a.ends_at).getTime();
+      totalHr += Math.max(0, (endMs - startMs) / 3_600_000);
+      nights += 1;
+    }
+    const avgPerNight = nights > 0 ? totalHr / nights : 0;
+    return {
+      cat: sleepCat,
+      perNightTarget,
+      weeklyTarget,
+      totalHr,
+      nights,
+      avgPerNight,
+    };
+  }, [appts, weekStart, weekEndMs, goalCategories]);
+
   // Per-category bucket per category:
   //   scheduled = TOTAL of every goal-tagged personal block this week
   //               (past + future, completed or not — anything 'on the cal')
@@ -2640,7 +2680,7 @@ function GoalProgressStrip({
     });
   }
 
-  if (trackedCats.length === 0) return null;
+  if (trackedCats.length === 0 && !sleepStats) return null;
 
   return (
     <div className="no-print" style={{ marginTop: "1rem" }}>
@@ -2661,6 +2701,66 @@ function GoalProgressStrip({
           paddingBottom: "0.25rem",
         }}
       >
+        {sleepStats && (() => {
+          const avg = Math.round(sleepStats.avgPerNight * 10) / 10;
+          const total = Math.round(sleepStats.totalHr * 10) / 10;
+          const totalPct = Math.max(0, Math.min(100, (sleepStats.totalHr / Math.max(sleepStats.weeklyTarget, 0.0001)) * 100));
+          const inRange = sleepStats.avgPerNight >= sleepStats.perNightTarget;
+          return (
+            <div
+              title={`Sleep this week\nAvg per night: ${avg} / ${sleepStats.perNightTarget} hr\nTotal: ${total} / ${sleepStats.weeklyTarget} hr\nNights logged: ${sleepStats.nights}`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.2rem",
+                minWidth: 220,
+                flex: "1 1 220px",
+                padding: "0.4rem 0.55rem",
+                border: `1px solid ${inRange ? sleepStats.cat.color : "var(--line)"}`,
+                borderRadius: 4,
+                background: "var(--paper)",
+              }}
+            >
+              <div style={{
+                display: "flex", justifyContent: "space-between", gap: "0.4rem", alignItems: "baseline",
+                fontSize: "0.74rem", fontWeight: 600,
+              }}>
+                <span style={{ color: sleepStats.cat.color, whiteSpace: "nowrap" }}>
+                  Sleep
+                </span>
+                <span style={{ whiteSpace: "nowrap", fontSize: "0.7rem", fontFamily: "Oswald, sans-serif", letterSpacing: "0.02em" }}>
+                  <span title="Avg per night" style={{ color: inRange ? sleepStats.cat.color : "var(--ink)", fontWeight: 700 }}>
+                    {avg}
+                  </span>
+                  <span style={{ color: "var(--muted)" }}>/</span>
+                  <span title="Per-night target" style={{ color: "var(--muted)" }}>
+                    {sleepStats.perNightTarget}
+                  </span>
+                  <span style={{ color: "var(--muted)", marginLeft: "0.18rem", fontSize: "0.62rem" }}>hr/night</span>
+                </span>
+              </div>
+              <div style={{
+                height: 4, background: "rgba(0,0,0,0.06)",
+                borderRadius: 999, overflow: "hidden",
+              }}>
+                <div style={{
+                  width: `${totalPct}%`, height: "100%",
+                  background: sleepStats.cat.color,
+                }} />
+              </div>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                fontSize: "0.62rem", color: "var(--muted)",
+                fontFamily: "Oswald, sans-serif", letterSpacing: "0.02em",
+              }}>
+                <span>{sleepStats.nights} night{sleepStats.nights === 1 ? "" : "s"}</span>
+                <span>
+                  total {total} / {sleepStats.weeklyTarget} hr
+                </span>
+              </div>
+            </div>
+          );
+        })()}
         {trackedCats.map((t) => {
           const a = actuals.get(t.cat.id) ?? { completedHr: 0, completedCt: 0, scheduledHr: 0, scheduledCt: 0 };
           const completed = t.kind === "weekly_hours" ? a.completedHr : a.completedCt;

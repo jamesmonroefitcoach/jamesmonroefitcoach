@@ -267,7 +267,7 @@ export default async function MarketingPage() {
           <div className="public-band-overlay">
             <span className="public-eyebrow" style={{ color: "#f3deba" }}>In the gym</span>
             <h2 className="public-band-quote">
-              Concentrated, but fun. Your goal is my goal.
+              Training with the full picture in mind.
             </h2>
           </div>
         </div>

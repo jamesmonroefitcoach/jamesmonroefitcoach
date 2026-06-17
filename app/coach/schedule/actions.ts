@@ -111,8 +111,13 @@ export async function saveAppointment(input: ApptInput): Promise<Result<{ id: st
     return { ok: true, data };
   }
 
-  // Repeat materialization: create a series row + N appointment rows
-  if (input.repeat?.enabled && input.repeat.occurrences > 1 && !isPersonal) {
+  // Repeat materialization: create a series row + N appointment rows.
+  // Works for both sessions and personal blocks — appointment_series
+  // allows a null client_id, so a Sleep block series (or Piano, or
+  // anything else James schedules nightly/weekly) flows through the
+  // same path. Each materialized row inherits the payload's
+  // personal_label, goal_id, is_blocking, etc.
+  if (input.repeat?.enabled && input.repeat.occurrences > 1) {
     const startBase = new Date(input.starts_at);
     const endBase = new Date(input.ends_at);
     const durationMin = Math.max(1, Math.round((endBase.getTime() - startBase.getTime()) / 60000));
