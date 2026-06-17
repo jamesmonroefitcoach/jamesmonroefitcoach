@@ -123,17 +123,21 @@ export async function quickUpdateClient(
   if (error) return { ok: false, error: error.message };
 
   // Rate propagation — when the client's session_rate changes, pull
-  // every future, non-cancelled appointment for this client up to the
-  // new rate so already-scheduled programs reflect current pricing.
-  // Past sessions (or cancelled / no-show) keep their historical rate.
+  // every non-cancelled session from the START OF THE CURRENT MONTH
+  // forward up to the new rate. So a mid-month rate bump catches the
+  // whole month (including any sessions that already happened earlier
+  // in the same month). Anything dated before the 1st of this month
+  // keeps its historical rate; cancelled / no-show never propagate.
   if (input.session_rate !== undefined && input.session_rate !== null) {
-    const nowIso = new Date().toISOString();
+    const monthStart = new Date();
+    monthStart.setHours(0, 0, 0, 0);
+    monthStart.setDate(1);
     await supabase
       .from("appointments")
       .update({ rate: input.session_rate })
       .eq("client_id", clientId)
       .eq("session_type", "session")
-      .gte("starts_at", nowIso)
+      .gte("starts_at", monthStart.toISOString())
       .not("status", "in", "(cancelled,no_show)");
   }
 

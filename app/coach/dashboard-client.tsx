@@ -1452,25 +1452,39 @@ function StatusEditor({
   }
 
   if (!editing) {
+    // Plain text status. Color coded only for the exception statuses
+    // (cancelled / no-show / change-requested); scheduled + completed
+    // get default ink. No box, no glyph other than the exception
+    // glyph from STATUS_GLYPH when relevant.
+    const isException =
+      appt.status === "cancelled" ||
+      appt.status === "no_show" ||
+      appt.status === "change_requested";
+    const exceptionColor =
+      appt.status === "cancelled" ? "var(--muted)"
+      : appt.status === "no_show" ? "var(--ink)"
+      : appt.status === "change_requested" ? "#a17a00"
+      : "var(--ink)";
     return (
       <button
         type="button"
         onClick={() => setEditing(true)}
         title="Edit status"
         style={{
-          background: STATUS_COLORS[appt.status].bg,
-          color: STATUS_COLORS[appt.status].fg,
-          fontWeight: 600,
-          fontSize: "0.72rem",
-          padding: "0.18rem 0.5rem",
-          borderRadius: 3,
+          background: "transparent",
+          color: isException ? exceptionColor : "var(--ink)",
+          fontWeight: isException ? 700 : 500,
+          fontSize: "0.78rem",
+          padding: "0.1rem 0.1rem",
           border: "none",
           cursor: "pointer",
           fontFamily: "inherit",
-          display: "inline-flex", alignItems: "center", gap: "0.3rem",
+          display: "inline-flex", alignItems: "center", gap: "0.25rem",
         }}
       >
-        <span style={{ fontSize: "0.78rem" }}>{STATUS_GLYPH[appt.status]}</span>
+        {isException && (
+          <span style={{ fontSize: "0.82rem" }}>{STATUS_GLYPH[appt.status]}</span>
+        )}
         {STATUS_LABELS[appt.status]}
       </button>
     );

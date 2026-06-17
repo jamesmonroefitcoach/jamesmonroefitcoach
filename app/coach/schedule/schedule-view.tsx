@@ -93,14 +93,17 @@ function sleepBlockLabel(starts_at: string, ends_at: string): string {
 //   cancelled        bright orange  — high-luminance warning, distinct from teal
 //   no_show          black-ink      — clear 'this didn't happen' visually
 //   change_requested gold           — high-attention amber
+// Softer, less-saturated bg hues so the calendar reads gentler.
+// Same color identities as before — teal for scheduled, navy for
+// completed, grey for cancelled, ink for no-show, gold for reschedule
+// — just calmer. Foreground colors lift to compensate for the
+// reduced contrast on the warmer backgrounds.
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
-  scheduled:        { bg: "#1f6f8b", fg: "#fff" },
-  completed:        { bg: "#1d2d44", fg: "#fff" },
-  // Cancelled is a muted grey now so it doesn't fight the Cardio
-  // category color (which sits in the same orange-rust family).
-  cancelled:        { bg: "#6b6157", fg: "#fff" },
-  no_show:          { bg: "#171311", fg: "#fff" },
-  change_requested: { bg: "#d4a017", fg: "#171311" }
+  scheduled:        { bg: "#4f8ba1", fg: "#fff" },
+  completed:        { bg: "#3a4a63", fg: "#fff" },
+  cancelled:        { bg: "#8a8079", fg: "#fff" },
+  no_show:          { bg: "#3a322d", fg: "#fff" },
+  change_requested: { bg: "#dec169", fg: "#3a2f0f" }
 };
 
 const STATUS_GLYPH: Record<AppointmentRow["status"], string> = {
@@ -1790,7 +1793,7 @@ export default function ScheduleView({
                           flexDirection: "column",
                           borderLeft: isPersonal
                             ? `2px solid ${personalColor}`
-                            : `4px solid ${cancelled ? "#6b6157" : sessionColors.bg}`,
+                            : `4px solid ${cancelled ? "#8a8079" : sessionColors.bg}`,
                           border: isPersonal ? `1px solid ${personalColor}` : undefined,
                           opacity: cancelled ? 0.85 : 1,
                           boxShadow: touchDraggingApptId === e.id
