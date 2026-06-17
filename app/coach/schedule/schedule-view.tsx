@@ -2247,6 +2247,10 @@ export default function ScheduleView({
               </>
             )}
 
+            {/* Status selector only makes sense for client sessions.
+                Personal blocks default to scheduled and stay that way —
+                completion is inferred from "past + not deleted". */}
+            {draft.session_type === "session" && (
             <div>
               <label className="stat-label">Status</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginTop: "0.3rem" }}>
@@ -2305,8 +2309,9 @@ export default function ScheduleView({
                 )}
               </div>
             </div>
+            )}
 
-            {(draft.status === "cancelled" || draft.status === "no_show") && (
+            {draft.session_type === "session" && (draft.status === "cancelled" || draft.status === "no_show") && (
               <div>
                 <label className="stat-label">Cancellation reason</label>
                 <select
@@ -2725,12 +2730,16 @@ function GoalProgressStrip({
           {actErr}
         </div>
       )}
+      {/* Single-row strip — each chip flexes to equal width, no
+          wrapping. Horizontal scroll kicks in if there are too many
+          to fit (8+ chips on a 1100px viewport). */}
       <div
         style={{
           display: "flex",
-          flexWrap: "wrap",
+          flexWrap: "nowrap",
           gap: "0.55rem",
           paddingBottom: "0.25rem",
+          overflowX: "auto",
         }}
       >
         {sleepStats && (() => {
@@ -2745,8 +2754,8 @@ function GoalProgressStrip({
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.2rem",
-                minWidth: 220,
-                flex: "1 1 220px",
+                minWidth: 170,
+                flex: "1 1 170px",
                 padding: "0.4rem 0.55rem",
                 border: `1px solid ${inRange ? sleepStats.cat.color : "var(--line)"}`,
                 borderRadius: 4,
@@ -2817,8 +2826,8 @@ function GoalProgressStrip({
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.2rem",
-                minWidth: 220,
-                flex: "1 1 220px",
+                minWidth: 170,
+                flex: "1 1 170px",
                 padding: "0.4rem 0.55rem",
                 border: `1px solid ${inRange ? t.cat.color : "var(--line)"}`,
                 borderRadius: 4,

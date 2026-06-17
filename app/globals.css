@@ -1249,9 +1249,13 @@ th.tbl-sticky-last {
   font-weight: 700;
 }
 
-/* Rate block */
+/* Rate / "Getting started" block — same 1100px section container as
+   every other section, just narrower body copy width so the line
+   lengths stay readable. Auto margins keep it centered. */
 .public-rate-block {
   max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
   text-align: left;
 }
 

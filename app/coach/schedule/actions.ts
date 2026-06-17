@@ -10,6 +10,29 @@ import {
   type AutoFillResult,
 } from "@/lib/goal-scheduler.server";
 
+// Auto-flip past sessions that are still 'scheduled' to 'completed'.
+// Reflects the rule: past = completed unless explicitly marked
+// otherwise (cancelled/no_show/change_requested). Idempotent — only
+// touches rows that actually need flipping.
+export async function autoCompletePastScheduled(): Promise<{ updated: number }> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { updated: 0 };
+  if (!hasSupabaseEnv()) return { updated: 0 };
+
+  const supabase = createSupabaseAdmin();
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("appointments")
+    .update({ status: "completed" })
+    .eq("coach_id", me.id)
+    .eq("session_type", "session")
+    .eq("status", "scheduled")
+    .lt("starts_at", nowIso)
+    .select("id");
+  if (error) return { updated: 0 };
+  return { updated: data?.length ?? 0 };
+}
+
 export async function fetchWeekAppts(weekStart: string): Promise<AppointmentRow[]> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return [];

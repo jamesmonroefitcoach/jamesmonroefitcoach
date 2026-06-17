@@ -20,7 +20,7 @@ import { allBeforeUrls, allAfterUrls } from "@/app/testimonials/types";
 const OFFERINGS = [
   {
     title: "Strength",
-    blurb: "Progressive overload, real lifts, real loading. Built so you peak — and keep peaking.",
+    blurb: "Progressive overload, real lifts, real loading. Built so you peak and keep peaking.",
   },
   {
     title: "Boxing",
@@ -28,7 +28,7 @@ const OFFERINGS = [
   },
   {
     title: "Body Recomposition",
-    blurb: "Lose fat and add muscle at the same time — paced for the long haul, not crash dieting.",
+    blurb: "Lose fat and add muscle at the same time, paced for the long haul, not crash dieting.",
   },
   {
     title: "Nutrition",
@@ -47,13 +47,13 @@ const OFFERINGS = [
 // What's actually included with every client — granular deliverables that
 // run alongside whichever offering above they pick.
 const SERVICES = [
-  { title: "Custom weekly programming",  blurb: "Built around your gym, schedule, and goals — not pulled from a template." },
+  { title: "Custom weekly programming",  blurb: "Built around your gym, schedule, and goals. Never pulled from a template." },
   { title: "Form review & cueing",       blurb: "Live in person, or video review for online clients." },
   { title: "Movement & mobility screen",  blurb: "Identify weak links before they become injuries." },
   { title: "Nutrition guidance",          blurb: "Practical fuel + recovery without a meal plan you'll hate." },
-  { title: "Weekly check-ins",            blurb: "Body comp, energy, sleep, soreness — all tracked in the app." },
+  { title: "Weekly check-ins",            blurb: "Body comp, energy, sleep, soreness, all tracked in the app." },
   { title: "Direct messaging access",     blurb: "Reach James between sessions when you need a quick answer." },
-  { title: "Optional coaching app",       blurb: "Schedule, reschedule, log your sets, see programs, track payments, and view progress — all in one place. Use it as much or as little as you like." },
+  { title: "Optional coaching app",       blurb: "Schedule, reschedule, log your sets, see programs, track payments, and view progress in one place. Use it as much or as little as you like." },
 ];
 
 // What the first 90 days look like, set up as a small numbered timeline.
@@ -76,7 +76,7 @@ const TIMELINE = [
   {
     label: "Weeks 9-12",
     title: "Performance & next chapter",
-    blurb: "Test the lifts, reassess, set the next 90-day target. Most clients renew here — many stay for years.",
+    blurb: "Test the lifts, reassess, set the next 90-day target. Most clients renew here. Many stay for years.",
   },
 ];
 
@@ -98,10 +98,10 @@ const PRICING = [
     cadence: "per hour",
     featured: true,
     bullets: [
-      "Strength, boxing, recomp — pick the focus",
+      "Strength, boxing, recomp. Pick the focus.",
       "Programming built in",
       "In-person at Hyde Park Gym, Austin",
-      "Packages available — ask on the consult",
+      "Packages available. Ask on the consult.",
       "Rate is the standard; we may tune it together if your situation calls for something different.",
     ],
   },
@@ -110,36 +110,36 @@ const PRICING = [
 const TESTIMONIALS = [
   {
     quote: "James got me back to deadlifting heavy after two surgeries thought I'd never lift again.",
-    name: "PLACEHOLDER — Client A",
+    name: "PLACEHOLDER · Client A",
     meta: "Down 28 lb · Deadlift 405 lb",
   },
   {
     quote: "He coaches the boring stuff that actually moves the needle.",
-    name: "PLACEHOLDER — Client B",
+    name: "PLACEHOLDER · Client B",
     meta: "First sub-23 5K at 47",
   },
   {
     quote: "I haven't missed a Monday in 14 months. That alone changed my life.",
-    name: "PLACEHOLDER — Client C",
+    name: "PLACEHOLDER · Client C",
     meta: "Body comp + bloodwork dialed",
   },
 ];
 
 const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterSrc?: string }[] = [
   {
-    label: "Body recomposition — Austin client",
-    summary: "Strength + recomp focus. Leaner build, less softness, more confidence — same person, different season.",
+    label: "Body recomposition · Austin client",
+    summary: "Strength + recomp focus. Leaner build, less softness, more confidence. Same person, different season.",
     beforeSrc: "/results/client-1-before.jpg",
     afterSrc: "/results/client-1-after.jpg",
   },
   {
-    label: "Lean-out — Austin client",
+    label: "Lean-out · Austin client",
     summary: "Strength + recomp. Visible torso definition and tighter waist after consistent programming.",
     beforeSrc: "/results/client-2-before.jpg",
     afterSrc: "/results/client-2-after.jpg",
   },
   {
-    label: "Strength + lean-out — Austin client",
+    label: "Strength + lean-out · Austin client",
     summary: "Dropped body fat while keeping muscle mass. Clear waist taper and visible abs.",
     beforeSrc: "/results/client-3-before.jpg",
     afterSrc: "/results/client-3-after.jpg",
@@ -195,7 +195,7 @@ export default async function MarketingPage({
             Train under a coach who actually shows up.
           </h1>
           <p className="public-sub">
-            PLACEHOLDER — James Monroe builds programs around your life, your
+            PLACEHOLDER. James Monroe builds programs around your life, your
             injuries, and your real schedule. No templates. No guessing. Just
             the next thing you need to do.
           </p>
@@ -216,21 +216,21 @@ export default async function MarketingPage({
               Born and raised in Portland, Oregon, James grew up playing
               sports from soccer to wrestling. He started weight training at
               twelve and later took up boxing, Muay Thai, and yoga. Over the
-              years he&rsquo;s worked with clients from eight to eighty —
-              physique competitors, recreational athletes, and people coming
-              back from injury — helping them lose body fat, gain muscle,
-              and lead more active lives.
+              years he&rsquo;s worked with clients from eight to eighty,
+              including physique competitors, recreational athletes, and
+              people coming back from injury, helping them lose body fat,
+              gain muscle, and lead more active lives.
             </p>
             <p className="public-p">
               He got into coaching because of family members and close
               friends who struggled to build healthy habits and lose weight.
-              His sessions are concentrated, but also fun and enjoyable —
-              your goal is his goal. Whether you want to compete, recover,
+              His sessions are concentrated, but also fun and enjoyable.
+              Your goal is his goal. Whether you want to compete, recover,
               or just feel like yourself again, the plan gets built around
               you.
             </p>
             <p className="public-p">
-              The current roster runs the full range &mdash; men, women, kids,
+              The current roster runs the full range: men, women, kids,
               families, couples, and groups training together. Ages eight to
               eighty, beginners through competitive athletes. James works with
               LGBTQIA+ clients and has experience supporting transitioning men
@@ -251,9 +251,9 @@ export default async function MarketingPage({
             />
             <ul className="public-credit-list">
               <li>NASM Certified Personal Trainer</li>
-              <li>Hyde Park Gym &mdash; Austin, TX</li>
+              <li>Hyde Park Gym, Austin TX</li>
               <li>Strength, boxing, Muay Thai, yoga background</li>
-              <li>Ages 8 to 80 &mdash; recreational to competitive</li>
+              <li>Ages 8 to 80, recreational to competitive</li>
             </ul>
           </div>
         </div>
@@ -286,7 +286,7 @@ export default async function MarketingPage({
           <span className="public-eyebrow">Specialties</span>
           <h2 className="public-h2">What James coaches.</h2>
           <p className="public-p public-p-meta">
-            Six focus areas. Most clients overlap two or three — pick whichever pulls you in.
+            Six focus areas. Most clients overlap two or three. Pick whichever pulls you in.
           </p>
           <div className="public-offerings-grid">
             {OFFERINGS.map((o) => (
@@ -305,7 +305,7 @@ export default async function MarketingPage({
           <span className="public-eyebrow">What&rsquo;s included</span>
           <h2 className="public-h2">Every plan runs on the same foundation.</h2>
           <p className="public-p public-p-meta">
-            All of this is available &mdash; on the consult we figure out where
+            All of this is available. On the consult we figure out where
             you actually need the focus. Nothing here is required; nothing is an
             upsell.
           </p>
@@ -329,7 +329,7 @@ export default async function MarketingPage({
           <span className="public-eyebrow">Timeline &amp; expectations</span>
           <h2 className="public-h2">What the first 90 days look like.</h2>
           <p className="public-p public-p-meta">
-            Every client is unique &mdash; the plan gets tailored to your body,
+            Every client is unique. The plan gets tailored to your body,
             history, and schedule. This is how the early arc typically runs.
           </p>
           <ol className="public-timeline">
@@ -379,7 +379,7 @@ export default async function MarketingPage({
       <section id="location" className="public-section public-section-tinted">
         <div className="public-section-inner">
           <span className="public-eyebrow">Where we train</span>
-          <h2 className="public-h2">Hyde Park Gym &mdash; Austin, TX.</h2>
+          <h2 className="public-h2">Hyde Park Gym, Austin TX.</h2>
           <p className="public-p public-p-meta">
             Old-school iron house in central Austin.
           </p>
@@ -410,7 +410,7 @@ export default async function MarketingPage({
                 </a>
               </div>
               <p className="public-p" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
-                Free parking on-site. <strong>Free 7-day trial</strong> available — try the room before
+                Free parking on-site. <strong>Free 7-day trial</strong> available so you can try the room before
                 signing up. Gym membership is <strong>$79/month</strong> (no commitment, no initiation fee),
                 <strong> $15</strong> for a single-visit day pass, or <strong>$90</strong> for a
                 10-visit punch card good for 6 months.
@@ -436,7 +436,7 @@ export default async function MarketingPage({
           <span className="public-eyebrow">Client results</span>
           <h2 className="public-h2">Real before &amp; afters.</h2>
           <p className="public-p public-p-meta">
-            Real clients, real arcs &mdash; published with permission.
+            Real clients, real arcs. Published with permission.
           </p>
           <div className="public-results-stack">
             {renderedBeforeAfters.map((b, i) => {
@@ -497,7 +497,7 @@ export default async function MarketingPage({
         <div className="public-footer-inner">
           <span>© {new Date().getFullYear()} Monroe Fit Coach.</span>
           <span className="public-footer-spacer">·</span>
-          <span>Hyde Park Gym &mdash; 4125 Guadalupe St, Austin, TX</span>
+          <span>Hyde Park Gym · 4125 Guadalupe St, Austin TX</span>
           <span className="public-footer-spacer">·</span>
           <a href="tel:+15034846052" className="public-footer-signin" style={{ marginLeft: 0 }}>
             (503) 484-6052
@@ -510,7 +510,7 @@ export default async function MarketingPage({
           <Link href="/login" className="public-footer-signin">Sign in</Link>
         </div>
         <div className="public-footer-credit">
-          Website &amp; app built by Ryan Mecca &mdash; see{" "}
+          Website &amp; app built by Ryan Mecca. See{" "}
           <a href="https://ryanmecca.com" target="_blank" rel="noopener">
             ryanmecca.com
           </a>{" "}
@@ -532,8 +532,8 @@ function AvailabilityBadge() {
     <div className="public-availability" data-state={ACCEPTING ? "open" : "closed"}>
       <span className="public-availability-dot" aria-hidden />
       {ACCEPTING
-        ? <>Accepting new clients &mdash; <strong>~{HOURS_AVAILABLE} hrs/week</strong> open this season</>
-        : <>Currently full &mdash; waitlist open</>}
+        ? <>Accepting new clients · <strong>~{HOURS_AVAILABLE} hrs/week</strong> open this season</>
+        : <>Currently full · waitlist open</>}
     </div>
   );
 }

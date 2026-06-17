@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForWeek, listAppointmentsForMonth, listClients, startOfWeek } from "@/lib/data";
 import { listGoalsForUser } from "@/lib/goals.server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import ScheduleView from "./schedule-view";
 import ScheduleTabs from "./schedule-tabs";
 
@@ -9,6 +10,19 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== "coach") redirect("/");
+
+  // Past-completed rule: flip any past session still in 'scheduled'
+  // state to 'completed' before reading. Cheap, idempotent — only
+  // touches rows that actually need flipping.
+  if (hasSupabaseEnv()) {
+    const sb = createSupabaseAdmin();
+    await sb.from("appointments")
+      .update({ status: "completed" })
+      .eq("coach_id", user.id)
+      .eq("session_type", "session")
+      .eq("status", "scheduled")
+      .lt("starts_at", new Date().toISOString());
+  }
 
   const sp = await searchParams;
   const weekStart = sp.week ? new Date(sp.week) : startOfWeek(new Date());
