@@ -96,7 +96,9 @@ function sleepBlockLabel(starts_at: string, ends_at: string): string {
 const STATUS_COLORS: Record<AppointmentRow["status"], { bg: string; fg: string }> = {
   scheduled:        { bg: "#1f6f8b", fg: "#fff" },
   completed:        { bg: "#1d2d44", fg: "#fff" },
-  cancelled:        { bg: "#e67e22", fg: "#fff" },
+  // Cancelled is a muted grey now so it doesn't fight the Cardio
+  // category color (which sits in the same orange-rust family).
+  cancelled:        { bg: "#6b6157", fg: "#fff" },
   no_show:          { bg: "#171311", fg: "#fff" },
   change_requested: { bg: "#d4a017", fg: "#171311" }
 };
@@ -1319,9 +1321,10 @@ export default function ScheduleView({
               alignItems: "center",
             }}
           >
+            {/* Only the three exception statuses get a glyph on a
+                session block now — scheduled and completed are the
+                silent default. */}
             {([
-              ["scheduled",        "Scheduled"],
-              ["completed",        "Completed"],
               ["cancelled",        "Cancelled"],
               ["no_show",          "No-show"],
               ["change_requested", "Reschedule"],
@@ -1787,7 +1790,7 @@ export default function ScheduleView({
                           flexDirection: "column",
                           borderLeft: isPersonal
                             ? `2px solid ${personalColor}`
-                            : `4px solid ${cancelled ? "#e67e22" : sessionColors.bg}`,
+                            : `4px solid ${cancelled ? "#6b6157" : sessionColors.bg}`,
                           border: isPersonal ? `1px solid ${personalColor}` : undefined,
                           opacity: cancelled ? 0.85 : 1,
                           boxShadow: touchDraggingApptId === e.id
@@ -1810,24 +1813,16 @@ export default function ScheduleView({
                           textOverflow: "ellipsis",
                         }}>
                           {/* Sessions: no glyph for the default-completed
-                              case (past or upcoming, status = scheduled or
-                              completed). Only flag the exceptions —
-                              cancelled and no-show — with an inline pill. */}
-                          {!isPersonal && (e.status === "cancelled" || e.status === "no_show") && (
-                            <span style={{
-                              display: "inline-block",
-                              padding: "0 5px",
-                              marginRight: 4,
-                              borderRadius: 2,
-                              background: "rgba(255,255,255,0.2)",
-                              color: "#fff",
-                              fontSize: "0.58rem",
-                              fontWeight: 700,
-                              letterSpacing: "0.06em",
-                              textTransform: "uppercase",
-                              verticalAlign: "1px",
-                            }}>
-                              {e.status === "no_show" ? "No-show" : "Cancelled"}
+                              case (scheduled or completed). Only the three
+                              exception statuses surface their glyph:
+                              ✕ cancelled · ⊘ no-show · ↻ reschedule. */}
+                          {!isPersonal && (
+                            e.status === "cancelled" ||
+                            e.status === "no_show" ||
+                            e.status === "change_requested"
+                          ) && (
+                            <span style={{ marginRight: 3, fontSize: "0.78rem" }}>
+                              {STATUS_GLYPH[e.status]}
                             </span>
                           )}
                           {isPersonal
