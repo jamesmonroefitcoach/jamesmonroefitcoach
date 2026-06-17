@@ -80,20 +80,26 @@ async function loadWeekContext(ownerId: string, weekStart: Date) {
 
 type Slot = { startsAt: string; endsAt: string };
 
-/** Sleep — nightly 22:00 → 06:00 with up-to-4×30-min shift on conflict.
- *  After each scheduled night, check duration; if < 7 hr, add a 60 min
- *  nap (13:00–14:00) the next day. Past nights already < 7 hr that
- *  haven't had a nap yet also get one. */
-function scheduleSleep(weekStart: Date, busy: AppointmentLite[]): Slot[] {
+/** Sleep — nightly block sized to the goal's per-night target (defaults
+ *  to 8 hr when no target is set). Starts at 22:00 by default; on a
+ *  conflict shifts in 30-min increments up to 2 hr later. After each
+ *  scheduled night, check duration; if < 7 hr, add a 60 min nap
+ *  (13:00–14:00) the next day. Past nights already < 7 hr that haven't
+ *  had a nap yet also get one. */
+function scheduleSleep(weekStart: Date, busy: AppointmentLite[], targetPerNight: number): Slot[] {
   const out: Slot[] = [];
   const SEVEN_HR_MS = 7 * 3_600_000;
   const now = new Date();
+  // Clamp the per-night target between 4 and 12 hours so a misconfigured
+  // goal doesn't produce a degenerate block.
+  const nightHrs = Math.min(12, Math.max(4, targetPerNight > 0 ? targetPerNight : 8));
+  const nightMs = nightHrs * 3_600_000;
 
   // 1) Future-night planning.
   for (let day = 0; day < 7; day++) {
     const dayBase = new Date(weekStart.getTime() + day * 86_400_000);
     const nightStart = setLocalHours(dayBase, 22);
-    const nightEnd = setLocalHours(new Date(nightStart.getTime() + 86_400_000), 6);
+    const nightEnd = new Date(nightStart.getTime() + nightMs);
     if (nightStart < now) continue;
     let s = nightStart, e = nightEnd, attempts = 0;
     while (isBusy(s, e, busy) && attempts < 4) {
@@ -221,8 +227,11 @@ function scheduleCook(weekStart: Date, busy: AppointmentLite[], targetHours: num
     if (g.gapStart < new Date()) continue;
     const lengthHr = (g.gapEnd.getTime() - g.gapStart.getTime()) / 3_600_000;
     if (lengthHr < 1) continue;
-    // Use 2 hr if the gap allows; else 1 hr.
-    const useHr = lengthHr >= 2 ? 2 : 1;
+    // Cap at the remaining-to-goal so we never overshoot the weekly
+    // target. If <1hr remains, skip — we don't book sub-hour cook blocks.
+    const remaining = targetHours - scheduled;
+    if (remaining < 1) break;
+    const useHr = Math.min(remaining, lengthHr >= 2 ? 2 : 1);
     const s = g.gapStart;
     const e = new Date(s.getTime() + useHr * 3_600_000);
     if (!isBusy(s, e, busy)) {
@@ -317,9 +326,12 @@ function scheduleBodyMastery(weekStart: Date, busy: AppointmentLite[], targetHou
       const gapEnd = new Date(todays[i + 1].starts_at);
       const gapMin = (gapEnd.getTime() - gapStart.getTime()) / 60_000;
       if (gapStart < new Date()) continue;
-      // Use full hour if 60+ min; else 30 min if 30+; else skip.
+      // Cap at remaining-to-goal so we don't overshoot the target.
+      // Prefer 1 hr if both gap + remaining allow; otherwise 0.5 hr.
+      const remaining = targetHours - scheduledHrs;
+      if (remaining < 0.5) break;
       let useHr = 0;
-      if (gapMin >= 60) useHr = 1;
+      if (gapMin >= 60 && remaining >= 1) useHr = 1;
       else if (gapMin >= 30) useHr = 0.5;
       else continue;
       const s = gapStart;
@@ -388,7 +400,7 @@ function scheduleByCategoryName(
 ): Slot[] {
   const lower = name.toLowerCase();
   if (/work/.test(lower)) return []; // Work = client sessions; not auto-scheduled.
-  if (/sleep/.test(lower)) return scheduleSleep(weekStart, busy);
+  if (/sleep/.test(lower)) return scheduleSleep(weekStart, busy, targetWeekly);
   if (/piano/.test(lower)) return schedulePiano(weekStart, busy, targetWeekly);
   if (/cook|prep/.test(lower)) return scheduleCook(weekStart, busy, targetWeekly);
   if (/cardio|run/.test(lower)) return scheduleCardio(weekStart, busy, targetWeekly);

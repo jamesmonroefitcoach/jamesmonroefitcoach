@@ -651,6 +651,33 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
         )}
       </div>
 
+      {/* Programs — top-level collapsible. Sits first so James opens
+          the page and the at-home-programming queue is right there. */}
+      <section style={{ marginBottom: "1.25rem" }}>
+        <SectionHeader
+          title="Programs"
+          count={programBlocks.length}
+          open={programsOpen}
+          onToggle={() => setProgramsOpen((v) => !v)}
+          subLabel="clients flagged for at-home programming"
+        />
+        {programsOpen && (
+          programBlocks.length === 0 ? (
+            <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>
+              No clients flagged for programming. Hit the <strong>+</strong> on the Client Roster to add one.
+            </p>
+          ) : (
+            <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
+              {programBlocks.map((b) => (
+                <ClientRow key={`p-${b.clientId}`} block={b} view="programs" />
+              ))}
+            </div>
+          )
+        )}
+      </section>
+
+      <hr className="divider" />
+
       {/* Upcoming this week — flat session list across all clients */}
       <section style={{ marginBottom: "1.25rem" }}>
         <SectionHeader
@@ -669,8 +696,6 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
         )}
       </section>
 
-      <hr className="divider" />
-
       {/* Sessions — top-level collapsible (no longer nested under
           'Client list view'). */}
       <section style={{ marginBottom: "1.25rem" }}>
@@ -688,30 +713,6 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
             <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
               {sessionBlocks.map((b) => (
                 <ClientRow key={`s-${b.clientId}`} block={b} view="sessions" />
-              ))}
-            </div>
-          )
-        )}
-      </section>
-
-      {/* Programs — top-level collapsible. */}
-      <section style={{ marginBottom: "1.25rem" }}>
-        <SectionHeader
-          title="Programs"
-          count={programBlocks.length}
-          open={programsOpen}
-          onToggle={() => setProgramsOpen((v) => !v)}
-          subLabel="clients flagged for at-home programming"
-        />
-        {programsOpen && (
-          programBlocks.length === 0 ? (
-            <p className="meta" style={{ padding: "0.85rem 0.4rem" }}>
-              No clients flagged for programming. Hit the <strong>+</strong> on the Client Roster to add one.
-            </p>
-          ) : (
-            <div className="card" style={{ padding: 0, marginTop: "0.4rem" }}>
-              {programBlocks.map((b) => (
-                <ClientRow key={`p-${b.clientId}`} block={b} view="programs" />
               ))}
             </div>
           )

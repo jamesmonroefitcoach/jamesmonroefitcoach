@@ -54,7 +54,7 @@ export default function GoalsClient({
           No categories yet. Add one to get started.
         </p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "0.7rem" }}>
           {categories.map((cat) => (
             <CategoryBlock key={cat.id} cat={cat} onAction={run} pending={pending} />
           ))}
@@ -119,8 +119,8 @@ function CategoryBlock({
       <div style={{
         display: "flex",
         alignItems: "center",
-        gap: "0.55rem",
-        padding: "0.55rem 0.9rem",
+        gap: "0.5rem",
+        padding: "0.35rem 0.7rem",
         background: `${cat.color}10`,
         borderBottom: "1px solid var(--line)",
       }}>
@@ -131,12 +131,12 @@ function CategoryBlock({
             <strong style={{
               color: cat.color,
               fontFamily: "var(--font-heading), Oswald, sans-serif",
-              fontSize: "0.96rem",
+              fontSize: "0.84rem",
               letterSpacing: "0.04em",
               textTransform: "uppercase",
             }}>{cat.name}</strong>
-            <span className="meta" style={{ fontSize: "0.72rem" }}>
-              {cat.goals.length} goal{cat.goals.length === 1 ? "" : "s"}
+            <span className="meta" style={{ fontSize: "0.68rem" }}>
+              {cat.goals.length}
             </span>
             <div style={{ marginLeft: "auto", display: "flex", gap: "0.15rem" }}>
               <button type="button" onClick={() => setEditingCat(true)} title="Edit category" style={iconBtn}>✎</button>
@@ -155,7 +155,7 @@ function CategoryBlock({
 
       {/* Goal rows */}
       {topGoals.length === 0 ? (
-        <p className="meta" style={{ padding: "0.7rem 0.9rem", fontStyle: "italic", margin: 0 }}>
+        <p className="meta" style={{ padding: "0.4rem 0.7rem", fontStyle: "italic", margin: 0, fontSize: "0.78rem" }}>
           No goals yet.
         </p>
       ) : (
@@ -175,7 +175,7 @@ function CategoryBlock({
       )}
 
       {/* Add goal */}
-      <div style={{ borderTop: "1px solid var(--line)", padding: "0.45rem 0.9rem", background: "var(--bg)" }}>
+      <div style={{ borderTop: "1px solid var(--line)", padding: "0.3rem 0.7rem", background: "var(--bg)" }}>
         {addingGoal ? (
           <NewGoalForm
             onCancel={() => setAddingGoal(false)}
@@ -193,7 +193,7 @@ function CategoryBlock({
               border: "none",
               padding: 0,
               cursor: "pointer",
-              fontSize: "0.78rem",
+              fontSize: "0.72rem",
               color: cat.color,
               fontWeight: 600,
             }}
@@ -223,12 +223,12 @@ function GoalListItem({
   const isOneTime = goal.kind === "one_time";
 
   return (
-    <li style={{ borderTop: "1px solid var(--line)", padding: "0.55rem 0.9rem" }}>
+    <li style={{ borderTop: "1px solid var(--line)", padding: "0.35rem 0.7rem" }}>
       {editing ? (
         <GoalEditForm goal={goal} onClose={() => setEditing(false)} onAction={onAction} pending={pending} />
       ) : (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
             {isOneTime && (
               <button
                 type="button"
@@ -239,8 +239,8 @@ function GoalListItem({
                   color: goal.is_achieved ? "#fff" : "var(--muted)",
                   border: `1px solid ${goal.is_achieved ? "var(--sage)" : "var(--line)"}`,
                   borderRadius: 3,
-                  width: 16, height: 16,
-                  fontSize: "0.7rem",
+                  width: 14, height: 14,
+                  fontSize: "0.62rem",
                   cursor: "pointer",
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                   flex: "none",
@@ -250,14 +250,15 @@ function GoalListItem({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontWeight: 500,
-                fontSize: "0.92rem",
+                fontSize: "0.82rem",
+                lineHeight: 1.25,
                 textDecoration: goal.is_achieved && isOneTime ? "line-through" : "none",
                 color: goal.is_achieved && isOneTime ? "var(--muted)" : "var(--ink)",
               }}>
                 {goal.name}
               </div>
               {goal.notes && (
-                <div className="meta" style={{ fontSize: "0.72rem", fontStyle: "italic", marginTop: "0.1rem" }}>
+                <div className="meta" style={{ fontSize: "0.66rem", fontStyle: "italic" }}>
                   {goal.notes}
                 </div>
               )}
@@ -265,16 +266,16 @@ function GoalListItem({
             {!isOneTime && (
               <div style={{
                 textAlign: "right",
-                fontSize: "0.8rem",
+                fontSize: "0.72rem",
                 whiteSpace: "nowrap",
                 color: "var(--muted)",
               }}>
                 <strong style={{ color: "var(--ink)" }}>{goal.current_value ?? 0}</strong>
-                {" "}/{" "}
+                {" / "}
                 {targetLabel(goal)}
               </div>
             )}
-            <div style={{ display: "flex", gap: "0.1rem" }}>
+            <div style={{ display: "flex", gap: "0.05rem" }}>
               <button type="button" onClick={() => setEditing(true)} title="Edit goal" style={iconBtn}>✎</button>
               <button
                 type="button"
@@ -288,8 +289,8 @@ function GoalListItem({
           {/* Progress bar (only for trackable goals) */}
           {showProgress && (
             <div style={{
-              marginTop: "0.45rem",
-              height: 4,
+              marginTop: "0.3rem",
+              height: 3,
               background: "rgba(0,0,0,0.06)",
               borderRadius: 999,
               overflow: "hidden",
