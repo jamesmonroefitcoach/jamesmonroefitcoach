@@ -500,11 +500,15 @@ export default function ScheduleView({
   const weekRevenue = dayTotals.reduce((acc, d) => acc + d.revenue, 0);
 
   function openCreate(day: number, hour: number) {
+    // Hours 24/25 are the visual 12a/1a "next-day" extension rows. Roll
+    // the date forward and use hour % 24 — otherwise setHours(>=24)
+    // double-advances the clock and the end-time picker ends up 25h
+    // after start, producing a giant overflowing block.
     const d = new Date(ws);
-    d.setDate(d.getDate() + day);
-    d.setHours(hour, 0, 0, 0);
+    d.setDate(d.getDate() + day + Math.floor(hour / 24));
+    d.setHours(hour % 24, 0, 0, 0);
     const e = new Date(d);
-    e.setHours(hour + 1);
+    e.setHours(e.getHours() + 1);
     setDraft(newDraft(d, e));
   }
   function openEdit(a: AppointmentRow) { setDraft(fromAppt(a)); }
@@ -564,8 +568,11 @@ export default function ScheduleView({
         const dayIdx = parseInt(cell.getAttribute("data-day") ?? "0");
         const hour   = parseInt(cell.getAttribute("data-hour") ?? "9");
         const d = new Date(ws);
-        d.setDate(d.getDate() + dayIdx);
-        d.setHours(hour, 0, 0, 0);
+        // Hour can be 24/25 for the extension rows — roll the date
+        // forward instead of overflowing setHours, otherwise the touch
+        // drop produces a 25h block.
+        d.setDate(d.getDate() + dayIdx + Math.floor(hour / 24));
+        d.setHours(hour % 24, 0, 0, 0);
         const end = new Date(d.getTime() + 3600000);
         const nd = newDraft(d, end);
         const c = clients.find((cl) => cl.id === clientId);
@@ -915,8 +922,10 @@ export default function ScheduleView({
     const oldEnd = new Date(target.ends_at);
     const durationMs = oldEnd.getTime() - oldStart.getTime();
     const newStart = new Date(ws);
-    newStart.setDate(newStart.getDate() + day);
-    newStart.setHours(hour, 0, 0, 0);
+    // Same hour/24 normalization as openCreate so dropping on the 12a/1a
+    // extension row doesn't double-advance the calendar date.
+    newStart.setDate(newStart.getDate() + day + Math.floor(hour / 24));
+    newStart.setHours(hour % 24, 0, 0, 0);
     if (newStart.getTime() === oldStart.getTime()) { setDragId(null); return; }
     const newEnd = new Date(newStart.getTime() + durationMs);
 
@@ -1549,11 +1558,14 @@ export default function ScheduleView({
                         onDrop={(e) => {
                           e.preventDefault();
                           if (dragClientId) {
+                            // Same hour/24 normalization as openCreate so
+                            // dropping a client pill on the 12a/1a row
+                            // doesn't produce a 25h block.
                             const d = new Date(ws);
-                            d.setDate(ws.getDate() + dayIdx);
-                            d.setHours(h, 0, 0, 0);
+                            d.setDate(ws.getDate() + dayIdx + Math.floor(h / 24));
+                            d.setHours(h % 24, 0, 0, 0);
                             const end = new Date(d);
-                            end.setHours(h + 1);
+                            end.setHours(end.getHours() + 1);
                             const nd = newDraft(d, end);
                             const client = clients.find((c) => c.id === dragClientId);
                             setDraft({ ...nd, client_id: dragClientId, rate: client?.session_rate?.toString() ?? nd.rate });
