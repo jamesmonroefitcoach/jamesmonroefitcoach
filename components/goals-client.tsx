@@ -53,6 +53,28 @@ export default function GoalsClient({
 
   const [showCategories, setShowCategories] = useState(false);
 
+  // Weekly-hours rollup — for the summary strip under the Weekly card.
+  // Per goal-kind hours/week conversion:
+  //   • weekly_hours → target as-is
+  //   • weekly_count → assume 1hr per occurrence (default block length)
+  //   • per_night    → target × 7 nights
+  //   • pr / one_time→ skipped (no recurring weekly footprint)
+  const weeklyHoursRollup = useMemo(() => {
+    let lo = 0, hi = 0;
+    for (const { goal } of flat.weekly) {
+      if (goal.kind === "pr" || goal.kind === "one_time") continue;
+      const lowRaw = goal.target_range_low ?? goal.target_value;
+      const highRaw = goal.target_range_high ?? goal.target_value;
+      if (lowRaw == null && highRaw == null) continue;
+      const lowV = lowRaw ?? highRaw!;
+      const highV = highRaw ?? lowRaw!;
+      const m = goal.kind === "per_night" ? 7 : 1;
+      lo += lowV * m;
+      hi += highV * m;
+    }
+    return { lo, hi };
+  }, [flat.weekly]);
+
   function run<T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>): Promise<void> {
     return new Promise((resolve) => {
       start(async () => {
@@ -100,6 +122,13 @@ export default function GoalsClient({
             onAction={run}
             pending={pending}
           />
+
+          {/* Weekly-hours rollup — what % of the 168-hour week the
+              weekly goals would occupy at their low / high ends, plus
+              the estimated free hours for wiggle. */}
+          {(weeklyHoursRollup.lo > 0 || weeklyHoursRollup.hi > 0) && (
+            <WeeklyHoursStrip lo={weeklyHoursRollup.lo} hi={weeklyHoursRollup.hi} />
+          )}
         </div>
       )}
 
@@ -143,6 +172,56 @@ export default function GoalsClient({
         )}
       </div>
     </main>
+  );
+}
+
+// ── Weekly-hours summary strip ──────────────────────────────────────
+
+function WeeklyHoursStrip({ lo, hi }: { lo: number; hi: number }) {
+  const WEEK = 168;
+  const sameLoHi = Math.abs(hi - lo) < 0.05;
+  const pctLo = Math.round((lo / WEEK) * 100);
+  const pctHi = Math.round((hi / WEEK) * 100);
+  // Wiggle = leftover after the goals are accounted for. The "low end"
+  // of wiggle hours assumes goals run at their high target (less slack);
+  // the "high end" assumes goals run at their low target (more slack).
+  const wiggleLo = Math.max(0, Math.round(WEEK - hi));
+  const wiggleHi = Math.max(0, Math.round(WEEK - lo));
+  const overbookedAtHigh = hi > WEEK;
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+      gap: "0.6rem",
+      padding: "0.55rem 0.7rem",
+      border: "1px solid var(--line)",
+      borderRadius: 3,
+      background: "var(--paper)",
+    }}>
+      <Cell label="Low end" value={`${Math.round(lo)} hr`} sub={`${pctLo}% of week`} />
+      <Cell
+        label="High end"
+        value={`${Math.round(hi)} hr`}
+        sub={`${pctHi}% of week`}
+        accent={overbookedAtHigh ? "var(--red)" : undefined}
+      />
+      <Cell
+        label="Free for wiggles"
+        value={sameLoHi ? `${wiggleLo} hr` : `${wiggleLo}–${wiggleHi} hr`}
+        sub={overbookedAtHigh ? "high end overbooks the week" : "of 168 / wk"}
+        accent={overbookedAtHigh ? "var(--red)" : "var(--sage)"}
+      />
+    </div>
+  );
+}
+
+function Cell({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: "0.6rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: "1rem", fontWeight: 700, color: accent ?? "var(--ink)" }}>{value}</div>
+      {sub && <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>{sub}</div>}
+    </div>
   );
 }
 
