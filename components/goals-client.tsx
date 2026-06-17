@@ -54,9 +54,14 @@ export default function GoalsClient({
           No categories yet. Add one to get started.
         </p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "0.7rem" }}>
+        // CSS columns instead of grid — each tile takes its natural height
+        // and the next tile flows underneath. Tall categories (Body
+        // Mastery) no longer stretch the others in the same row.
+        <div style={{ columnWidth: 320, columnGap: "0.7rem" }}>
           {categories.map((cat) => (
-            <CategoryBlock key={cat.id} cat={cat} onAction={run} pending={pending} />
+            <div key={cat.id} style={{ breakInside: "avoid", marginBottom: "0.7rem" }}>
+              <CategoryBlock cat={cat} onAction={run} pending={pending} />
+            </div>
           ))}
         </div>
       )}
