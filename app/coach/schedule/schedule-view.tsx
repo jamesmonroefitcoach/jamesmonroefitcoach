@@ -2868,69 +2868,58 @@ function GoalProgressStrip({
                   width: `${pct}%`, height: "100%", background: t.cat.color, transition: "width 0.2s",
                 }} />
               </div>
-              <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.1rem" }}>
+              {/* Stack the two actions vertically so the chip stays
+                  narrow enough that 5-6 fit in a single row. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", marginTop: "0.15rem" }}>
                 <button
                   type="button"
                   disabled={pending}
                   onClick={() => doAction("fill", t)}
                   title={`Schedule planned blocks across this week to hit ${targetLabel} ${t.unit}`}
-                  style={miniBtnStyle(t.cat.color, true)}
+                  style={{ ...miniBtnStyle(t.cat.color, true), width: "100%" }}
                 >+ add to cal</button>
                 <button
                   type="button"
                   disabled={pending}
                   onClick={() => doAction("reorg", t)}
                   title="Delete future planned blocks for this category and re-fill"
-                  style={miniBtnStyle(t.cat.color, false)}
+                  style={{ ...miniBtnStyle(t.cat.color, false), width: "100%" }}
                 >↻ reorg</button>
               </div>
             </div>
           );
         })}
-
-        {/* Trailing 'All' chip — same shape as the per-category ones
-            but runs the action across every chip in one go. */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.2rem",
-            minWidth: 200,
-            flex: "1 1 200px",
-            padding: "0.4rem 0.55rem",
-            border: "1px solid var(--ink)",
-            borderRadius: 4,
-            background: "var(--paper)",
-          }}
-        >
-          <div style={{
-            fontSize: "0.74rem", fontWeight: 700, color: "var(--ink)",
-          }}>
-            All categories
-          </div>
-          <div className="meta" style={{ fontSize: "0.66rem", lineHeight: 1.3 }}>
-            Schedule or rebuild the week across every chip at once.
-          </div>
-          <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.1rem" }}>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => doAllAction("fill")}
-              title="Run + add to cal for every category"
-              style={miniBtnStyle("var(--ink)", true)}
-            >+ add all</button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => doAllAction("reorg")}
-              title="Reorg every category"
-              style={miniBtnStyle("var(--ink)", false)}
-            >↻ reorg all</button>
-          </div>
-        </div>
       </div>
-      <div className="meta" style={{ marginTop: "0.35rem", fontSize: "0.66rem", fontStyle: "italic" }}>
-        chip reads <strong>completed / scheduled / goal</strong> · progress bar tracks completed only · Add / Reorg never touch history
+
+      {/* 'All categories' actions live below the chip row so they read
+          as a global control rather than just another chip. */}
+      <div style={{
+        marginTop: "0.45rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "0.55rem",
+        flexWrap: "wrap",
+      }}>
+        <span className="meta" style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--ink)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          All categories
+        </span>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => doAllAction("fill")}
+          title="Run + add to cal for every category"
+          style={miniBtnStyle("var(--ink)", true)}
+        >+ add all</button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => doAllAction("reorg")}
+          title="Reorg every category"
+          style={miniBtnStyle("var(--ink)", false)}
+        >↻ reorg all</button>
+        <span className="meta" style={{ fontSize: "0.66rem", fontStyle: "italic", marginLeft: "auto" }}>
+          chip reads <strong>completed / scheduled / goal</strong> · progress bar tracks completed only · Add / Reorg never touch history
+        </span>
       </div>
     </div>
   );
