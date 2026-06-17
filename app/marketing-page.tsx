@@ -254,18 +254,19 @@ export default async function MarketingPage() {
       </section>
 
       {/* ── Coaching band ────────────────────────────────────── */}
-      {/* Full-bleed in-gym shot. Drop public/coaching-action.jpg to
-          fill the background; the dark ink falls back cleanly if the
-          file is missing. */}
+      {/* Photo lives on the left as a real <img> so it renders in its
+          natural aspect — no crop, no upscale. Text sits next to it
+          on the right. */}
       <section className="public-band">
-        <div
-          className="public-band-image"
-          style={{ backgroundImage: "url(/coaching-action.jpg)" }}
-          role="img"
-          aria-label="James coaching a client through a plank holding boxing gloves"
-        >
-          <div className="public-band-overlay">
-            <span className="public-eyebrow" style={{ color: "#f3deba" }}>In the gym</span>
+        <div className="public-band-inner">
+          <div className="public-band-photo">
+            <img
+              src="/coaching-action.jpg"
+              alt="James coaching a client through a plank holding boxing gloves"
+            />
+          </div>
+          <div className="public-band-text">
+            <span className="public-eyebrow">In the gym</span>
             <h2 className="public-band-quote">
               Training with the full picture in mind.
             </h2>
