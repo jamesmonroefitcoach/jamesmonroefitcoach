@@ -117,7 +117,7 @@ export default function Sidebar({ user }: { user: SessionUser }) {
                 Account
               </Link>
               <a
-                href="https://jamesmonroefitcoach.vercel.app/"
+                href="https://jamesmonroefitcoach.vercel.app/preview"
                 target="_blank"
                 rel="noopener"
                 className="sidebar-link"
@@ -222,7 +222,7 @@ export default function Sidebar({ user }: { user: SessionUser }) {
               Account
             </Link>
             <a
-              href="https://jamesmonroefitcoach.vercel.app/"
+              href="https://jamesmonroefitcoach.vercel.app/preview"
               target="_blank"
               rel="noopener"
               style={{
