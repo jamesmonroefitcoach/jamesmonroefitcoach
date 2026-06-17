@@ -37,7 +37,11 @@ export async function markThreadRead(threadId: string): Promise<Result> {
   return { ok: true };
 }
 
-export async function announceToAllClients(body: string, tier?: "tier_1" | "tier_2" | "tier_3"): Promise<Result> {
+export async function announceToAllClients(
+  body: string,
+  tier?: "tier_1" | "tier_2" | "tier_3",
+  recipientIds?: string[],
+): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
   const trimmed = body.trim();
@@ -58,14 +62,21 @@ export async function announceToAllClients(body: string, tier?: "tier_1" | "tier
     .eq("role", "client");
   if (!profileRows) return { ok: false, error: "no clients" };
 
+  const explicit = recipientIds && recipientIds.length > 0
+    ? new Set(recipientIds)
+    : null;
+
   const eligible: string[] = profileRows
     .map((p: any) => {
       const d = Array.isArray(p.details) ? p.details[0] : p.details;
       if (d?.coach_id && d.coach_id !== me.id) return null;
       if (tier && d?.tier !== tier) return null;
+      if (explicit && !explicit.has(p.id)) return null;
       return p.id as string;
     })
     .filter((id: string | null): id is string => !!id);
+
+  if (eligible.length === 0) return { ok: false, error: "no recipients matched" };
 
   for (const pid of eligible) {
     // ensure announcement-marked thread exists

@@ -8,18 +8,27 @@ import { sendMessage, announceToAllClients, startThreadWithClient } from "./acti
 
 type ClientPick = { id: string; full_name: string };
 
+// Audience mode for the broadcast. "all" + tier_* delegate to the server's
+// own tier filter; "today" / "week" / "custom" send the resolved client IDs
+// down with the message.
+type AudienceMode = "all" | "tier_1" | "tier_2" | "tier_3" | "today" | "week" | "custom";
+
 export default function MessagesClient({
   threads,
   activeId,
   initialMessages,
   myId,
   clients,
+  todayClientIds,
+  weekClientIds,
 }: {
   threads: ThreadPreview[];
   activeId: string | null;
   initialMessages: ThreadMessage[];
   myId: string;
   clients: ClientPick[];
+  todayClientIds: string[];
+  weekClientIds: string[];
 }) {
   const router = useRouter();
   const [active, setActive] = useState<string | null>(activeId);
@@ -28,7 +37,9 @@ export default function MessagesClient({
   const [pending, start] = useTransition();
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [announceBody, setAnnounceBody] = useState("");
-  const [announceTier, setAnnounceTier] = useState<"" | "tier_1" | "tier_2" | "tier_3">("");
+  const [audience, setAudience] = useState<AudienceMode>("all");
+  const [customIds, setCustomIds] = useState<Set<string>>(new Set());
+  const [customSearch, setCustomSearch] = useState("");
   const [info, setInfo] = useState<string | null>(null);
   // New-message modal state
   const [showNewMessage, setShowNewMessage] = useState(false);
@@ -45,14 +56,34 @@ export default function MessagesClient({
   }, [clients, newClientSearch]);
 
   // Recipient preview for the announce modal — counts (and names) of who
-  // will actually receive it given the tier filter. Lets the coach spot
-  // a client who's missing before broadcasting.
-  const announceRecipients = useMemo(() => {
-    // We don't have tier info on the lightweight clients prop, so this
-    // preview is approximate: when a tier filter is set, fall back to a
-    // best-effort count of all clients (server actually filters by tier).
-    return clients;
-  }, [clients]);
+  // will actually receive it given the audience selection. Lets the coach
+  // spot a missing/extra client before broadcasting.
+  const audienceCount = useMemo(() => {
+    if (audience === "today") return todayClientIds.length;
+    if (audience === "week") return weekClientIds.length;
+    if (audience === "custom") return customIds.size;
+    // For "all" + tier_*, the server resolves recipients — we only know
+    // the upper bound (total clients visible to this coach).
+    return clients.length;
+  }, [audience, customIds, clients, todayClientIds, weekClientIds]);
+
+  // Clients filtered for the custom-list picker.
+  const customFiltered = useMemo(() => {
+    const q = customSearch.trim().toLowerCase();
+    const list = q
+      ? clients.filter((c) => c.full_name.toLowerCase().includes(q))
+      : clients.slice();
+    return list.sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [clients, customSearch]);
+
+  function toggleCustom(id: string) {
+    setCustomIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function startNewMessage() {
     if (!newClientId) return;
@@ -101,13 +132,33 @@ export default function MessagesClient({
   function broadcast() {
     if (!announceBody.trim()) return;
     const text = announceBody.trim();
+    let tier: "tier_1" | "tier_2" | "tier_3" | undefined;
+    let recipientIds: string[] | undefined;
+    let label = "all clients";
+    if (audience === "tier_1" || audience === "tier_2" || audience === "tier_3") {
+      tier = audience;
+      label = audience.replace("_", " ");
+    } else if (audience === "today") {
+      recipientIds = todayClientIds;
+      label = "today's clients";
+    } else if (audience === "week") {
+      recipientIds = weekClientIds;
+      label = "this week's clients";
+    } else if (audience === "custom") {
+      recipientIds = Array.from(customIds);
+      label = `${recipientIds.length} selected client${recipientIds.length === 1 ? "" : "s"}`;
+    }
+    if ((audience === "today" || audience === "week" || audience === "custom") && (!recipientIds || recipientIds.length === 0)) {
+      setInfo("No clients match that audience.");
+      return;
+    }
     start(async () => {
-      const res = await announceToAllClients(text, announceTier || undefined);
+      const res = await announceToAllClients(text, tier, recipientIds);
       if (!res.ok) {
         setInfo(res.error.startsWith("Supabase") ? "Saved locally — Supabase not configured yet." : res.error);
         return;
       }
-      setInfo(`Announcement sent to ${announceTier || "all clients"}.`);
+      setInfo(`Announcement sent to ${label}.`);
       setAnnounceBody("");
       setShowAnnounce(false);
     });
@@ -246,14 +297,73 @@ export default function MessagesClient({
             <hr className="divider" />
             <div>
               <label className="stat-label">Audience</label>
-              <select className="select" value={announceTier} onChange={(e) => setAnnounceTier(e.target.value as any)} style={{ marginTop: "0.3rem" }}>
-                <option value="">All clients ({announceRecipients.length})</option>
+              <select className="select" value={audience} onChange={(e) => setAudience(e.target.value as AudienceMode)} style={{ marginTop: "0.3rem" }}>
+                <option value="all">All clients ({clients.length})</option>
+                <option value="today">Today&apos;s clients ({todayClientIds.length})</option>
+                <option value="week">This week&apos;s clients ({weekClientIds.length})</option>
                 <option value="tier_1">Tier 1 only</option>
                 <option value="tier_2">Tier 2 only</option>
                 <option value="tier_3">Tier 3 only</option>
+                <option value="custom">Custom list…</option>
               </select>
               <p className="meta" style={{ fontSize: "0.72rem", marginTop: "0.35rem" }}>
-                Goes to every client whose record either has you as their coach or has no coach assigned.
+                {audience === "today" ? "Clients with a live session scheduled today."
+                  : audience === "week" ? "Clients with at least one live session this week."
+                  : audience === "custom" ? "Pick exactly who hears this. " + (customIds.size > 0 ? `${customIds.size} selected.` : "")
+                  : "Goes to every client whose record either has you as their coach or has no coach assigned."}
+              </p>
+              {audience === "custom" ? (
+                <div style={{ marginTop: "0.45rem" }}>
+                  <input
+                    className="input"
+                    placeholder="Search clients…"
+                    value={customSearch}
+                    onChange={(e) => setCustomSearch(e.target.value)}
+                  />
+                  <div style={{ maxHeight: 180, overflowY: "auto", marginTop: "0.4rem", border: "1px solid var(--line)", borderRadius: 3 }}>
+                    {customFiltered.length === 0 ? (
+                      <p className="meta" style={{ padding: "0.5rem 0.7rem", margin: 0, fontSize: "0.78rem" }}>No matches.</p>
+                    ) : (
+                      customFiltered.map((c) => {
+                        const on = customIds.has(c.id);
+                        return (
+                          <label
+                            key={c.id}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "0.5rem",
+                              padding: "0.4rem 0.7rem",
+                              borderBottom: "1px solid var(--line)",
+                              cursor: "pointer",
+                              background: on ? "rgba(168,61,43,0.08)" : "transparent",
+                              fontSize: "0.82rem",
+                              fontWeight: on ? 700 : 400,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={() => toggleCustom(c.id)}
+                            />
+                            <span>{c.full_name}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem" }}>
+                    <button type="button" className="btn btn-ghost" style={{ fontSize: "0.72rem", padding: "0.25rem 0.55rem" }}
+                      onClick={() => setCustomIds(new Set(customFiltered.map((c) => c.id)))}>
+                      Select shown
+                    </button>
+                    <button type="button" className="btn btn-ghost" style={{ fontSize: "0.72rem", padding: "0.25rem 0.55rem" }}
+                      onClick={() => setCustomIds(new Set())}>
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <p className="meta" style={{ fontSize: "0.72rem", marginTop: "0.45rem" }}>
+                Will reach <strong style={{ color: "var(--ink)" }}>{audienceCount}</strong> {audienceCount === 1 ? "client" : "clients"}.
               </p>
             </div>
             <div style={{ marginTop: "0.6rem" }}>

@@ -498,6 +498,8 @@ export default function DashboardClient({
   threads,
   changeRequests,
   claimedSlots,
+  newTestimonials,
+  newConsultRequests,
   baseWeekStart,
   clientProgramInfo,
   allTimeStats,
@@ -509,6 +511,8 @@ export default function DashboardClient({
   threads: { id: string; client_name: string | null; last_message: string | null; last_at: string | null; unread: boolean }[];
   changeRequests: { id: string; client_name: string | null; starts_at: string; requested_starts_at: string | null }[];
   claimedSlots: { id: string; starts_at: string; claimed_by_name: string | null; claimed_at: string | null }[];
+  newTestimonials: { id: string; name: string; created_at: string }[];
+  newConsultRequests: { id: string; name: string; created_at: string }[];
   baseWeekStart: Date;
   clientProgramInfo: Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null }>;
   allTimeStats: {
@@ -1004,7 +1008,7 @@ export default function DashboardClient({
             <hr className="divider" />
             {(() => {
               const unread = threads.filter((t) => t.unread);
-              const total = unread.length + changeRequests.length + claimedSlots.length;
+              const total = unread.length + changeRequests.length + claimedSlots.length + newTestimonials.length + newConsultRequests.length;
               if (total === 0) {
                 return <p className="meta">All caught up — nothing pending.</p>;
               }
@@ -1053,6 +1057,50 @@ export default function DashboardClient({
                       </div>
                       <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>
                         Claimed an open slot — confirm to schedule
+                      </p>
+                    </li>
+                  ))}
+
+                  {/* New consultation requests */}
+                  {newConsultRequests.map((c) => (
+                    <li
+                      key={`cn-${c.id}`}
+                      style={{
+                        borderLeft: "3px solid var(--sage)",
+                        paddingLeft: "0.6rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.4rem" }}>
+                        <Link href="/coach/appointments" style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 700, fontSize: "0.88rem" }}>
+                          <span style={{ color: "var(--sage)", marginRight: "0.3rem" }}>★</span>
+                          {c.name}
+                        </Link>
+                        <span className="meta" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }}>{fmtTime(c.created_at)}</span>
+                      </div>
+                      <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>
+                        New consultation request
+                      </p>
+                    </li>
+                  ))}
+
+                  {/* New testimonials awaiting review */}
+                  {newTestimonials.map((t) => (
+                    <li
+                      key={`tm-${t.id}`}
+                      style={{
+                        borderLeft: "3px solid var(--steel)",
+                        paddingLeft: "0.6rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.4rem" }}>
+                        <Link href="/coach/testimonials" style={{ color: "var(--ink)", textDecoration: "none", fontWeight: 700, fontSize: "0.88rem" }}>
+                          <span style={{ color: "var(--steel)", marginRight: "0.3rem" }}>❝</span>
+                          {t.name}
+                        </Link>
+                        <span className="meta" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }}>{fmtTime(t.created_at)}</span>
+                      </div>
+                      <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>
+                        New testimonial — review & approve
                       </p>
                     </li>
                   ))}

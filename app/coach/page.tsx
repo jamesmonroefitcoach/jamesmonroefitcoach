@@ -7,6 +7,8 @@ import {
 } from "@/lib/data";
 import { listSlotOffers } from "./availability/data";
 import { pastProgramsForClient } from "@/lib/programs";
+import { listAllTestimonials } from "@/app/testimonials/actions";
+import { listConsultationRequests } from "@/app/consult/actions";
 import DashboardClient from "./dashboard-client";
 
 export default async function CoachDashboard() {
@@ -18,7 +20,7 @@ export default async function CoachDashboard() {
   const weekStart = startOfWeek(new Date());
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-  const [clients, appts, monthAppts, openReq, threads, slotOffers, allTimeStats] = await Promise.all([
+  const [clients, appts, monthAppts, openReq, threads, slotOffers, allTimeStats, allTestimonials, consultReqs] = await Promise.all([
     listClients(user.id),
     listAppointmentsForWeek(user.id),
     listAppointmentsForMonth(user.id, monthStart),
@@ -26,7 +28,27 @@ export default async function CoachDashboard() {
     listCoachThreads(user.id),
     listSlotOffers(user.id),
     getAllTimeSessionStats(user.id),
+    listAllTestimonials(),
+    listConsultationRequests(),
   ]);
+
+  const newTestimonials = allTestimonials
+    .filter((t) => t.status === "new")
+    .map((t) => ({
+      id: t.id,
+      name: t.display_name || t.submitted_name,
+      created_at: t.created_at,
+    }))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  const newConsultRequests = consultReqs
+    .filter((c) => c.status === "new")
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      created_at: c.created_at,
+    }))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   // Inbox feeds — change-requested appointments + claimed slot offers
   const seenIds = new Set<string>();
@@ -91,6 +113,8 @@ export default async function CoachDashboard() {
         threads={threads}
         changeRequests={changeRequests}
         claimedSlots={claimedSlots}
+        newTestimonials={newTestimonials}
+        newConsultRequests={newConsultRequests}
         baseWeekStart={weekStart}
         clientProgramInfo={clientProgramInfo}
         allTimeStats={allTimeStats}
