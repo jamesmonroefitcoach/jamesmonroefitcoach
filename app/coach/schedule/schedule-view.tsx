@@ -1805,12 +1805,30 @@ export default function ScheduleView({
                           zIndex: touchDraggingApptId === e.id ? 4 : 2,
                         }}
                       >
+                        {/* $ pinned to the top-right corner so the bottom
+                            strip can stay tight (PAID + PROG only). Hidden
+                            on personal blocks since they don't have a rate. */}
+                        {!isPersonal && (
+                          <span style={{
+                            position: "absolute",
+                            top: 2,
+                            right: 4,
+                            fontSize: "0.66rem",
+                            fontWeight: 700,
+                            opacity: 0.92,
+                            pointerEvents: "none",
+                          }}>
+                            {`$${e.rate ?? 0}`}
+                          </span>
+                        )}
                         <div style={{
                           fontWeight: isPersonal ? 600 : 700,
                           textDecoration: cancelled ? "line-through" : "none",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
+                          /* room for the top-right $ pill */
+                          paddingRight: isPersonal ? 0 : 32,
                         }}>
                           {/* Sessions: no glyph for the default-completed
                               case (scheduled or completed). Only the three
@@ -1881,8 +1899,9 @@ export default function ScheduleView({
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                             }}>
-                              <span style={{ opacity: 0.95 }}>{`$${e.rate ?? 0}`}</span>
-                              <span style={{ opacity: 0.55 }}>·</span>
+                              {/* $ rate moved to top-right corner; this row is
+                                  now just the two PAID/PROG signals + the
+                                  optional change-count badge. */}
                               <span>PAID: {e.paid ? "✓" : "✗"}</span>
                               <span style={{ opacity: 0.55 }}>·</span>
                               <span>PROG: {hasProgram ? "Y" : "N"}</span>

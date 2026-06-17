@@ -146,7 +146,13 @@ const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterS
   },
 ];
 
-export default async function MarketingPage() {
+export default async function MarketingPage({
+  hideHeader = false,
+}: {
+  // /preview passes hideHeader=true so the prospect-facing sticky nav
+  // doesn't show when James opens the public site from inside the app.
+  hideHeader?: boolean;
+} = {}) {
   // Approved & published testimonials shown first; fall back to PLACEHOLDER
   // set when there are zero so a fresh deploy still looks complete.
   const approvedTestimonials = await listPublicTestimonials();
@@ -178,7 +184,7 @@ export default async function MarketingPage() {
 
   return (
     <main className="public-shell">
-      <PublicHeader />
+      {!hideHeader && <PublicHeader />}
 
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="public-hero">
