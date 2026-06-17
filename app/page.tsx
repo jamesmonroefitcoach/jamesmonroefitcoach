@@ -91,10 +91,7 @@ const PRICING = [
     price: "Free",
     cadence: "20 minutes",
     bullets: [
-      "Hear your goals + history",
-      "See if we're a fit",
-      "No pitch, no pressure",
-      "Book the first session if it clicks",
+      "A 20-minute conversation to hear what you're after, what's in the way, and whether we're a fit.",
     ],
   },
   {
@@ -107,6 +104,7 @@ const PRICING = [
       "Programming built in",
       "In-person at Hyde Park Gym, Austin",
       "Packages available — ask on the consult",
+      "Rate is the standard; we may tune it together if your situation calls for something different.",
     ],
   },
 ];
@@ -234,6 +232,17 @@ export default async function HomePage() {
               or just feel like yourself again, the plan gets built around
               you.
             </p>
+            <p className="public-p">
+              The current roster runs the full range &mdash; men, women, kids,
+              families, couples, and groups training together. Ages eight to
+              eighty, beginners through competitive athletes. James works with
+              LGBTQIA+ clients and has experience supporting transitioning men
+              and women through training that meets them where they are.
+              Goals run just as wide: first pull-up, getting back to lifting
+              after surgery, a stage-ready physique, a tactical selection,
+              menopause-stage strength, a 5K under 23 minutes, or simply
+              moving without pain again.
+            </p>
           </div>
           <div className="public-card public-card-portrait">
             {/* Drop the portrait file at public/james-portrait.jpg and
@@ -244,10 +253,31 @@ export default async function HomePage() {
               fallback="Drop public/james-portrait.jpg"
             />
             <ul className="public-credit-list">
+              <li>NASM Certified Personal Trainer</li>
               <li>Hyde Park Gym &mdash; Austin, TX</li>
               <li>Strength, boxing, Muay Thai, yoga background</li>
               <li>Ages 8 to 80 &mdash; recreational to competitive</li>
             </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Coaching band ────────────────────────────────────── */}
+      {/* Full-bleed in-gym shot. Drop public/coaching-action.jpg to
+          fill the background; the dark ink falls back cleanly if the
+          file is missing. */}
+      <section className="public-band">
+        <div
+          className="public-band-image"
+          style={{ backgroundImage: "url(/coaching-action.jpg)" }}
+          role="img"
+          aria-label="James coaching a client through a plank holding boxing gloves"
+        >
+          <div className="public-band-overlay">
+            <span className="public-eyebrow" style={{ color: "#f3deba" }}>In the gym</span>
+            <h2 className="public-band-quote">
+              Concentrated, but fun. Your goal is my goal.
+            </h2>
           </div>
         </div>
       </section>
@@ -277,7 +307,9 @@ export default async function HomePage() {
           <span className="public-eyebrow">What&rsquo;s included</span>
           <h2 className="public-h2">Every plan runs on the same foundation.</h2>
           <p className="public-p public-p-meta">
-            Whatever format you pick, these are the things you get from day one.
+            All of this is available &mdash; on the consult we figure out where
+            you actually need the focus. Nothing here is required; nothing is an
+            upsell.
           </p>
           <div className="public-services-grid">
             {SERVICES.map((s) => (
@@ -299,7 +331,8 @@ export default async function HomePage() {
           <span className="public-eyebrow">Timeline &amp; expectations</span>
           <h2 className="public-h2">What the first 90 days look like.</h2>
           <p className="public-p public-p-meta">
-            Real progress is paced. Here&rsquo;s how the early arc tends to run.
+            Every client is unique &mdash; the plan gets tailored to your body,
+            history, and schedule. This is how the early arc typically runs.
           </p>
           <ol className="public-timeline">
             {TIMELINE.map((t, i) => (
@@ -320,11 +353,7 @@ export default async function HomePage() {
       <section id="pricing" className="public-section">
         <div className="public-section-inner">
           <span className="public-eyebrow">Pricing</span>
-          <h2 className="public-h2">One rate. No upsells.</h2>
-          <p className="public-p public-p-meta">
-            Start with the free 20-minute consult. If we click, sessions are
-            a flat $100 per hour. Packages available — ask on the call.
-          </p>
+          <h2 className="public-h2">Transparency. Always.</h2>
           <div className="public-pricing-grid">
             {PRICING.map((p) => (
               <div

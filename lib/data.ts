@@ -946,20 +946,28 @@ export async function getAllTimeSessionStats(coachId: string): Promise<AllTimeSe
   }
 
   // Fill zeros for any weeks between first and now so the chart shows
-  // real gaps rather than collapsing them.
+  // real gaps rather than collapsing them. Stop at the start of THIS
+  // week so the history never includes future weeks; the current
+  // week's bar counts only past sessions because the .lte("starts_at")
+  // filter above already excluded anything later than now.
   const sortedKeys = Array.from(buckets.keys()).sort();
   const firstKey = sortedKeys[0];
   const first = new Date(firstKey + "T00:00:00");
   const nowMon = new Date();
   nowMon.setHours(0, 0, 0, 0);
   nowMon.setDate(nowMon.getDate() - ((nowMon.getDay() + 6) % 7));
+  const nowMonMs = nowMon.getTime();
   const weeks: WeeklySessionCount[] = [];
-  for (let d = new Date(first); d.getTime() <= nowMon.getTime(); d.setDate(d.getDate() + 7)) {
+  for (let d = new Date(first); d.getTime() <= nowMonMs; d.setDate(d.getDate() + 7)) {
     const key = d.toISOString().slice(0, 10);
     weeks.push({ weekStart: key, count: buckets.get(key) ?? 0 });
   }
+  // Belt-and-suspenders: drop any week whose start is in the future.
+  const filteredWeeks = weeks.filter((w) =>
+    new Date(w.weekStart + "T00:00:00").getTime() <= nowMonMs
+  );
 
   const totalSessions = rows.length;
-  const avgPerWeek = weeks.length > 0 ? totalSessions / weeks.length : 0;
-  return { weeks, totalSessions, avgPerWeek, firstWeek: firstKey };
+  const avgPerWeek = filteredWeeks.length > 0 ? totalSessions / filteredWeeks.length : 0;
+  return { weeks: filteredWeeks, totalSessions, avgPerWeek, firstWeek: firstKey };
 }

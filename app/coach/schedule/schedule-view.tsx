@@ -11,7 +11,10 @@ import { CANCEL_REASONS, CANCEL_REASON_LABELS, cancelReasonLabel } from "@/lib/c
 // the card's maxHeight on standard laptop viewports without scrolling.
 // The full 20-row grid is still there (6a → 1a), just compressed so the
 // 'normal day' window is above the fold.
-const HOUR_HEIGHT = 44;
+// 60 px per hour gives a 30-min block ~30 px tall — enough room for
+// the title + bottom-row "✓ paid | programmed" line without
+// truncation, while keeping the full day visible without much scroll.
+const HOUR_HEIGHT = 60;
 // 6a–1a next day. Hours 24 and 25 are visual placeholders for midnight
 // and 1am of the following calendar day so sleep blocks (which routinely
 // span midnight) render cleanly.
@@ -108,27 +111,26 @@ const STATUS_GLYPH: Record<AppointmentRow["status"], string> = {
 
 const PERSONAL_COLOR = { bg: "#3a342f", fg: "#f5efe4" };
 
-// Per-category emoji for personal blocks. Gives James a non-colour
-// cue in the block's top-left corner since hue alone isn't reliable
-// for him. Match is case-insensitive substring on the category name
-// so 'Body Mastery' picks up 💪 etc. Default fallback covers any new
-// category the coach adds without a known keyword.
-const PERSONAL_CATEGORY_EMOJI: { match: RegExp; emoji: string }[] = [
-  { match: /sleep/i,             emoji: "🌙" },
-  { match: /cook|food|meal/i,    emoji: "🍳" },
-  { match: /piano|music|song/i,  emoji: "🎹" },
-  { match: /cardio|run/i,        emoji: "🏃" },
-  { match: /body|train|gym|lift/i, emoji: "💪" },
-  { match: /business|biz|admin/i, emoji: "💼" },
-  { match: /read|book|study/i,   emoji: "📚" },
-  { match: /family|friend|social/i, emoji: "👥" },
-  { match: /chore|clean|house/i, emoji: "🧹" },
-  { match: /travel|drive|commute/i, emoji: "🚗" },
+// Per-category 2-3 letter monogram for personal blocks. Same role the
+// emoji table played — a non-colour cue James can read at a glance —
+// but typographic instead of emoji so it lands cleaner on the calendar.
+// Match is case-insensitive substring on the category name.
+const PERSONAL_CATEGORY_TAG: { match: RegExp; tag: string }[] = [
+  { match: /sleep/i,             tag: "SLP" },
+  { match: /cook|food|meal/i,    tag: "CK"  },
+  { match: /piano|music|song/i,  tag: "PNO" },
+  { match: /cardio|run/i,        tag: "CRD" },
+  { match: /body|train|gym|lift/i, tag: "BDY" },
+  { match: /business|biz|admin/i, tag: "BIZ" },
+  { match: /read|book|study/i,   tag: "RD"  },
+  { match: /family|friend|social/i, tag: "FAM" },
+  { match: /chore|clean|house/i, tag: "CH"  },
+  { match: /travel|drive|commute/i, tag: "TVL" },
 ];
 function categoryEmoji(categoryName: string | null | undefined): string {
-  if (!categoryName) return "📌";
-  const match = PERSONAL_CATEGORY_EMOJI.find((m) => m.match.test(categoryName));
-  return match?.emoji ?? "📌";
+  if (!categoryName) return "•";
+  const match = PERSONAL_CATEGORY_TAG.find((m) => m.match.test(categoryName));
+  return match?.tag ?? categoryName.slice(0, 3).toUpperCase();
 }
 const ONLINE_COLOR   = { bg: "#1e6a8c", fg: "#ffffff" };
 
@@ -138,33 +140,6 @@ const ONLINE_COLOR   = { bg: "#1e6a8c", fg: "#ffffff" };
 // (right pill below). Each fact gets its own visual slot so James can
 // scan them at a glance without having to disentangle one signal from
 // another.
-
-// Compact icon + value chip used in the month-header summary row.
-// Tooltip carries the long-form label so the chip stays glanceable.
-function SummaryToken({
-  icon, value, color, title,
-}: {
-  icon: string;
-  value: string;
-  color: string;
-  title: string;
-}) {
-  return (
-    <span
-      title={title}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 3,
-        fontSize: "0.78rem",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span aria-hidden style={{ fontSize: "0.86rem", lineHeight: 1 }}>{icon}</span>
-      <strong style={{ color, fontWeight: 700 }}>{value}</strong>
-    </span>
-  );
-}
 
 function PaymentPill({ paid }: { paid: boolean }) {
   return (
@@ -1171,37 +1146,18 @@ export default function ScheduleView({
               )}
               {fetching && <span style={{ marginLeft: "0.25rem", opacity: 0.6 }}>loading…</span>}
             </span>
-            {/* Compact token strip — icon + value, tooltip for the
-                long-form label. Reads as a scoreboard rather than a
-                paragraph. */}
-            <span style={{ marginLeft: "auto", display: "inline-flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <SummaryToken
-                icon="💵"
-                value={fmtMoney(monthTotals.paid)}
-                color="var(--sage)"
-                title={`Paid · ${monthTotals.paidN} session${monthTotals.paidN === 1 ? "" : "s"}`}
-              />
-              <SummaryToken
-                icon="⏳"
-                value={fmtMoney(monthTotals.unpaid)}
-                color="var(--steel)"
-                title={`Unpaid · ${monthTotals.unpaidN} session${monthTotals.unpaidN === 1 ? "" : "s"}`}
-              />
+            <span className="meta" style={{ marginLeft: "auto" }} title={`paid ${monthTotals.paidN} · unpaid ${monthTotals.unpaidN} · cancelled ${monthTotals.cancelledN}${monthTotals.noShowN > 0 ? ` · no-show ${monthTotals.noShowN}` : ""}`}>
+              paid <strong style={{ color: "var(--sage)" }}>{fmtMoney(monthTotals.paid)}</strong>
+              {" · "}unpaid <strong style={{ color: "var(--steel)" }}>{fmtMoney(monthTotals.unpaid)}</strong>
               {monthTotals.cancelled > 0 && (
-                <SummaryToken
-                  icon="✕"
-                  value={fmtMoney(monthTotals.cancelled)}
-                  color="var(--rust)"
-                  title={`Cancelled (fee paid) · ${monthTotals.cancelledN}`}
-                />
+                <>
+                  {" · "}cancelled <strong style={{ color: "var(--rust)" }}>{fmtMoney(monthTotals.cancelled)}</strong>
+                </>
               )}
               {monthTotals.noShowN > 0 && (
-                <SummaryToken
-                  icon="⊘"
-                  value={String(monthTotals.noShowN)}
-                  color="var(--rust)"
-                  title={`No-show · ${monthTotals.noShowN}`}
-                />
+                <>
+                  {" · "}<span style={{ color: "var(--rust)", fontWeight: 700 }}>{monthTotals.noShowN} no-show</span>
+                </>
               )}
             </span>
           </>
@@ -1399,13 +1355,15 @@ export default function ScheduleView({
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
               <span style={{
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: 22, height: 14, borderRadius: 2,
+                minWidth: 26, padding: "0 3px", height: 14, borderRadius: 2,
                 background: "rgba(255,255,255,0.55)",
                 color: "#5a6b4a",
                 border: "1px solid #5a6b4a",
                 borderLeft: "2px solid #5a6b4a",
-                fontSize: "0.62rem",
-              }}>🏃</span>
+                fontSize: "0.58rem",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+              }}>CRD</span>
               <span>personal (goal-tagged)</span>
             </span>
           </div>
@@ -1726,7 +1684,17 @@ export default function ScheduleView({
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, fontSize: "0.66rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           <span title="continues from previous day">↩</span>
-                          {emoji && <span>{emoji}</span>}
+                          {emoji && (
+                            <span style={{
+                              padding: "0 3px",
+                              borderRadius: 2,
+                              background: color,
+                              color: "#fff",
+                              fontSize: "0.58rem",
+                              fontWeight: 700,
+                              letterSpacing: "0.04em",
+                            }}>{emoji}</span>
+                          )}
                           <span>{c.personal_label ?? "continued"}</span>
                         </div>
                         <div style={{ fontSize: "0.62rem", opacity: 0.8 }}>
@@ -1761,9 +1729,9 @@ export default function ScheduleView({
                     const personalCatName = personalGoalId
                       ? goalCategoryNameById.get(personalGoalId)
                       : null;
-                    const personalEmoji = personalCatName
+                    const personalTag = personalCatName
                       ? categoryEmoji(personalCatName)
-                      : "⛔";
+                      : "—";
                     const personalColor = personalCatColor ?? "#7a6f63";
 
                     const sessionColors = eventClient?.lifecycle === "online"
@@ -1843,7 +1811,23 @@ export default function ScheduleView({
                             </span>
                           )}
                           {isPersonal
-                            ? `${personalEmoji} ${e.personal_label ?? "Personal"}`
+                            ? (
+                              <>
+                                <span style={{
+                                  display: "inline-block",
+                                  padding: "0 4px",
+                                  marginRight: 4,
+                                  borderRadius: 2,
+                                  background: personalColor,
+                                  color: "#fff",
+                                  fontSize: "0.6rem",
+                                  fontWeight: 700,
+                                  letterSpacing: "0.04em",
+                                  verticalAlign: "1px",
+                                }}>{personalTag}</span>
+                                {e.personal_label ?? "Personal"}
+                              </>
+                            )
                             : eventClient?.lifecycle === "online"
                               ? `${e.call_type === "video" ? "🎥" : e.call_type === "voice" ? "📞" : "🌐"} ${e.client_name ?? "Client"}`
                               : (e.client_name ?? "Client")
