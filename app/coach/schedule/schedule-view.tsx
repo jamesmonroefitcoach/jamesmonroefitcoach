@@ -1809,9 +1809,25 @@ export default function ScheduleView({
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                         }}>
-                          {!isPersonal && (
-                            <span style={{ marginRight: 3, fontSize: "0.78rem" }}>
-                              {STATUS_GLYPH[e.status]}
+                          {/* Sessions: no glyph for the default-completed
+                              case (past or upcoming, status = scheduled or
+                              completed). Only flag the exceptions —
+                              cancelled and no-show — with an inline pill. */}
+                          {!isPersonal && (e.status === "cancelled" || e.status === "no_show") && (
+                            <span style={{
+                              display: "inline-block",
+                              padding: "0 5px",
+                              marginRight: 4,
+                              borderRadius: 2,
+                              background: "rgba(255,255,255,0.2)",
+                              color: "#fff",
+                              fontSize: "0.58rem",
+                              fontWeight: 700,
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
+                              verticalAlign: "1px",
+                            }}>
+                              {e.status === "no_show" ? "No-show" : "Cancelled"}
                             </span>
                           )}
                           {isPersonal
@@ -1843,10 +1859,19 @@ export default function ScheduleView({
                             with ✓/✗ for paid and Y/N for programmed so the
                             three facts read at a glance. */}
                         {!isPersonal && (() => {
+                          // Past sessions are assumed completed unless
+                          // flagged otherwise — so a past block whose
+                          // status is still 'scheduled' counts as logged.
+                          const startTime = new Date(e.starts_at).getTime();
+                          const isPastNonException = startTime < Date.now()
+                            && e.status !== "cancelled"
+                            && e.status !== "no_show"
+                            && e.status !== "change_requested";
                           const hasProgram =
                             e.program_status === "programmed" ||
                             e.program_status === "draft" ||
-                            e.status === "completed";
+                            e.status === "completed" ||
+                            isPastNonException;
                           return (
                             <div style={{
                               marginTop: "auto",
