@@ -25,6 +25,34 @@ export default function GoalsClient({
 
   const totalGoals = useMemo(() => categories.reduce((s, c) => s + c.goals.length, 0), [categories]);
 
+  // Flatten goals into two ordered lists:
+  //   • Annual / high-level — every one_time goal across all categories
+  //   • Weekly — every recurring goal (weekly_count, per_night, etc.)
+  // Each carries its parent category color/id so a row can render a
+  // color stripe and pass category info to the edit/add forms.
+  const flat = useMemo(() => {
+    const annual: { goal: GoalRow; cat: GoalCategoryWithGoals; subs: GoalRow[] }[] = [];
+    const weekly: { goal: GoalRow; cat: GoalCategoryWithGoals; subs: GoalRow[] }[] = [];
+    for (const cat of categories) {
+      const subsByParent = new Map<string, GoalRow[]>();
+      for (const g of cat.goals) {
+        if (g.parent_goal_id) {
+          const arr = subsByParent.get(g.parent_goal_id) ?? [];
+          arr.push(g);
+          subsByParent.set(g.parent_goal_id, arr);
+        }
+      }
+      for (const g of cat.goals) {
+        if (g.parent_goal_id) continue;
+        const entry = { goal: g, cat, subs: subsByParent.get(g.id) ?? [] };
+        if (g.kind === "one_time") annual.push(entry); else weekly.push(entry);
+      }
+    }
+    return { annual, weekly };
+  }, [categories]);
+
+  const [showCategories, setShowCategories] = useState(false);
+
   function run<T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>): Promise<void> {
     return new Promise((resolve) => {
       start(async () => {
@@ -54,37 +82,124 @@ export default function GoalsClient({
           No categories yet. Add one to get started.
         </p>
       ) : (
-        // CSS columns instead of grid — each tile takes its natural height
-        // and the next tile flows underneath. Tall categories (Body
-        // Mastery) no longer stretch the others in the same row.
-        <div style={{ columnWidth: 320, columnGap: "0.7rem" }}>
-          {categories.map((cat) => (
-            <div key={cat.id} style={{ breakInside: "avoid", marginBottom: "0.7rem" }}>
-              <CategoryBlock cat={cat} onAction={run} pending={pending} />
-            </div>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* ── Annual / high-level ────────────────────────────── */}
+          <FlatGoalsCard
+            title="Annual / high-level"
+            empty="No annual goals yet."
+            items={flat.annual}
+            onAction={run}
+            pending={pending}
+          />
+
+          {/* ── Weekly ─────────────────────────────────────────── */}
+          <FlatGoalsCard
+            title="Weekly"
+            empty="No weekly goals yet."
+            items={flat.weekly}
+            onAction={run}
+            pending={pending}
+          />
         </div>
       )}
 
+      {/* Footer: category management — collapsed by default so the
+          main view stays "just the two lists." Expand to add / rename /
+          delete categories or to add a new goal to a specific category. */}
       <div style={{ marginTop: "1.4rem" }}>
-        {addingCat ? (
-          <NewCategoryForm
-            onCancel={() => setAddingCat(false)}
-            onSubmit={(name, color) => run(createCategory({ name, color })).then(() => setAddingCat(false))}
-            pending={pending}
-          />
-        ) : (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ padding: "0.4rem 0.95rem", fontSize: "0.84rem" }}
-            onClick={() => setAddingCat(true)}
-          >
-            + New category
-          </button>
+        <button
+          type="button"
+          onClick={() => setShowCategories((v) => !v)}
+          style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "var(--muted)", fontSize: "0.78rem", letterSpacing: "0.04em" }}
+        >
+          {showCategories ? "▾ Categories" : "▸ Manage categories"}
+        </button>
+        {showCategories && (
+          <div style={{ marginTop: "0.6rem", display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+            <div style={{ columnWidth: 320, columnGap: "0.7rem" }}>
+              {categories.map((cat) => (
+                <div key={cat.id} style={{ breakInside: "avoid", marginBottom: "0.7rem" }}>
+                  <CategoryBlock cat={cat} onAction={run} pending={pending} />
+                </div>
+              ))}
+            </div>
+            {addingCat ? (
+              <NewCategoryForm
+                onCancel={() => setAddingCat(false)}
+                onSubmit={(name, color) => run(createCategory({ name, color })).then(() => setAddingCat(false))}
+                pending={pending}
+              />
+            ) : (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: "0.4rem 0.95rem", fontSize: "0.84rem", alignSelf: "flex-start" }}
+                onClick={() => setAddingCat(true)}
+              >
+                + New category
+              </button>
+            )}
+          </div>
         )}
       </div>
     </main>
+  );
+}
+
+// ── Flat list card (Annual / Weekly) ────────────────────────────────
+
+function FlatGoalsCard({
+  title, empty, items, onAction, pending,
+}: {
+  title: string;
+  empty: string;
+  items: { goal: GoalRow; cat: GoalCategoryWithGoals; subs: GoalRow[] }[];
+  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
+  pending: boolean;
+}) {
+  return (
+    <section style={{
+      border: "1px solid var(--line)",
+      borderRadius: 3,
+      background: "var(--paper)",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        padding: "0.4rem 0.7rem",
+        background: "var(--bg)",
+        borderBottom: "1px solid var(--line)",
+        fontFamily: "var(--font-heading), Oswald, sans-serif",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        fontSize: "0.74rem",
+        color: "var(--muted)",
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+      }}>
+        {title}
+        <span style={{ fontSize: "0.66rem", color: "var(--muted)", opacity: 0.7 }}>{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="meta" style={{ padding: "0.5rem 0.7rem", fontStyle: "italic", margin: 0, fontSize: "0.78rem" }}>{empty}</p>
+      ) : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {items.map(({ goal, cat, subs }) => (
+            <div key={goal.id} style={{ borderLeft: `3px solid ${cat.color}` }}>
+              <GoalListItem
+                goal={goal}
+                subs={subs}
+                categoryColor={cat.color}
+                categoryId={cat.id}
+                onAction={onAction}
+                pending={pending}
+              />
+            </div>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
