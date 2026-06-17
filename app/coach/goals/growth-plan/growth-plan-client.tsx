@@ -282,15 +282,15 @@ function GanttTable({
     <div className="card" style={{ padding: 0, overflowX: "auto" }}>
       <div style={{ minWidth: 720 + cols.length * colWidth }}>
         {/* header */}
-        <div style={{ display: "grid", gridTemplateColumns: `200px 90px 90px 1fr`, alignItems: "stretch", borderBottom: "1px solid var(--line)", background: "var(--bg)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: `170px 110px 110px 1fr`, alignItems: "stretch", borderBottom: "1px solid var(--line)", background: "var(--bg)" }}>
           <div style={hCellStyle}>Client</div>
           <div style={hCellStyle}>Current</div>
           <div style={hCellStyle}>Tested</div>
           <div style={{ position: "relative", display: "flex" }}>
             {cols.map((d, i) => (
               <div key={i} style={{
-                width: colWidth, padding: "0.4rem 0.2rem", borderLeft: i === 0 ? "1px solid var(--line)" : "1px solid rgba(0,0,0,0.04)",
-                fontSize: mode === "month" ? "0.66rem" : "0.55rem",
+                width: colWidth, padding: "0.22rem 0.2rem", borderLeft: i === 0 ? "1px solid var(--line)" : "1px solid rgba(0,0,0,0.04)",
+                fontSize: mode === "month" ? "0.62rem" : "0.52rem",
                 color: "var(--muted)",
                 textTransform: "uppercase",
                 letterSpacing: "0.04em",
@@ -330,14 +330,16 @@ function GanttTable({
 }
 
 const hCellStyle: React.CSSProperties = {
-  padding: "0.5rem 0.7rem",
-  fontSize: "0.7rem",
+  padding: "0.28rem 0.5rem",
+  fontSize: "0.62rem",
   letterSpacing: "0.05em",
   textTransform: "uppercase",
   color: "var(--muted)",
   fontWeight: 700,
   borderRight: "1px solid var(--line)",
   background: "var(--bg)",
+  display: "flex",
+  alignItems: "center",
 };
 
 function Row({
@@ -412,38 +414,36 @@ function Row({
 
   return (
     <div style={{ borderBottom: "1px solid var(--line)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: `200px 90px 90px 1fr`, alignItems: "stretch", minHeight: 56 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `170px 110px 110px 1fr`, alignItems: "stretch", minHeight: 28 }}>
         {/* name */}
         <div style={cellStyle}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <strong style={{ fontSize: "0.84rem", flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</strong>
-            <button type="button" onClick={() => setEditing(!editing)} style={iconBtn} title={editing ? "Close" : "Edit"}>✎</button>
-            {!isSynth && (
-              <button type="button" onClick={() => { if (confirm(`Delete plan row for ${name}?`)) onDelete(row.id); }} style={{ ...iconBtn, color: "var(--red)" }}>×</button>
-            )}
-          </div>
+          <strong style={{ fontSize: "0.76rem", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</strong>
           {snapshot?.cvi_proxy != null && (
-            <div style={{ fontSize: "0.62rem", color: "var(--muted)", marginTop: 2 }}>
-              CVI proxy <strong style={{ color: "var(--ink)" }}>{snapshot.cvi_proxy}</strong>
-            </div>
+            <span title="CVI proxy = rate × spw" style={{ fontSize: "0.58rem", color: "var(--muted)", padding: "0 4px", border: "1px solid var(--line)", borderRadius: 2 }}>
+              {snapshot.cvi_proxy}
+            </span>
           )}
           {snapshot?.applied_increases?.length ? (
-            <div style={{ fontSize: "0.6rem", color: "var(--sage)", marginTop: 2 }}>
-              {snapshot.applied_increases.length} rate ↑
-            </div>
+            <span title={`${snapshot.applied_increases.length} applied rate increase${snapshot.applied_increases.length === 1 ? "" : "s"}`} style={{ fontSize: "0.58rem", color: "var(--sage)" }}>↑{snapshot.applied_increases.length}</span>
           ) : null}
+          <button type="button" onClick={() => setEditing(!editing)} style={iconBtn} title={editing ? "Close" : "Edit"}>✎</button>
+          {!isSynth && (
+            <button type="button" onClick={() => { if (confirm(`Delete plan row for ${name}?`)) onDelete(row.id); }} style={{ ...iconBtn, color: "var(--red)" }}>×</button>
+          )}
         </div>
 
         {/* current */}
         <div style={cellStyle}>
-          <div style={{ fontSize: "0.78rem", fontWeight: 700 }}>{fmtRate(snapshot?.current_rate ?? null)}</div>
-          <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>{fmtSpw(snapshot?.current_spw ?? null)} / wk</div>
+          <span style={{ fontSize: "0.74rem", fontWeight: 700 }}>{fmtRate(snapshot?.current_rate ?? null)}</span>
+          <span style={{ fontSize: "0.66rem", color: "var(--muted)" }}>·</span>
+          <span style={{ fontSize: "0.66rem", color: "var(--muted)" }}>{fmtSpw(snapshot?.current_spw ?? null)}/wk</span>
         </div>
 
         {/* tested */}
         <div style={cellStyle}>
-          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: liveDelta ? "var(--rust)" : "var(--ink)" }}>{fmtRate(tested.rate)}</div>
-          <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>{fmtSpw(tested.spw)} / wk</div>
+          <span style={{ fontSize: "0.74rem", fontWeight: 700, color: liveDelta ? "var(--rust)" : "var(--ink)" }}>{fmtRate(tested.rate)}</span>
+          <span style={{ fontSize: "0.66rem", color: "var(--muted)" }}>·</span>
+          <span style={{ fontSize: "0.66rem", color: "var(--muted)" }}>{fmtSpw(tested.spw)}/wk</span>
         </div>
 
         {/* gantt bar lane */}
@@ -462,11 +462,11 @@ function Row({
             return (
               <div style={{
                 position: "absolute",
-                top: 14, bottom: 14,
+                top: 5, bottom: 5,
                 left, width,
                 background: "rgba(168,61,43,0.18)",
                 border: "1px solid var(--rust)",
-                borderRadius: 3,
+                borderRadius: 2,
               }} />
             );
           })()}
@@ -484,12 +484,12 @@ function Row({
             return (
               <div style={{
                 position: "absolute",
-                top: 14, bottom: 14,
+                top: 5, bottom: 5,
                 left: leftPct * totalWidth,
                 width: widthPct * totalWidth,
                 background: "repeating-linear-gradient(45deg, rgba(80,80,80,0.18) 0 6px, transparent 6px 12px)",
                 border: "1px dashed rgba(80,80,80,0.5)",
-                borderRadius: 3,
+                borderRadius: 2,
               }} title="Blackout period" />
             );
           })()}
@@ -504,7 +504,7 @@ function Row({
                 title={`Rate raised from $${inc.from_rate} → $${inc.to_rate} on ${d.toLocaleDateString()}`}
                 style={{
                   position: "absolute",
-                  top: 8, bottom: 8,
+                  top: 2, bottom: 2,
                   left: offset,
                   width: 2,
                   background: "var(--sage)",
@@ -558,11 +558,12 @@ function Row({
 }
 
 const cellStyle: React.CSSProperties = {
-  padding: "0.55rem 0.7rem",
+  padding: "0.22rem 0.5rem",
   borderRight: "1px solid var(--line)",
   display: "flex",
-  flexDirection: "column",
-  justifyContent: "center",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: "0.35rem",
   background: "var(--paper)",
 };
 const iconBtn: React.CSSProperties = {
