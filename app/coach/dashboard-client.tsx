@@ -617,11 +617,20 @@ export default function DashboardClient({
   }
 
   // ── Derived week data ────────────────────────────────────────────────────
+  // Paid Hours intentionally excludes zero-rate sessions (e.g. Ryan's
+  // comp'd sessions) so the number reflects revenue-bearing time, not
+  // total time on the floor.
   const hours = displayAppts
-    .filter((a) => a.session_type === "session")
+    .filter((a) => a.session_type === "session" && (a.rate ?? 0) > 0)
     .reduce((acc, a) => {
       return acc + (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 3_600_000;
     }, 0);
+  const paidHourSessions = displayAppts.filter(
+    (a) => a.session_type === "session"
+      && a.status !== "cancelled"
+      && a.status !== "no_show"
+      && (a.rate ?? 0) > 0
+  ).length;
   const weekRevenue = displayAppts
     .filter((a) => a.session_type === "session")
     .reduce((acc, a) => acc + (a.rate ?? 0), 0);
@@ -735,7 +744,7 @@ export default function DashboardClient({
               <div className="stat">
                 <div className="stat-label">Paid Hours</div>
                 <div className="stat-value">{Math.round(hours)}</div>
-                <div className="stat-sub">{displayAppts.filter((a) => a.session_type === "session" && a.status !== "cancelled" && a.status !== "no_show").length} sessions</div>
+                <div className="stat-sub">{paidHourSessions} sessions</div>
               </div>
               <div className="stat">
                 <div className="stat-label">Revenue</div>

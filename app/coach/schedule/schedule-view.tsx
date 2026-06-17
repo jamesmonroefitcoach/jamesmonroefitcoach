@@ -1778,9 +1778,13 @@ export default function ScheduleView({
                           color: isPersonal ? personalColor : sessionColors.fg,
                           padding: isPersonal
                             ? "0.18rem 0.4rem 0.18rem 0.45rem"
-                            : "0.25rem 0.4rem 0.25rem 0.55rem",
+                            : "0.25rem 0.4rem 0.3rem 0.55rem",
                           borderRadius: 3,
                           fontSize: "0.74rem",
+                          // Flex column so the bottom row pins to the
+                          // bottom edge instead of crowding the title.
+                          display: "flex",
+                          flexDirection: "column",
                           borderLeft: isPersonal
                             ? `2px solid ${personalColor}`
                             : `4px solid ${cancelled ? "#e67e22" : sessionColors.bg}`,
@@ -1834,47 +1838,40 @@ export default function ScheduleView({
                           }
                         </div>
 
-                        {/* Bottom row — flat text. Left: $rate. Right:
-                            "✓ PAID | PROGRAMMED" style line that combines
-                            the three signals without any boxes or icons
-                            beyond the paid check. */}
-                        {!isPersonal && (
-                          <div style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: 4,
-                            marginTop: 2,
-                            fontSize: "0.62rem",
-                            letterSpacing: "0.04em",
-                          }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-                              <span style={{ opacity: 0.92, fontWeight: 600 }}>
-                                {`$${e.rate ?? "—"}`}
-                              </span>
-                              {e.change_count > 0 && (
-                                <span style={{ opacity: 0.78 }}>·{e.change_count}↺</span>
-                              )}
-                            </span>
-                            <span style={{
+                        {/* Bottom strip — pinned to the bottom edge via
+                            margin-top: auto. Format: "$X · PAID: ✓ · PROG: Y"
+                            with ✓/✗ for paid and Y/N for programmed so the
+                            three facts read at a glance. */}
+                        {!isPersonal && (() => {
+                          const hasProgram =
+                            e.program_status === "programmed" ||
+                            e.program_status === "draft" ||
+                            e.status === "completed";
+                          return (
+                            <div style={{
+                              marginTop: "auto",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              fontSize: "0.64rem",
+                              fontWeight: 700,
+                              letterSpacing: "0.04em",
                               textTransform: "uppercase",
-                              fontWeight: 600,
-                              opacity: 0.95,
                               whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
                             }}>
-                              {e.paid && <span style={{ marginRight: 2 }}>✓</span>}
-                              {e.paid ? "paid" : "unpaid"}
-                              <span style={{ margin: "0 4px", opacity: 0.55 }}>|</span>
-                              {e.program_status === "programmed"
-                                ? "programmed"
-                                : e.program_status === "draft"
-                                  ? "draft"
-                                  : e.status === "completed"
-                                    ? "logged"
-                                    : "not programmed"}
-                            </span>
-                          </div>
-                        )}
+                              <span style={{ opacity: 0.95 }}>{`$${e.rate ?? 0}`}</span>
+                              <span style={{ opacity: 0.55 }}>·</span>
+                              <span>PAID: {e.paid ? "✓" : "✗"}</span>
+                              <span style={{ opacity: 0.55 }}>·</span>
+                              <span>PROG: {hasProgram ? "Y" : "N"}</span>
+                              {e.change_count > 0 && (
+                                <span style={{ opacity: 0.78, marginLeft: "auto" }}>{e.change_count}↺</span>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Personal: tiny meta line if there's room (>32px) */}
                         {isPersonal && heightPx > 32 && (
