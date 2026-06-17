@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { listGoalsForUser } from "@/lib/goals.server";
 import { rollupSleepForUser, rollupWeeklyGoalsForUser } from "@/lib/goal-rollups.server";
 import GoalsClient from "@/components/goals-client";
+import GoalsTabs from "./goals-tabs";
 
 export default async function CoachGoalsPage() {
   const user = await getSessionUser();
@@ -15,5 +16,12 @@ export default async function CoachGoalsPage() {
     rollupWeeklyGoalsForUser(user.id),
   ]);
   const categories = await listGoalsForUser(user.id);
-  return <GoalsClient ownerLabel={user.name} categories={categories} />;
+  return (
+    <>
+      <main className="shell" style={{ paddingTop: "0.75rem", paddingBottom: 0 }}>
+        <GoalsTabs />
+      </main>
+      <GoalsClient ownerLabel={user.name} categories={categories} />
+    </>
+  );
 }

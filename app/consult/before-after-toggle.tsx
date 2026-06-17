@@ -11,6 +11,8 @@ export default function BeforeAfterToggle({
   beforeSrc,
   afterSrc,
   fit = "cover",
+  beforeFit,
+  afterFit,
 }: {
   label: string;
   summary: string;
@@ -19,21 +21,28 @@ export default function BeforeAfterToggle({
   afterSrc?: string;
   // "cover" crops to the 4/5 frame, head anchored at top. "contain"
   // letterboxes so the full body shows (useful when feet/legs would
-  // otherwise get clipped).
+  // otherwise get clipped). Per-photo overrides win over the shared
+  // `fit` prop so a row can mix (e.g. crop the BEFORE, letterbox the
+  // AFTER) when only one of the two photos has legs/feet at the edge.
   fit?: "cover" | "contain";
+  beforeFit?: "cover" | "contain";
+  afterFit?: "cover" | "contain";
 }) {
-  const photoClass = "public-photo" + (fit === "contain" ? " is-contain" : "");
+  const bFit = beforeFit ?? fit;
+  const aFit = afterFit ?? fit;
+  const photoClassFor = (f: "cover" | "contain") =>
+    "public-photo" + (f === "contain" ? " is-contain" : "");
   return (
     <div className="public-result">
       <div className="public-result-row">
         <div className="public-result-photos">
-          <div className={photoClass}>
+          <div className={photoClassFor(bFit)}>
             {beforeSrc
               ? <img src={beforeSrc} alt={`${label} - before`} />
               : <span>BEFORE</span>}
             <span className="public-photo-tag">BEFORE</span>
           </div>
-          <div className={photoClass}>
+          <div className={photoClassFor(aFit)}>
             {afterSrc
               ? <img src={afterSrc} alt={`${label} - after`} />
               : <span>AFTER</span>}

@@ -679,7 +679,10 @@ th.tbl-sticky-last {
   line-height: 1.04;
   letter-spacing: 0.005em;
   text-transform: none;
-  max-width: 19ch;
+  /* Was 19ch — capped the line so short that the hero felt like a
+     phone column on wide viewports. Widen so the headline uses the
+     section's actual width; mobile breakpoint already drops the cap. */
+  max-width: 34ch;
   margin: 0 0 1.2rem;
 }
 .public-sub {
@@ -1256,15 +1259,12 @@ th.tbl-sticky-last {
   font-weight: 700;
 }
 
-/* Rate / "Getting started" block — same 1100px section container as
-   every other section, just narrower body copy width so the line
-   lengths stay readable. Auto margins keep it centered. */
-.public-rate-block {
-  max-width: 720px;
-  margin-left: auto;
-  margin-right: auto;
-  text-align: left;
-}
+/* Rate / "Getting started" block — sits inside the same 1100px section
+   container as every other section. We let the eyebrow/H2/CTA align to
+   the section's left edge so it reads as part of the page rhythm; the
+   paragraph stays readable via its own max-width below. */
+.public-rate-block { text-align: left; }
+.public-rate-block .public-p { max-width: 58ch; }
 
 /* Location section — Hyde Park Gym */
 .public-location-grid {

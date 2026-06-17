@@ -94,7 +94,19 @@ function CategoryBlock({
 }) {
   const [editingCat, setEditingCat] = useState(false);
   const [addingGoal, setAddingGoal] = useState(false);
-  const topGoals = cat.goals.filter((g) => !g.parent_goal_id);
+  // Annual (one_time, checkbox-style) goals first, then weekly/recurring.
+  // Within each group, original insertion order is preserved by the
+  // stable .sort.
+  const topGoals = cat.goals
+    .filter((g) => !g.parent_goal_id)
+    .map((g, idx) => ({ g, idx }))
+    .sort((a, b) => {
+      const aRank = a.g.kind === "one_time" ? 0 : 1;
+      const bRank = b.g.kind === "one_time" ? 0 : 1;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.idx - b.idx;
+    })
+    .map(({ g }) => g);
   const subsByParent = useMemo(() => {
     const m = new Map<string, GoalRow[]>();
     for (const g of cat.goals) {
@@ -218,9 +230,14 @@ function GoalListItem({
 }) {
   const [editing, setEditing] = useState(false);
   const [addingSub, setAddingSub] = useState(false);
+  // Each row collapses to title + status by default. Notes, sub-goals,
+  // and the add-sub-goal control only render when the row is expanded
+  // or being edited. Click the title area (or the chevron) to toggle.
+  const [expanded, setExpanded] = useState(false);
   const pct = progressPct(goal);
   const showProgress = pct != null && goal.kind !== "one_time";
   const isOneTime = goal.kind === "one_time";
+  const hasDetails = !!goal.notes || subs.length > 0;
 
   return (
     <li style={{ borderTop: "1px solid var(--line)", padding: "0.35rem 0.7rem" }}>
@@ -232,7 +249,7 @@ function GoalListItem({
             {isOneTime && (
               <button
                 type="button"
-                onClick={() => onAction(updateGoal(goal.id, { is_achieved: !goal.is_achieved }))}
+                onClick={(ev) => { ev.stopPropagation(); onAction(updateGoal(goal.id, { is_achieved: !goal.is_achieved })); }}
                 title={goal.is_achieved ? "Mark not done" : "Mark done"}
                 style={{
                   background: goal.is_achieved ? "var(--sage)" : "transparent",
@@ -247,7 +264,15 @@ function GoalListItem({
                 }}
               >{goal.is_achieved ? "✓" : ""}</button>
             )}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              style={{
+                flex: 1, minWidth: 0, textAlign: "left",
+                background: "transparent", border: "none", padding: 0, cursor: "pointer",
+              }}
+              title={expanded ? "Collapse" : "Expand"}
+            >
               <div style={{
                 fontWeight: 500,
                 fontSize: "0.82rem",
@@ -257,12 +282,7 @@ function GoalListItem({
               }}>
                 {goal.name}
               </div>
-              {goal.notes && (
-                <div className="meta" style={{ fontSize: "0.66rem", fontStyle: "italic" }}>
-                  {goal.notes}
-                </div>
-              )}
-            </div>
+            </button>
             {!isOneTime && (
               <div style={{
                 textAlign: "right",
@@ -275,8 +295,16 @@ function GoalListItem({
                 {targetLabel(goal)}
               </div>
             )}
-            <div style={{ display: "flex", gap: "0.05rem" }}>
-              <button type="button" onClick={() => setEditing(true)} title="Edit goal" style={iconBtn}>✎</button>
+            <div style={{ display: "flex", gap: "0.05rem", alignItems: "center" }}>
+              {hasDetails && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  title={expanded ? "Collapse" : "Expand details"}
+                  style={{ ...iconBtn, color: "var(--muted)" }}
+                >{expanded ? "▾" : "▸"}</button>
+              )}
+              <button type="button" onClick={() => { setExpanded(true); setEditing(true); }} title="Edit goal" style={iconBtn}>✎</button>
               <button
                 type="button"
                 onClick={() => { if (confirm(`Delete goal "${goal.name}"?`)) onAction(deleteGoal(goal.id)); }}
@@ -286,7 +314,8 @@ function GoalListItem({
             </div>
           </div>
 
-          {/* Progress bar (only for trackable goals) */}
+          {/* Progress bar — always visible for trackable goals; it's a
+              3px sliver so it doesn't read as "detail" the way notes do. */}
           {showProgress && (
             <div style={{
               marginTop: "0.3rem",
@@ -302,11 +331,17 @@ function GoalListItem({
               }} />
             </div>
           )}
+
+          {expanded && goal.notes && (
+            <div className="meta" style={{ fontSize: "0.66rem", fontStyle: "italic", marginTop: "0.3rem" }}>
+              {goal.notes}
+            </div>
+          )}
         </>
       )}
 
-      {/* Sub-goals */}
-      {subs.length > 0 && (
+      {/* Sub-goals — only visible when row is expanded. */}
+      {expanded && subs.length > 0 && (
         <ul style={{
           listStyle: "none",
           padding: "0.4rem 0 0",
@@ -319,26 +354,28 @@ function GoalListItem({
         </ul>
       )}
 
-      {/* Add sub-goal */}
-      <div style={{ marginTop: subs.length > 0 ? "0.4rem" : "0.5rem", paddingLeft: "1.1rem" }}>
-        {addingSub ? (
-          <NewSubGoalForm
-            onCancel={() => setAddingSub(false)}
-            onSubmit={(name) =>
-              onAction(createGoal({
-                category_id: categoryId, parent_goal_id: goal.id, name, kind: "one_time",
-              })).then(() => setAddingSub(false))
-            }
-            pending={pending}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAddingSub(true)}
-            style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: "0.7rem", color: "var(--muted)" }}
-          >+ sub-goal</button>
-        )}
-      </div>
+      {/* Add sub-goal — only visible when expanded. */}
+      {expanded && (
+        <div style={{ marginTop: subs.length > 0 ? "0.4rem" : "0.5rem", paddingLeft: "1.1rem" }}>
+          {addingSub ? (
+            <NewSubGoalForm
+              onCancel={() => setAddingSub(false)}
+              onSubmit={(name) =>
+                onAction(createGoal({
+                  category_id: categoryId, parent_goal_id: goal.id, name, kind: "one_time",
+                })).then(() => setAddingSub(false))
+              }
+              pending={pending}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingSub(true)}
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", fontSize: "0.7rem", color: "var(--muted)" }}
+            >+ sub-goal</button>
+          )}
+        </div>
+      )}
     </li>
   );
 }

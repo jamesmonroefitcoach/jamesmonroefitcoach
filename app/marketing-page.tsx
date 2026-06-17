@@ -125,14 +125,15 @@ const TESTIMONIALS = [
   },
 ];
 
-const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterSrc?: string; fit?: "cover" | "contain" }[] = [
+const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterSrc?: string; fit?: "cover" | "contain"; beforeFit?: "cover" | "contain"; afterFit?: "cover" | "contain" }[] = [
   {
     label: "Body recomposition · Austin client",
     summary: "Strength + recomp focus. Leaner build, less softness, more confidence. Same person, different season.",
     beforeSrc: "/results/client-1-before.jpg",
     afterSrc: "/results/client-1-after.jpg",
-    // Full-body shot — letterbox so legs/feet aren't cropped.
-    fit: "contain",
+    // BEFORE crops like every other entry; AFTER letterboxes so the
+    // full body shows (feet/legs would otherwise clip).
+    afterFit: "contain",
   },
   {
     label: "Lean-out · Austin client",
@@ -445,6 +446,8 @@ export default async function MarketingPage({
               const beforeSrc = (b as { beforeSrc?: string }).beforeSrc;
               const afterSrc = (b as { afterSrc?: string }).afterSrc;
               const fit = (b as { fit?: "cover" | "contain" }).fit;
+              const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
+              const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
               return (
                 <BeforeAfterToggle
                   key={i}
@@ -454,6 +457,8 @@ export default async function MarketingPage({
                   beforeSrc={beforeSrc}
                   afterSrc={afterSrc}
                   fit={fit}
+                  beforeFit={beforeFit}
+                  afterFit={afterFit}
                 />
               );
             })}
