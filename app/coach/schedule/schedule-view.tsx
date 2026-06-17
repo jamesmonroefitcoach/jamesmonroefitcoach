@@ -1487,18 +1487,17 @@ export default function ScheduleView({
               const dayEvents = appts.filter((a) => dayIndex(new Date(a.starts_at)) === dayIdx);
               const laid = layOutDay(dayEvents);
 
-              // Morning continuations — overnight blocks (sleep that runs
-              // past 6am the next day) get an extra mini-block in the
-              // next day's column at the top showing the morning portion
-              // that doesn't fit at the bottom of the previous day's
-              // column.
+              // Morning continuations — any overnight block (sleep, cook,
+              // body mastery, whatever) renders a small label at the top
+              // of the next day's column so a coach can see "↩ ends 3a"
+              // even when the prev-day's grid clips the tail past 1a/2a.
+              // Cap at 2pm-end to filter out obviously bad data.
               const morningContinuations = appts.filter((a) => {
                 const s = new Date(a.starts_at);
                 const e = new Date(a.ends_at);
                 if (e.toDateString() === s.toDateString()) return false; // single-day
                 const eHr = e.getHours();
-                if (eHr < HOURS[0]) return false; // earlier than 6am still falls into prev-day extension
-                if (eHr > 12) return false; // afternoon spans aren't 'morning' continuations
+                if (eHr > 14) return false; // beyond noon-ish isn't a continuation
                 return dayIndex(e) === dayIdx;
               });
 
@@ -1650,7 +1649,16 @@ export default function ScheduleView({
                       a wraparound icon so it's obvious it's a continuation. */}
                   {morningContinuations.map((c) => {
                     const e = new Date(c.ends_at);
-                    const heightPx = Math.max(14, pxFromTop(e));
+                    // For ends past 6am, scale to "minutes since 6am" so
+                    // the bar reads like a normal time slot. For ends
+                    // before 6am (a Cook 11p-3a continuation, etc.) just
+                    // show a fixed-height label — the next column's
+                    // visible grid starts at 6a and a giant bar pinned to
+                    // the top would not represent anything meaningful.
+                    const eHr = e.getHours();
+                    const heightPx = eHr < HOURS[0]
+                      ? 22
+                      : Math.max(14, pxFromTop(e));
                     const isPersonal = c.session_type === "personal";
                     const personalGoalId = isPersonal
                       ? (c as { goal_id?: string | null }).goal_id ?? null
@@ -2355,11 +2363,14 @@ export default function ScheduleView({
                     onChange={(e) => {
                       const d = e.target.value;
                       if (!d) return;
-                      setDraft({
-                        ...draft,
-                        starts_at: setDateOnIso(draft.starts_at, d),
-                        ends_at:   setDateOnIso(draft.ends_at,   d),
-                      });
+                      const newStart = setDateOnIso(draft.starts_at, d);
+                      let newEnd = setDateOnIso(draft.ends_at, d);
+                      if (new Date(newEnd).getTime() <= new Date(newStart).getTime()) {
+                        const nx = new Date(newEnd);
+                        nx.setDate(nx.getDate() + 1);
+                        newEnd = nx.toISOString();
+                      }
+                      setDraft({ ...draft, starts_at: newStart, ends_at: newEnd });
                     }}
                     style={{ marginTop: "0.2rem" }}
                   />
@@ -2389,7 +2400,19 @@ export default function ScheduleView({
                       onChange={(e) => {
                         const t = e.target.value;
                         if (!t) return;
-                        setDraft({ ...draft, ends_at: setTimeOnIso(draft.ends_at, t) });
+                        // setTimeOnIso keeps the existing end's calendar
+                        // date. If the new end is ≤ start (user typed e.g.
+                        // "01:00" while start is "23:00"), the block would
+                        // collapse to 0/negative duration. Roll the end
+                        // forward by one day so cross-midnight ranges
+                        // work the way the form reads.
+                        let nextEnd = setTimeOnIso(draft.ends_at, t);
+                        if (new Date(nextEnd).getTime() <= new Date(draft.starts_at).getTime()) {
+                          const d = new Date(nextEnd);
+                          d.setDate(d.getDate() + 1);
+                          nextEnd = d.toISOString();
+                        }
+                        setDraft({ ...draft, ends_at: nextEnd });
                       }}
                       style={{ marginTop: "0.2rem" }}
                     />
