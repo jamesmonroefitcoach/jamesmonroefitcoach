@@ -133,10 +133,21 @@
   .col-resizer { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize; touch-action: none; z-index: 3; }
   .col-resizer::after { content: ""; position: absolute; top: 15%; bottom: 15%; right: 4px; width: 2px; background: var(--line); }
   thead th:hover .col-resizer::after { background: var(--rust); }
-  tbody td { border: 1px solid #b9ad98; padding: 0; height: 0.3in; overflow: hidden; }
-  tbody td input { font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink); background: transparent; border: none; width: 100%; height: 100%; padding: 0.05rem 0.4rem; }
+  tbody td { border: 1px solid #b9ad98; padding: 0; vertical-align: top; }
+  tbody td input { font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink); background: transparent; border: none; width: 100%; min-height: 0.3in; padding: 0.05rem 0.4rem; box-sizing: border-box; }
   tbody td input.center { text-align: center; padding: 0.05rem 0.1rem; }
   tbody td input:focus { outline: none; background: #fbf7ef; }
+  /* Load / Notes cell — textarea wraps long notes inline instead of
+     getting clipped or pushed off the right edge on phone. Auto-grows
+     vertically as the user types; the surrounding row matches. */
+  tbody td.notes-cell { padding: 0; }
+  tbody td.notes-cell textarea {
+    font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink);
+    background: transparent; border: none; width: 100%; min-height: 0.3in;
+    padding: 0.1rem 0.4rem; line-height: 1.3; resize: none; overflow: hidden;
+    white-space: pre-wrap; word-wrap: break-word; box-sizing: border-box;
+  }
+  tbody td.notes-cell textarea:focus { outline: none; background: #fbf7ef; }
   tbody td.x-cell { padding: 0; text-align: center; }
   .row-del { width: 100%; height: 100%; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 0.82rem; line-height: 1; padding: 0; }
   .row-del:hover { color: var(--rust); }
@@ -156,6 +167,11 @@
     .toolbar .actions { width: 100%; justify-content: space-between; }
     .toolbar .btn { flex: 1; text-align: center; }
     .sheet { padding: 0.7rem; }
+    /* On phone the fixed data columns already eat the row width — give
+       the table a hard min so the notes column still has room to wrap
+       into. .table-wrap scrolls horizontally if this overflows. */
+    table { min-width: 640px; }
+    tbody td.notes-cell { min-width: 220px; }
   }
 
   /* lock banner + locked-by-other state */
@@ -182,7 +198,8 @@
   body.locked-by-other #save-modal-trigger,
   body.locked-by-other #clear-btn,
   body.locked-by-other #cancel-btn { pointer-events: none; opacity: 0.65; }
-  body.locked-by-other input:not([type=submit]):not([type=button]) { background: #fbf7ef !important; }
+  body.locked-by-other input:not([type=submit]):not([type=button]),
+  body.locked-by-other textarea { background: #fbf7ef !important; }
 
   /* save modal */
   .modal {
@@ -313,6 +330,21 @@
       td.appendChild(input);
       return td;
     }
+    function notesCell() {
+      var td = document.createElement("td");
+      td.className = "notes-cell";
+      var ta = document.createElement("textarea");
+      ta.rows = 1;
+      ta.autocomplete = "off";
+      ta.spellcheck = false;
+      ta.addEventListener("input", function () { autoGrow(ta); });
+      td.appendChild(ta);
+      return td;
+    }
+    function autoGrow(el) {
+      el.style.height = "auto";
+      el.style.height = (el.scrollHeight + 2) + "px";
+    }
     function xCell() {
       var td = document.createElement("td");
       td.className = "x-cell";
@@ -322,13 +354,13 @@
       return td;
     }
 
-    // row = [×] + movement + sets×(reps,wt) + load/notes
+    // row = [×] + movement + sets×(reps,wt) + load/notes (textarea)
     function makeRow(sets) {
       var tr = document.createElement("tr");
       tr.appendChild(xCell());
       tr.appendChild(cell(false));
       for (var s = 0; s < sets; s++) { tr.appendChild(cell(true)); tr.appendChild(cell(true)); }
-      tr.appendChild(cell(false));
+      tr.appendChild(notesCell());
       return tr;
     }
 
@@ -379,8 +411,12 @@
 
       var bar = document.createElement("div");
       bar.className = "day-bar";
+      // Bar-field order: [name, date, weight, sleep] — collectState /
+      // fillDay index by position, so adding a new field at the front
+      // means updating those two helpers as well.
       bar.innerHTML =
         '<span class="day-tag">Day ' + dayCount + '</span>' +
+        '<span class="bar-field"><span class="bar-label">Name (optional)</span><input type="text" autocomplete="off" placeholder="Push / Lower / Recovery" /></span>' +
         '<span class="bar-field"><span class="bar-label">Date</span><input type="text" autocomplete="off" /></span>' +
         '<span class="bar-field"><span class="bar-label">Current Weight</span><input type="text" autocomplete="off" /></span>' +
         '<span class="bar-field"><span class="bar-label">Sleep (hrs)</span><input type="text" autocomplete="off" /></span>';
@@ -503,22 +539,40 @@
         var rows = [];
         b.querySelectorAll("tbody tr").forEach(function (tr) {
           var vals = [];
-          tr.querySelectorAll("input").forEach(function (i) { vals.push(i.value); });
+          tr.querySelectorAll("input, textarea").forEach(function (i) { vals.push(i.value); });
           rows.push(vals);
         });
-        days.push({ date: bar[0].value, weight: bar[1].value, sleep: bar[2].value, sets: parseInt(b.dataset.sets, 10), rows: rows });
+        days.push({
+          name: bar[0].value,
+          date: bar[1].value,
+          weight: bar[2].value,
+          sleep: bar[3].value,
+          sets: parseInt(b.dataset.sets, 10),
+          rows: rows,
+        });
       });
       return { client: val("client_name"), goal: val("goal"), nutrition: val("nutrition"), days: days };
     }
 
     function fillDay(block, d) {
       var bar = block.querySelectorAll(".day-bar .bar-field input");
-      bar[0].value = d.date || ""; bar[1].value = d.weight || ""; bar[2].value = d.sleep || "";
+      // Backwards compat: sheets saved before the Name field stored
+      // [date, weight, sleep] only. If `d.name` is missing assume the
+      // legacy layout and shift the values forward.
+      var hasName = Object.prototype.hasOwnProperty.call(d, "name");
+      bar[0].value = hasName ? (d.name || "") : "";
+      bar[1].value = d.date || "";
+      bar[2].value = d.weight || "";
+      bar[3].value = d.sleep || "";
       var trs = block.querySelectorAll("tbody tr");
       (d.rows || []).forEach(function (vals, ri) {
         if (!trs[ri]) return;
-        var ins = trs[ri].querySelectorAll("input");   // [movement, reps/wt..., notes] (× cell has no input)
-        vals.forEach(function (v, ci) { if (ins[ci]) ins[ci].value = v; });
+        var ins = trs[ri].querySelectorAll("input, textarea");   // [movement, reps/wt..., notes] (× cell has no input)
+        vals.forEach(function (v, ci) {
+          if (!ins[ci]) return;
+          ins[ci].value = v;
+          if (ins[ci].tagName === "TEXTAREA") autoGrow(ins[ci]);
+        });
       });
     }
 
@@ -554,7 +608,11 @@
       return false;
     }
 
-    document.addEventListener("input", function (e) { if (e.target && e.target.tagName === "INPUT") saveState(); });
+    document.addEventListener("input", function (e) {
+      if (!e.target) return;
+      var t = e.target.tagName;
+      if (t === "INPUT" || t === "TEXTAREA") saveState();
+    });
 
     // ---------- send / share ----------
     function sheetSummary() {
@@ -567,12 +625,14 @@
       daysEl.querySelectorAll(".day-block").forEach(function (b, i) {
         var bar = b.querySelectorAll(".day-bar .bar-field input");
         var meta = [];
-        if (bar[0].value.trim()) meta.push("Date " + bar[0].value.trim());
-        if (bar[1].value.trim()) meta.push("Weight " + bar[1].value.trim());
-        if (bar[2].value.trim()) meta.push("Sleep " + bar[2].value.trim());
-        lines.push(""); lines.push("Day " + (i + 1) + (meta.length ? " — " + meta.join(" · ") : ""));
+        var name = bar[0] ? bar[0].value.trim() : "";
+        if (bar[1] && bar[1].value.trim()) meta.push("Date " + bar[1].value.trim());
+        if (bar[2] && bar[2].value.trim()) meta.push("Weight " + bar[2].value.trim());
+        if (bar[3] && bar[3].value.trim()) meta.push("Sleep " + bar[3].value.trim());
+        var heading = "Day " + (i + 1) + (name ? " · " + name : "");
+        lines.push(""); lines.push(heading + (meta.length ? " — " + meta.join(" · ") : ""));
         b.querySelectorAll("tbody tr").forEach(function (tr) {
-          var ins = tr.querySelectorAll("input");        // [movement, reps/wt..., notes]
+          var ins = tr.querySelectorAll("input, textarea");  // [movement, reps/wt..., notes]
           var mv = ins[0].value.trim();
           if (!mv) return;
           var sets = [];
@@ -644,7 +704,7 @@
       LOCKED_BY_OTHER = locked;
       document.body.classList.toggle("locked-by-other", locked);
       // readOnly inputs (still focusable/selectable, but no edits)
-      document.querySelectorAll("input").forEach(function (i) {
+      document.querySelectorAll("input, textarea").forEach(function (i) {
         if (locked) i.setAttribute("readonly", "");
         else i.removeAttribute("readonly");
       });
@@ -741,7 +801,7 @@
                 });
                 restoring = false;
                 // re-apply read-only after rebuilding inputs
-                document.querySelectorAll("input").forEach(function (i) { i.setAttribute("readonly", ""); });
+                document.querySelectorAll("input, textarea").forEach(function (i) { i.setAttribute("readonly", ""); });
               }
             }
           })
