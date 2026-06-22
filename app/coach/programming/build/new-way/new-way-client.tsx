@@ -12,7 +12,7 @@ import {
 } from "../actions";
 import ReworkClient from "../rework/rework-client";
 import ProgramsReworkClient from "../programs-rework/programs-rework-client";
-import WorkoutSheetEmbed, { type ClientLite } from "@/components/workout-sheet-embed";
+import WorkoutSheetEmbed, { type ClientLite, type AutofillData } from "@/components/workout-sheet-embed";
 import { archiveActiveWip, listWipBackups, restoreWipBackup, deleteWipBackup, type WipBackup } from "@/lib/program-wip";
 
 type ViewMode = "inapp" | "template";
@@ -241,6 +241,21 @@ export default function NewWayClient({
     const clientLite: ClientLite[] = clients
       .filter((c) => !!c.full_name)
       .map((c) => ({ id: c.id, name: c.full_name }));
+
+    // Autofill for session template: pre-populate client name, date, timeframe
+    const sessionAutofill: AutofillData | null = type === "session" && startsAt
+      ? (() => {
+          const d = new Date(startsAt);
+          const dateStr = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+          const firstName = (selectedClient?.full_name ?? "").split(" ")[0];
+          return {
+            clientName: selectedClient?.full_name ?? "",
+            timeframe: `Session ${dateStr}`,
+            dayName: firstName ? `Session with ${firstName} ${dateStr}` : `Session ${dateStr}`,
+            dayDate: dateStr,
+          };
+        })()
+      : null;
     const subLabel =
       type === "session"
         ? apptId
@@ -296,6 +311,7 @@ export default function NewWayClient({
               clients={clientLite}
               sessions={[]}
               sheetId={pairedSheetId}
+              autofill={sessionAutofill}
             />
           ) : (
             <div className="card" style={{ padding: "1.5rem", textAlign: "center" }}>

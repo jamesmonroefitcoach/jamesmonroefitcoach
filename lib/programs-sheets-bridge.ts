@@ -207,6 +207,23 @@ export async function syncSheetDataToProgram(programId: string, sheet: SheetData
   }
 }
 
+// ─── timeframe parser ────────────────────────────────────────────────
+
+function parseTimeframeDates(tf: string | null | undefined, todayISO: string): { startsOn: string; endsOn: string | null } {
+  if (!tf) return { startsOn: todayISO, endsOn: null };
+  const yr = parseInt(todayISO.slice(0, 4), 10);
+  const re = /(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/g;
+  const dates: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(tf)) !== null) {
+    const [, month, day, year] = m;
+    const y = year ? parseInt(year, 10) : yr;
+    dates.push(`${y}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`);
+  }
+  if (dates.length === 0) return { startsOn: todayISO, endsOn: null };
+  return { startsOn: dates[0], endsOn: dates[dates.length - 1] };
+}
+
 // ─── pair lookup / creation ───────────────────────────────────────────
 
 export async function getOrCreatePairedSheet(programId: string): Promise<string | null> {
@@ -249,7 +266,7 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
 
   const { data: sheet } = await supabase
     .from("workout_sheets")
-    .select("id, name, coach_id, client_id, program_id, kind")
+    .select("id, name, coach_id, client_id, program_id, kind, sheet_data")
     .eq("id", sheetId)
     .maybeSingle<{
       id: string;
@@ -258,10 +275,14 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
       client_id: string | null;
       program_id: string | null;
       kind: "app" | "pdf";
+      sheet_data: { timeframe?: string } | null;
     }>();
   if (!sheet) return null;
   if (sheet.program_id) return sheet.program_id;
   if (!sheet.client_id) return null; // can't create a programs row without a client
+
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const { startsOn, endsOn } = parseTimeframeDates(sheet.sheet_data?.timeframe, todayISO);
 
   const { data: program } = await supabase
     .from("programs")
@@ -270,7 +291,8 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
       coach_id: sheet.coach_id,
       name: sheet.name,
       program_kind: "in_gym",
-      starts_on: new Date().toISOString().slice(0, 10),
+      starts_on: startsOn,
+      ends_on: endsOn,
       duration_weeks: 1,
       is_published: sheet.kind === "pdf",       // PDFs are inherently "submitted"
       is_current: true,

@@ -15,17 +15,25 @@ import { useRouter, usePathname } from "next/navigation";
 export type ClientLite = { id: string; name: string };
 export type SessionLite = { id: string; label: string; client_id: string };
 export type UserLite = { id: string; name: string; role: string };
+export type AutofillData = {
+  clientName?: string;
+  timeframe?: string;
+  dayName?: string;
+  dayDate?: string;
+};
 
 export default function WorkoutSheetEmbed({
   sheetId,
   user,
   clients,
   sessions,
+  autofill,
 }: {
   sheetId?: string | null;
   user?: UserLite | null;
   clients?: ClientLite[];
   sessions?: SessionLite[];
+  autofill?: AutofillData | null;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const router = useRouter();
@@ -55,6 +63,7 @@ export default function WorkoutSheetEmbed({
             clientList: clients ?? [],
             sessionList: sessions ?? [],
             sheetId: sheetId ?? null,
+            autofill: autofill ?? null,
           },
           window.location.origin
         );
@@ -72,7 +81,7 @@ export default function WorkoutSheetEmbed({
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [user, clients, sessions, sheetId, router, pathname]);
+  }, [user, clients, sessions, sheetId, router, pathname, autofill]);
 
   function onLoad() {
     resize();

@@ -56,9 +56,10 @@ export default async function ProgrammingLandingPage() {
       listAppointmentsForClient(c.id),
       listProgramsForClient(c.id),
     ]);
-    const sessions = programs.find((p) => p.is_current && p.program_kind === "in_gym") ?? null;
-    const program = programs.find((p) => p.is_current && p.program_kind === "at_home") ?? null;
-    const historicalPrograms = programs.filter((p) => !p.is_current && p.program_kind === "at_home");
+    const today = new Date().toISOString().slice(0, 10);
+    const sessions = programs.find((p) => p.is_current && p.program_kind === "in_gym" && (!p.ends_on || p.ends_on >= today)) ?? null;
+    const program = programs.find((p) => p.is_current && p.program_kind === "at_home" && (!p.ends_on || p.ends_on >= today)) ?? null;
+    const historicalPrograms = programs.filter((p) => p.program_kind === "at_home" && (!p.is_current || (p.ends_on && p.ends_on < today)));
     const now = Date.now();
     const sessionAppts = appts.filter((a) => a.session_type === "session" && a.client_id === c.id);
     const upcomingSessions = sessionAppts

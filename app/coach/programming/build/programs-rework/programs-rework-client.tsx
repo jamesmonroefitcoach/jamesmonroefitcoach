@@ -19,12 +19,16 @@ import type { ClientProgramItem } from "../page";
 
 type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
 
+type SlotSetRow = { reps: string; exertion_score: number };
+
 type ExerciseSlot = {
   uid: string;
   movement: Movement;
   sets: number;
   reps: string;
   exertion_score: number;
+  same_format: boolean;
+  set_rows: SlotSetRow[];
   variations: Variation[];
   equipment_list: Equipment[];
   equipment_specifics?: string;
@@ -43,6 +47,8 @@ type ProgramState = {
   kind: ProgramKind;
   name: string;
   timeframe: string;         // freeform, e.g. "2 weeks 6/23 - 7/7"
+  headerGoal: string;        // mirrors the template's Goal field
+  headerNutrition: string;   // mirrors the template's Deficit/Nutrition field
   durationWeeks: number;
   suggestedDaysPerWeek: number;
   dayCount: number;
@@ -88,6 +94,8 @@ function freshSlot(movement: Movement): ExerciseSlot {
     sets: 3,
     reps: "8-10",
     exertion_score: 5,
+    same_format: true,
+    set_rows: [],
     variations: [],
     equipment_list: (movement.equipment_list ?? []) as Equipment[],
     equipment_specifics: movement.equipment_specifics,
@@ -102,6 +110,8 @@ function defaultProgram(): ProgramState {
     kind: "day",
     name: "New program",
     timeframe: "",
+    headerGoal: "",
+    headerNutrition: "",
     durationWeeks: 4,
     suggestedDaysPerWeek: 3,
     dayCount: 3,
@@ -230,6 +240,16 @@ export default function ProgramsReworkClient({
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [program, hydrated, clientId, draftId, draftIdKey]);
+
+  // Seed headerGoal from client.goals when client changes (only if blank)
+  useEffect(() => {
+    if (!selectedClient) return;
+    setProgram((p) => ({
+      ...p,
+      headerGoal: p.headerGoal || (selectedClient.goals ?? ""),
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   // ── toggle Day ↔ Week ───────────────────────────────────────────────────
   function setKind(next: ProgramKind) {
@@ -561,6 +581,46 @@ export default function ProgramsReworkClient({
         </p>
       </div>
 
+      {/* Header fields — mirrors the top of the printable template */}
+      <div className="card" style={{ marginBottom: "1rem" }}>
+        <div style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--muted)", marginBottom: "0.55rem" }}>Program Header</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.55rem", alignItems: "start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="stat-label">Client Name</span>
+            <div className="input" style={{ background: "rgba(0,0,0,0.03)", color: selectedClient ? "var(--ink)" : "var(--muted)", minHeight: "1.85rem", display: "flex", alignItems: "center", padding: "0.2rem 0.5rem", fontSize: "0.86rem" }}>
+              {selectedClient?.full_name ?? "—"}
+            </div>
+          </div>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="stat-label">Goal</span>
+            <input
+              className="input"
+              value={program.headerGoal}
+              onChange={(e) => patchProgram({ headerGoal: e.target.value })}
+              placeholder="e.g. Build muscle, lose weight"
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="stat-label">Timeframe</span>
+            <input
+              className="input"
+              value={program.timeframe}
+              onChange={(e) => patchProgram({ timeframe: e.target.value })}
+              placeholder="e.g. 2 weeks 6/23 - 7/7"
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="stat-label">Deficit / Nutrition</span>
+            <input
+              className="input"
+              value={program.headerNutrition}
+              onChange={(e) => patchProgram({ headerNutrition: e.target.value })}
+              placeholder="optional"
+            />
+          </label>
+        </div>
+      </div>
+
       {/* Two-col layout: library sidebar | program body */}
       <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "1rem" }}>
         <LibrarySidebar libraryMovements={libraryMovements} onAdd={handleAdd} />
@@ -851,6 +911,37 @@ function ExerciseRow({ slot, onPatch, onDelete, onMoveUp, onMoveDown }: {
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
+  function toggleSameFormat() {
+    if (slot.same_format) {
+      // Switching to per-set: seed set_rows from shared values
+      const rows: SlotSetRow[] = Array.from({ length: slot.sets }, () => ({
+        reps: slot.reps,
+        exertion_score: slot.exertion_score,
+      }));
+      onPatch({ same_format: false, set_rows: rows });
+    } else {
+      onPatch({ same_format: true, set_rows: [] });
+    }
+  }
+
+  function patchSetRow(i: number, p: Partial<SlotSetRow>) {
+    const rows = [...(slot.set_rows ?? [])];
+    rows[i] = { ...rows[i], ...p };
+    onPatch({ set_rows: rows });
+  }
+
+  // When sets count changes in per-set mode, grow or shrink set_rows
+  function handleSetsChange(n: number) {
+    const next = Math.max(1, n);
+    if (!slot.same_format) {
+      const rows = [...(slot.set_rows ?? [])];
+      while (rows.length < next) rows.push({ reps: slot.reps, exertion_score: slot.exertion_score });
+      onPatch({ sets: next, set_rows: rows.slice(0, next) });
+    } else {
+      onPatch({ sets: next });
+    }
+  }
+
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: 4, padding: "0.45rem 0.6rem", background: "var(--paper)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.45rem", flexWrap: "wrap" }}>
@@ -859,26 +950,24 @@ function ExerciseRow({ slot, onPatch, onDelete, onMoveUp, onMoveDown }: {
           <button type="button" className="btn btn-ghost" style={{ padding: "0.1rem 0.32rem", fontSize: "0.7rem" }} onClick={onMoveDown}>↓</button>
           <strong style={{ fontSize: "0.86rem" }}>{slot.movement.name}</strong>
         </div>
-        <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.1rem 0.4rem", color: "var(--red)" }} onClick={onDelete}>✕</button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem", color: "var(--muted)", cursor: "pointer" }}>
+            <input type="checkbox" checked={slot.same_format !== false} onChange={toggleSameFormat} style={{ cursor: "pointer" }} />
+            All same
+          </label>
+          <button type="button" className="btn btn-ghost" style={{ fontSize: "0.68rem", padding: "0.1rem 0.4rem", color: "var(--red)" }} onClick={onDelete}>✕</button>
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "60px 70px 70px 130px 1fr", gap: "0.35rem 0.5rem", alignItems: "center", marginTop: "0.4rem" }}>
+
+      {/* Shared sets/reps/equipment row — always visible */}
+      <div style={{ display: "grid", gridTemplateColumns: "60px 130px 1fr", gap: "0.35rem 0.5rem", alignItems: "center", marginTop: "0.4rem" }}>
         <label className="meta" style={{ fontSize: "0.64rem" }}>Sets</label>
-        <label className="meta" style={{ fontSize: "0.64rem" }}>Reps</label>
-        <label className="meta" style={{ fontSize: "0.64rem" }}>RPE</label>
         <label className="meta" style={{ fontSize: "0.64rem" }}>Equipment</label>
         <label className="meta" style={{ fontSize: "0.64rem" }}>Notes</label>
 
         <input className="input" type="number" min={1} value={slot.sets}
-          onChange={(e) => onPatch({ sets: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+          onChange={(e) => handleSetsChange(parseInt(e.target.value, 10) || 1)}
           style={{ fontSize: "0.78rem", padding: "0.15rem 0.28rem" }} />
-        <input className="input" value={slot.reps}
-          onChange={(e) => onPatch({ reps: e.target.value })}
-          style={{ fontSize: "0.78rem", padding: "0.15rem 0.28rem" }} />
-        <select className="select" value={slot.exertion_score}
-          onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}
-          style={{ fontSize: "0.74rem", padding: "0.14rem 0.22rem" }}>
-          {Object.entries(EXERTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.15rem 0.4rem", fontSize: "0.7rem" }}>
           {EQUIPMENT_OPTIONS.map((opt) => (
             <label key={opt.value} style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
@@ -898,6 +987,50 @@ function ExerciseRow({ slot, onPatch, onDelete, onMoveUp, onMoveDown }: {
           style={{ fontSize: "0.78rem", padding: "0.15rem 0.28rem" }}
           placeholder="optional" />
       </div>
+
+      {/* Same-format: one shared Reps + RPE row */}
+      {slot.same_format !== false && (
+        <div style={{ display: "grid", gridTemplateColumns: "70px 70px", gap: "0.35rem 0.5rem", alignItems: "center", marginTop: "0.3rem" }}>
+          <label className="meta" style={{ fontSize: "0.64rem" }}>Reps</label>
+          <label className="meta" style={{ fontSize: "0.64rem" }}>RPE</label>
+          <input className="input" value={slot.reps}
+            onChange={(e) => onPatch({ reps: e.target.value })}
+            style={{ fontSize: "0.78rem", padding: "0.15rem 0.28rem" }} />
+          <select className="select" value={slot.exertion_score}
+            onChange={(e) => onPatch({ exertion_score: Number(e.target.value) })}
+            style={{ fontSize: "0.74rem", padding: "0.14rem 0.22rem" }}>
+            {Object.entries(EXERTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Per-set rows when All Same is unchecked */}
+      {slot.same_format === false && (
+        <div style={{ marginTop: "0.35rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "36px 70px 70px", gap: "0.25rem 0.4rem" }}>
+            <span className="meta" style={{ fontSize: "0.62rem" }}></span>
+            <span className="meta" style={{ fontSize: "0.62rem" }}>Reps</span>
+            <span className="meta" style={{ fontSize: "0.62rem" }}>RPE</span>
+          </div>
+          {Array.from({ length: slot.sets }).map((_, i) => {
+            const row = slot.set_rows?.[i] ?? { reps: slot.reps, exertion_score: slot.exertion_score };
+            return (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "36px 70px 70px", gap: "0.25rem 0.4rem", alignItems: "center" }}>
+                <span className="meta" style={{ fontSize: "0.62rem", color: "#cdc2b5" }}>S{i + 1}</span>
+                <input className="input" value={row.reps}
+                  onChange={(e) => patchSetRow(i, { reps: e.target.value })}
+                  style={{ fontSize: "0.76rem", padding: "0.12rem 0.24rem" }} />
+                <select className="select" value={row.exertion_score}
+                  onChange={(e) => patchSetRow(i, { exertion_score: Number(e.target.value) })}
+                  style={{ fontSize: "0.72rem", padding: "0.11rem 0.18rem" }}>
+                  {Object.entries(EXERTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {(slot.equipment_list.includes("machine") || slot.equipment_list.includes("other")) && (
         <div style={{ marginTop: "0.35rem" }}>
           <input

@@ -241,8 +241,8 @@
   .modal {
     position: fixed; inset: 0;
     background: rgba(23,19,17,0.45);
-    display: none; align-items: center; justify-content: center;
-    z-index: 200; padding: 1rem;
+    display: none; align-items: flex-start; justify-content: center;
+    z-index: 200; padding: 4vh 1rem 1rem;
   }
   .modal.show { display: flex; }
   .modal-box {
@@ -1106,8 +1106,23 @@
         var cb = document.getElementById("cancel-btn");
         if (cb) cb.style.display = "";
         initSavedMode(d.sheetId);
-      } else if (!daysEl.children.length) {
-        if (!restoreState()) { buildDay(); buildDay(); }
+      } else {
+        if (!daysEl.children.length) {
+          if (!restoreState()) { buildDay(); buildDay(); }
+        }
+        // Pre-fill header fields from autofill data (only if empty)
+        if (d.autofill) {
+          var af = d.autofill;
+          if (af.clientName && !val("client_name")) setVal("client_name", af.clientName);
+          if (af.timeframe && !val("timeframe")) setVal("timeframe", af.timeframe);
+          var firstDay = daysEl.querySelector(".day-block");
+          if (firstDay) {
+            var bar = firstDay.querySelectorAll(".day-bar .bar-field input");
+            if (af.dayName && bar[0] && !bar[0].value) bar[0].value = af.dayName;
+            if (af.dayDate && bar[1] && !bar[1].value) bar[1].value = af.dayDate;
+          }
+          saveState();
+        }
       }
     });
 
