@@ -149,6 +149,13 @@
   .set-pair input:focus { outline: none; background: #fbf7ef; border-bottom-color: var(--rust); }
   /* Smaller divider between Reps and Wt within a pair */
   .set-pair .wt-in { border-left: 1px solid #ece5d8; margin-left: 2px; padding-left: 3px; }
+  /* S1 / S2 / … label at the front of each set pair */
+  .set-num {
+    font-family: "Oswald", sans-serif; font-size: 0.55rem; font-weight: 600;
+    color: #cdc2b5; letter-spacing: 0.04em; line-height: 1;
+    align-self: center; margin-right: 2px; flex-shrink: 0;
+  }
+
   /* tiny × to remove an individual set pair */
   .pair-del {
     border: none; background: transparent; cursor: pointer;
@@ -388,10 +395,20 @@
       return td;
     }
 
+    function renumberSets(inner) {
+      var pairs = inner.querySelectorAll(".set-pair");
+      for (var i = 0; i < pairs.length; i++) {
+        var lbl = pairs[i].querySelector(".set-num");
+        if (lbl) lbl.textContent = "S" + (i + 1);
+      }
+    }
+
     // Append one (Reps, Wt, ×) pair to a sets-inner div, before the + button
     function appendSetPair(inner) {
       var pair = document.createElement("span");
       pair.className = "set-pair";
+      var lbl = document.createElement("span");
+      lbl.className = "set-num"; lbl.textContent = "S?";
       var ri = document.createElement("input");
       ri.type = "text"; ri.autocomplete = "off"; ri.className = "reps-in";
       var wi = document.createElement("input");
@@ -400,14 +417,16 @@
       dx.type = "button"; dx.className = "pair-del"; dx.title = "Remove set"; dx.textContent = "×";
       dx.addEventListener("click", function () {
         var pairs = inner.querySelectorAll(".set-pair");
-        if (pairs.length > 1) { pair.remove(); saveState(); }
+        if (pairs.length > 1) { pair.remove(); renumberSets(inner); saveState(); }
       });
+      pair.appendChild(lbl);
       pair.appendChild(ri);
       pair.appendChild(wi);
       pair.appendChild(dx);
       var addBtn = inner.querySelector(".row-add-set");
       if (addBtn) inner.insertBefore(pair, addBtn);
       else inner.appendChild(pair);
+      renumberSets(inner);
     }
 
     // Sets column — per-row flex container of (Reps · Wt) pairs + light + button
