@@ -126,14 +126,14 @@
   tbody td.move-cell { padding: 0; }
   tbody td.move-cell textarea {
     font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink);
-    background: transparent; border: none; width: 100%; min-height: 0.3in;
+    background: transparent; border: none; width: 100%; min-height: 1.1rem;
     padding: 0.1rem 0.4rem; line-height: 1.3; resize: none; overflow: hidden;
     white-space: pre-wrap; word-wrap: break-word; box-sizing: border-box;
   }
   tbody td.move-cell textarea:focus { outline: none; background: #fbf7ef; }
 
   /* Sets cell — per-row flex pairs (Reps · Wt) + inline + button */
-  tbody td.sets-cell { padding: 2px 3px; overflow: hidden; }
+  tbody td.sets-cell { padding: 2px 3px; }
   /* width + min-width 0 keeps the flex container inside its table cell so
      flex-wrap actually kicks in instead of overflowing the row. */
   .sets-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; width: 100%; min-width: 0; }
@@ -168,7 +168,7 @@
   tbody td.notes-cell { padding: 0; }
   tbody td.notes-cell textarea {
     font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink);
-    background: transparent; border: none; width: 100%; min-height: 0.3in;
+    background: transparent; border: none; width: 100%; min-height: 1.1rem;
     padding: 0.1rem 0.4rem; line-height: 1.3; resize: none; overflow: hidden;
     white-space: pre-wrap; word-wrap: break-word; box-sizing: border-box;
   }
@@ -455,7 +455,7 @@
         '<tr>' +
         '<th class="th-x"></th>' +
         '<th>Movement &amp; Equipment<span class="col-resizer" data-col="1"></span></th>' +
-        '<th>Sets &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;font-family:Georgia,serif;font-size:0.58rem;color:var(--muted)">(Reps &middot; Wt per set)</span></th>' +
+        '<th>Sets &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;font-family:Georgia,serif;font-size:0.58rem;color:var(--muted)">(Reps &middot; Wt per set)</span><span class="col-resizer" data-col="2"></span></th>' +
         '<th>Load / Notes<span class="col-resizer" data-col="3"></span></th>' +
         '</tr>';
       table.insertBefore(thead, cg.nextSibling);
