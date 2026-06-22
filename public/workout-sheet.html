@@ -107,7 +107,7 @@
   .remove-day:hover { color: var(--rust); }
 
   /* Movement table — 4 columns: × | Movement | Sets | Notes */
-  .table-wrap { overflow-x: auto; }
+  .table-wrap { overflow-x: auto; padding-right: 1px; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   thead th {
     position: relative;
@@ -567,7 +567,10 @@
       if (!col) return;
       var startX = e.clientX;
       var startW = parseFloat(col.style.width) || col.offsetWidth || 40;
-      function move(ev) { col.style.width = Math.max(MIN_COL, startW + (ev.clientX - startX)) + "px"; }
+      function move(ev) {
+        col.style.width = Math.max(MIN_COL, startW + (ev.clientX - startX)) + "px";
+        table.querySelectorAll("textarea").forEach(function (ta) { autoGrow(ta); });
+      }
       function up() {
         document.removeEventListener("pointermove", move);
         document.removeEventListener("pointerup", up);
