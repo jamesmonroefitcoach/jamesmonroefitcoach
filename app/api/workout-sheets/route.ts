@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { createWorkoutSheet, listWorkoutSheets } from "@/lib/workout-sheets.server";
+import { getOrCreatePairedProgram } from "@/lib/programs-sheets-bridge";
 import type { WorkoutSheetKind } from "@/lib/workout-sheets";
 
 // GET /api/workout-sheets?clientId=&sessionId=&kind=
@@ -56,5 +57,10 @@ export async function POST(req: NextRequest) {
     last_edited_by: user.id,
   });
   if (!sheet) return NextResponse.json({ error: "Create failed" }, { status: 500 });
+  // If the sheet is assigned to a client, create a paired programs row so it
+  // appears in View Programs as an active program for that client.
+  if (sheet.client_id) {
+    await getOrCreatePairedProgram(sheet.id);
+  }
   return NextResponse.json({ sheet });
 }

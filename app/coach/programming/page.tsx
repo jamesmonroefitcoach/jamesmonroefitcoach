@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
-import { listClients, listAppointmentsForWeek, listAppointmentsForClient, startOfWeek } from "@/lib/data";
-import { pastProgramsForClient, type PastProgramFull, PROGRAM_KIND_LABEL, CATEGORY_LABELS, type Category } from "@/lib/programs";
+import { listClients, listAppointmentsForWeek, listAppointmentsForClient, startOfWeek, listProgramsForClient, type ClientProgramRow } from "@/lib/data";
 import { fmtDate } from "@/lib/format";
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import ViewProgramsClient from "./view-programs-client";
@@ -12,9 +11,9 @@ export type ClientProgramBlock = {
   clientName: string;
   needsAtHomeProgramming: boolean;          // true when coach has hit + on the roster
   active: {
-    sessions: PastProgramFull | null;       // current in_gym
+    sessions: ClientProgramRow | null;       // current in_gym
     sessionsStatus: "draft" | "published" | "none";
-    program: PastProgramFull | null;        // current at_home
+    program: ClientProgramRow | null;        // current at_home
     programStatus: "draft" | "published" | "none";
   };
   // Next upcoming session — surfaced on the subtext line
@@ -34,7 +33,7 @@ export type ClientProgramBlock = {
     /** True when the linked program was built by the client themselves. */
     is_client_made?: boolean;
   }[];
-  historicalPrograms: PastProgramFull[];    // past at_home programs
+  historicalPrograms: ClientProgramRow[];    // past at_home programs
   historicalSessions: {                      // past in_gym sessions (appointments) — grouped by month
     id: string;
     starts_at: string;
@@ -55,7 +54,7 @@ export default async function ProgrammingLandingPage() {
   const blocks: ClientProgramBlock[] = await Promise.all(activeClients.map(async (c) => {
     const [appts, programs] = await Promise.all([
       listAppointmentsForClient(c.id),
-      Promise.resolve(pastProgramsForClient(c.id)),
+      listProgramsForClient(c.id),
     ]);
     const sessions = programs.find((p) => p.is_current && p.program_kind === "in_gym") ?? null;
     const program = programs.find((p) => p.is_current && p.program_kind === "at_home") ?? null;
