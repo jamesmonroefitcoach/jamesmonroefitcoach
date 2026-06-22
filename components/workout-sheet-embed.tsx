@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 // Embed the interactive workout sheet (public/workout-sheet.html, a copy of
 // samples/client-materials/workout-sheet.html) in a same-origin auto-sizing
@@ -29,6 +29,7 @@ export default function WorkoutSheetEmbed({
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   function resize() {
     const f = ref.current;
@@ -59,12 +60,19 @@ export default function WorkoutSheetEmbed({
         );
       }
       if (data.type === "mfc.workout-sheet.saved") {
-        router.refresh();
+        const saved = data as { type: string; sheet?: { id: string } };
+        if (!sheetId && saved.sheet?.id) {
+          // First save — navigate so the URL reflects the new sheet id,
+          // which also triggers a server-component refresh with the new sheet in the list.
+          router.push(`${pathname}?sheet=${saved.sheet.id}`);
+        } else {
+          router.refresh();
+        }
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [user, clients, sessions, sheetId, router]);
+  }, [user, clients, sessions, sheetId, router, pathname]);
 
   function onLoad() {
     resize();
