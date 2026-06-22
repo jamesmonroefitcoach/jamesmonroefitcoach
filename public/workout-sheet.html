@@ -556,19 +556,31 @@
       }
     });
 
-    // column resize (pointer events); col indices: 1=Movement, 3=Notes
+    // column resize — dragging col N steals from / gives to its neighbour
+    // so the total never exceeds the table width and the right border stays visible.
+    // col 1 (Movement) ↔ col 2 (Sets); col 2 (Sets) ↔ col 3 (Notes); col 3 (Notes) ↔ col 2 (Sets)
     document.addEventListener("pointerdown", function (e) {
       var t = e.target;
       if (!t || !t.classList || !t.classList.contains("col-resizer")) return;
       e.preventDefault();
       var table = t.closest("table");
+      var cols = table.querySelectorAll("colgroup col");
       var idx = parseInt(t.getAttribute("data-col"), 10);
-      var col = table.querySelectorAll("colgroup col")[idx];
+      var col = cols[idx];
       if (!col) return;
+      // counterpart column: moving col 2 (Sets) steals from col 3 (Notes);
+      // moving col 1 or col 3 steals from/gives to col 2 (Sets).
+      var otherIdx = idx === 2 ? 3 : 2;
+      var other = cols[otherIdx];
       var startX = e.clientX;
       var startW = parseFloat(col.style.width) || col.offsetWidth || 40;
+      var otherStartW = other ? (parseFloat(other.style.width) || other.offsetWidth || 40) : 0;
       function move(ev) {
-        col.style.width = Math.max(MIN_COL, startW + (ev.clientX - startX)) + "px";
+        var delta = ev.clientX - startX;
+        var newW = Math.max(MIN_COL, startW + delta);
+        var actualDelta = newW - startW;
+        col.style.width = newW + "px";
+        if (other) other.style.width = Math.max(MIN_COL, otherStartW - actualDelta) + "px";
         table.querySelectorAll("textarea").forEach(function (ta) { autoGrow(ta); });
       }
       function up() {
