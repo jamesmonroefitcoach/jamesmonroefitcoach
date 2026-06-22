@@ -8,21 +8,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-  /*
-   * Monroe Fit Coach — multi-day workout sheet (SAMPLE).
-   * "Old-gym editorial" theme, matching the app's globals.css.
-   *
-   * Each day owns its own table: a leading delete column (×), Movement &
-   * Equipment, Set 1..N each with Reps + Wt, and Load / Notes (auto-width so
-   * the table always fills the row and the columns line up with the day bar).
-   *
-   * Per-day controls:  + Row / + Set   (under each day)
-   * Row delete:        × at the start of each row
-   * Set delete:        × on each Set N header
-   * Global:            + Add Day
-   * Columns are drag-resizable (grab the header divider). Works by type,
-   * print-blank-and-handwrite, or stylus. Auto-saves to this browser.
-   */
   :root {
     --bg:    #f5efe4;
     --paper: #ffffff;
@@ -47,7 +32,6 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Screen-only toolbar */
   .toolbar {
     width: min(8.5in, 100% - 1rem);
     margin: 1.25rem auto 0.5rem;
@@ -107,16 +91,22 @@
 
   /* ---------- Day block ---------- */
   .day-block { margin-top: 1rem; page-break-inside: avoid; position: relative; }
-  .day-bar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; background: var(--bar); border: 1px solid var(--ink); border-bottom: none; padding: 0.28rem 0.5rem; }
-  .day-tag { font-family: "Oswald", sans-serif; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.74rem; font-weight: 700; color: var(--rust); white-space: nowrap; }
-  .day-bar .bar-field { display: flex; align-items: baseline; gap: 0.35rem; flex: 1 1 130px; }
-  .day-bar .bar-label { font-family: "Oswald", sans-serif; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.58rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  /* Bar fields stack (label on top, input below) so narrow date/weight/sleep
+     fields don't overflow their label text. Name gets most of the flex space. */
+  .day-bar {
+    display: flex; align-items: flex-end; gap: 0.3rem 0.65rem; flex-wrap: wrap;
+    background: var(--bar); border: 1px solid var(--ink); border-bottom: none;
+    padding: 0.28rem 0.5rem;
+  }
+  .day-tag { font-family: "Oswald", sans-serif; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.74rem; font-weight: 700; color: var(--rust); white-space: nowrap; align-self: center; }
+  .day-bar .bar-field { display: flex; flex-direction: column; gap: 0.02rem; min-width: 0; }
+  .day-bar .bar-label { font-family: "Oswald", sans-serif; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.55rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
   .day-bar .bar-field input { font-family: "Georgia", serif; font-size: 0.88rem; color: var(--ink); background: transparent; border: none; border-bottom: 1px solid var(--ink); padding: 0.02rem 0.1rem; width: 100%; min-width: 0; }
   .day-bar .bar-field input:focus { outline: none; border-bottom-color: var(--rust); }
-  .remove-day { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.1rem; flex: none; }
+  .remove-day { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.1rem; flex: none; align-self: center; }
   .remove-day:hover { color: var(--rust); }
 
-  /* Movement table — width:100% + auto Load/Notes col keeps it aligned with the bar */
+  /* Movement table — 4 columns: × | Movement | Sets | Notes */
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   thead th {
@@ -126,20 +116,49 @@
     background: var(--bar); border: 1px solid var(--ink);
     padding: 0.26rem 0.4rem; white-space: nowrap; overflow: hidden;
   }
-  thead th.center { text-align: center; }
   thead th.th-x { padding: 0; }
-  .set-del { margin-left: 5px; color: var(--muted); cursor: pointer; font-weight: 400; }
-  .set-del:hover { color: var(--rust); }
   .col-resizer { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize; touch-action: none; z-index: 3; }
   .col-resizer::after { content: ""; position: absolute; top: 15%; bottom: 15%; right: 4px; width: 2px; background: var(--line); }
   thead th:hover .col-resizer::after { background: var(--rust); }
   tbody td { border: 1px solid #b9ad98; padding: 0; vertical-align: top; }
-  tbody td input { font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink); background: transparent; border: none; width: 100%; min-height: 0.3in; padding: 0.05rem 0.4rem; box-sizing: border-box; }
-  tbody td input.center { text-align: center; padding: 0.05rem 0.1rem; }
-  tbody td input:focus { outline: none; background: #fbf7ef; }
-  /* Load / Notes cell — textarea wraps long notes inline instead of
-     getting clipped or pushed off the right edge on phone. Auto-grows
-     vertically as the user types; the surrounding row matches. */
+
+  /* Movement cell — textarea wraps and auto-grows */
+  tbody td.move-cell { padding: 0; }
+  tbody td.move-cell textarea {
+    font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink);
+    background: transparent; border: none; width: 100%; min-height: 0.3in;
+    padding: 0.1rem 0.4rem; line-height: 1.3; resize: none; overflow: hidden;
+    white-space: pre-wrap; word-wrap: break-word; box-sizing: border-box;
+  }
+  tbody td.move-cell textarea:focus { outline: none; background: #fbf7ef; }
+
+  /* Sets cell — per-row flex pairs (Reps · Wt) + inline + button */
+  tbody td.sets-cell { padding: 3px 4px; }
+  .sets-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
+  .set-pair { display: inline-flex; align-items: center; gap: 1px; }
+  .set-pair input {
+    font-family: "Georgia", serif; font-size: 0.82rem; color: var(--ink);
+    background: transparent; border: none; border-bottom: 1px solid var(--line);
+    width: 34px; padding: 0.04rem 0.08rem; text-align: center;
+    box-sizing: border-box; min-height: 0;
+  }
+  .set-pair input:focus { outline: none; background: #fbf7ef; border-bottom-color: var(--rust); }
+  /* tiny × to remove an individual set pair */
+  .pair-del {
+    border: none; background: transparent; cursor: pointer;
+    font-size: 0.58rem; color: #d5cbbf; line-height: 1; padding: 0 1px;
+    align-self: flex-start; margin-top: 1px;
+  }
+  .pair-del:hover { color: var(--rust); }
+  /* + button at right edge of each row's sets, very light grey */
+  .row-add-set {
+    border: none; background: transparent; cursor: pointer;
+    font-family: "Oswald", sans-serif; font-size: 0.75rem; font-weight: 700;
+    color: #cdc2b5; line-height: 1; padding: 1px 3px; letter-spacing: 0.05em;
+  }
+  .row-add-set:hover { color: var(--rust); }
+
+  /* Load / Notes cell — textarea wraps and auto-grows */
   tbody td.notes-cell { padding: 0; }
   tbody td.notes-cell textarea {
     font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink);
@@ -148,11 +167,13 @@
     white-space: pre-wrap; word-wrap: break-word; box-sizing: border-box;
   }
   tbody td.notes-cell textarea:focus { outline: none; background: #fbf7ef; }
+
   tbody td.x-cell { padding: 0; text-align: center; }
   .row-del { width: 100%; height: 100%; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 0.82rem; line-height: 1; padding: 0; }
   .row-del:hover { color: var(--rust); }
   tbody tr:nth-child(even) td { background: #faf6ee; }
-  tbody tr:nth-child(even) td input:focus { background: #f3ecdd; }
+  tbody tr:nth-child(even) td input:focus,
+  tbody tr:nth-child(even) td textarea:focus { background: #f3ecdd; }
 
   .day-controls { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
   .sheet-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.9rem; }
@@ -167,14 +188,12 @@
     .toolbar .actions { width: 100%; justify-content: space-between; }
     .toolbar .btn { flex: 1; text-align: center; }
     .sheet { padding: 0.7rem; }
-    /* On phone the fixed data columns already eat the row width — give
-       the table a hard min so the notes column still has room to wrap
-       into. .table-wrap scrolls horizontally if this overflows. */
-    table { min-width: 640px; }
-    tbody td.notes-cell { min-width: 220px; }
+    table { min-width: 560px; }
+    tbody td.move-cell { min-width: 140px; }
+    tbody td.notes-cell { min-width: 180px; }
   }
 
-  /* lock banner + locked-by-other state */
+  /* lock banner */
   .lock-banner {
     display: none;
     width: min(8.5in, 100% - 1rem);
@@ -191,7 +210,8 @@
   body.locked-by-other select,
   body.locked-by-other .mini,
   body.locked-by-other .row-del,
-  body.locked-by-other .set-del,
+  body.locked-by-other .pair-del,
+  body.locked-by-other .row-add-set,
   body.locked-by-other .remove-day,
   body.locked-by-other .col-resizer,
   body.locked-by-other #add-day,
@@ -236,10 +256,11 @@
   @media print {
     @page { size: letter portrait; margin: 0.5in; }
     html, body { background: #fff; }
-    .toolbar, .sheet-controls, .remove-day, .day-controls, .col-resizer, .set-del, .row-del, .lock-banner, .modal { display: none !important; }
+    .toolbar, .sheet-controls, .remove-day, .day-controls, .col-resizer,
+    .pair-del, .row-add-set, .row-del, .lock-banner, .modal { display: none !important; }
     .table-wrap { overflow: visible; }
     .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; }
-    .field input, tbody td input, .day-bar .bar-field input { background: transparent !important; }
+    .field input, tbody td input, tbody td textarea, .day-bar .bar-field input { background: transparent !important; }
     .day-bar, thead th { background: #e7ddc9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     tbody tr:nth-child(even) td { background: #f4eee2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
@@ -247,7 +268,7 @@
 </head>
 <body>
   <div class="toolbar">
-    <p>Sample workout sheet. Type into any field, then <strong>Save&nbsp;PDF</strong> or <strong>Send</strong>. Each set has <strong>Reps + Wt</strong>; drag header dividers to resize. Per day: <strong>+ Row</strong> / <strong>+ Set</strong>; use the small <strong>×</strong> to delete a row or set. Auto-saves here.</p>
+    <p>Type into any field, then <strong>Save&nbsp;PDF</strong> or <strong>Send</strong>. Each row has its own sets — use the light <strong>+</strong> at the right of each row to add a set, the tiny <strong>×</strong> to remove one. Use <strong>+ Row</strong> to add an exercise. Auto-saves here.</p>
     <div class="actions">
       <span class="saved-flag" id="saved-flag">Saved &check;</span>
       <button class="btn ghost" id="clear-btn" type="button">Clear</button>
@@ -282,13 +303,11 @@
 
     <p class="footnote">
       <strong>Movement &amp; Equipment</strong> = the pattern + exercise and the tool used.
-      Each <strong>Set</strong> records <strong>Reps</strong> and <strong>Wt</strong> (load); load &amp; cues also go under <strong>Load / Notes</strong>.
-      Add with <strong>+ Row</strong> / <strong>+ Set</strong>; delete with the small <strong>×</strong>.
+      Each row has independent <strong>Sets</strong> (Reps &middot; Wt); use the light <strong>+</strong> to add a set to that row, tiny <strong>×</strong> to remove.
+      Add exercises with <strong>+ Row</strong>; load &amp; cues go under <strong>Load / Notes</strong>.
     </p>
   </div>
 
-  <!-- Save modal: opens when the coach clicks Save (only visible once the
-       app has passed user context via postMessage). -->
   <div id="save-modal" class="modal" role="dialog" aria-modal="true">
     <div class="modal-box">
       <div class="modal-header" id="save-modal-title">Save Sheet</div>
@@ -316,20 +335,40 @@
     var DEFAULT_SETS = 3;
     var DEFAULT_ROWS = 9;
     var STORE_KEY = "mfc-workout-sheet-v4";
-    var XW = 22, MOVE_W = 200, REPS_W = 46, WT_W = 54, MIN_COL = 30;
+    var XW = 22, MOVE_W = 200, MIN_COL = 30;
 
     var dayCount = 0;
     var restoring = false;
     var daysEl = document.getElementById("days");
 
-    function cell(center) {
+    function autoGrow(el) {
+      el.style.height = "auto";
+      el.style.height = (el.scrollHeight + 2) + "px";
+    }
+
+    function xCell() {
       var td = document.createElement("td");
-      var input = document.createElement("input");
-      input.type = "text"; input.autocomplete = "off";
-      if (center) input.className = "center";
-      td.appendChild(input);
+      td.className = "x-cell";
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "row-del"; b.title = "Delete row"; b.textContent = "×";
+      td.appendChild(b);
       return td;
     }
+
+    // Movement column — textarea so long names wrap and the row grows
+    function movementCell() {
+      var td = document.createElement("td");
+      td.className = "move-cell";
+      var ta = document.createElement("textarea");
+      ta.rows = 1;
+      ta.autocomplete = "off";
+      ta.spellcheck = false;
+      ta.addEventListener("input", function () { autoGrow(ta); });
+      td.appendChild(ta);
+      return td;
+    }
+
+    // Load / Notes column — textarea wraps and auto-grows
     function notesCell() {
       var td = document.createElement("td");
       td.className = "notes-cell";
@@ -341,56 +380,77 @@
       td.appendChild(ta);
       return td;
     }
-    function autoGrow(el) {
-      el.style.height = "auto";
-      el.style.height = (el.scrollHeight + 2) + "px";
+
+    // Append one (Reps, Wt, ×) pair to a sets-inner div, before the + button
+    function appendSetPair(inner) {
+      var pair = document.createElement("span");
+      pair.className = "set-pair";
+      var ri = document.createElement("input");
+      ri.type = "text"; ri.autocomplete = "off"; ri.placeholder = "Reps";
+      var wi = document.createElement("input");
+      wi.type = "text"; wi.autocomplete = "off"; wi.placeholder = "Wt";
+      var dx = document.createElement("button");
+      dx.type = "button"; dx.className = "pair-del"; dx.title = "Remove set"; dx.textContent = "×";
+      dx.addEventListener("click", function () {
+        var pairs = inner.querySelectorAll(".set-pair");
+        if (pairs.length > 1) { pair.remove(); saveState(); }
+      });
+      pair.appendChild(ri);
+      pair.appendChild(wi);
+      pair.appendChild(dx);
+      var addBtn = inner.querySelector(".row-add-set");
+      if (addBtn) inner.insertBefore(pair, addBtn);
+      else inner.appendChild(pair);
     }
-    function xCell() {
+
+    // Sets column — per-row flex container of (Reps · Wt) pairs + light + button
+    function setsCell(sets) {
       var td = document.createElement("td");
-      td.className = "x-cell";
-      var b = document.createElement("button");
-      b.type = "button"; b.className = "row-del"; b.title = "Delete row"; b.textContent = "×";
-      td.appendChild(b);
+      td.className = "sets-cell";
+      var inner = document.createElement("div");
+      inner.className = "sets-inner";
+      for (var s = 0; s < sets; s++) appendSetPair(inner);
+      var addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "row-add-set";
+      addBtn.title = "Add set to this row";
+      addBtn.textContent = "+";
+      addBtn.addEventListener("click", function () { appendSetPair(inner); saveState(); });
+      inner.appendChild(addBtn);
+      td.appendChild(inner);
       return td;
     }
 
-    // row = [×] + movement + sets×(reps,wt) + load/notes (textarea)
+    // Row: [×] | Movement textarea | Sets (per-row) | Notes textarea
+    // querySelectorAll("input, textarea") order: [movement, reps1, wt1, reps2, wt2, ..., notes]
     function makeRow(sets) {
       var tr = document.createElement("tr");
       tr.appendChild(xCell());
-      tr.appendChild(cell(false));
-      for (var s = 0; s < sets; s++) { tr.appendChild(cell(true)); tr.appendChild(cell(true)); }
+      tr.appendChild(movementCell());
+      tr.appendChild(setsCell(sets || DEFAULT_SETS));
       tr.appendChild(notesCell());
       return tr;
     }
 
-    function renderHead(table, sets) {
+    // Simplified static header — sets are per-row so no dynamic columns needed
+    function renderHead(table) {
       var oldHead = table.querySelector("thead"); if (oldHead) oldHead.remove();
       var oldCg = table.querySelector("colgroup"); if (oldCg) oldCg.remove();
-
       var cg = document.createElement("colgroup");
-      var html = '<col style="width:' + XW + 'px" /><col style="width:' + MOVE_W + 'px" />';
-      for (var i = 0; i < sets; i++) html += '<col style="width:' + REPS_W + 'px" /><col style="width:' + WT_W + 'px" />';
-      html += "<col />"; // Load/Notes — auto width fills the row
-      cg.innerHTML = html;
+      cg.innerHTML =
+        '<col style="width:' + XW + 'px" />' +
+        '<col style="width:' + MOVE_W + 'px" />' +
+        '<col />' +
+        '<col style="width:160px" />';
       table.insertBefore(cg, table.firstChild);
-
-      var row1 = "<tr>";
-      row1 += '<th rowspan="2" class="th-x"></th>';
-      row1 += '<th rowspan="2">Movement &amp; Equipment<span class="col-resizer" data-col="1"></span></th>';
-      for (var s = 0; s < sets; s++)
-        row1 += '<th colspan="2" class="center">Set ' + (s + 1) + '<span class="set-del" data-set="' + s + '" title="Delete set">×</span></th>';
-      row1 += '<th rowspan="2">Load / Notes</th></tr>';
-
-      var row2 = "<tr>";
-      for (var s2 = 0; s2 < sets; s2++) {
-        row2 += '<th class="center">Reps<span class="col-resizer" data-col="' + (2 + 2 * s2) + '"></span></th>';
-        row2 += '<th class="center">Wt<span class="col-resizer" data-col="' + (3 + 2 * s2) + '"></span></th>';
-      }
-      row2 += "</tr>";
-
       var thead = document.createElement("thead");
-      thead.innerHTML = row1 + row2;
+      thead.innerHTML =
+        '<tr>' +
+        '<th class="th-x"></th>' +
+        '<th>Movement &amp; Equipment<span class="col-resizer" data-col="1"></span></th>' +
+        '<th>Sets &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;font-family:Georgia,serif;font-size:0.58rem;color:var(--muted)">(Reps &middot; Wt per set)</span></th>' +
+        '<th>Load / Notes<span class="col-resizer" data-col="3"></span></th>' +
+        '</tr>';
       table.insertBefore(thead, cg.nextSibling);
     }
 
@@ -402,7 +462,7 @@
 
     function buildDay(sets, rowCount) {
       sets = sets || DEFAULT_SETS;
-      rowCount = rowCount || DEFAULT_ROWS;
+      rowCount = (rowCount === undefined || rowCount === null) ? DEFAULT_ROWS : rowCount;
       dayCount += 1;
 
       var block = document.createElement("section");
@@ -411,15 +471,14 @@
 
       var bar = document.createElement("div");
       bar.className = "day-bar";
-      // Bar-field order: [name, date, weight, sleep] — collectState /
-      // fillDay index by position, so adding a new field at the front
-      // means updating those two helpers as well.
+      // Name field is wide; date / weight / sleep are compact.
+      // Bar-field order: [name, date, weight, sleep] — collectState / fillDay index by position.
       bar.innerHTML =
         '<span class="day-tag">Day ' + dayCount + '</span>' +
-        '<span class="bar-field"><span class="bar-label">Name (optional)</span><input type="text" autocomplete="off" placeholder="Push / Lower / Recovery" /></span>' +
-        '<span class="bar-field"><span class="bar-label">Date</span><input type="text" autocomplete="off" /></span>' +
-        '<span class="bar-field"><span class="bar-label">Current Weight</span><input type="text" autocomplete="off" /></span>' +
-        '<span class="bar-field"><span class="bar-label">Sleep (hrs)</span><input type="text" autocomplete="off" /></span>';
+        '<span class="bar-field" style="flex:4 1 140px"><span class="bar-label">Name (optional)</span><input type="text" autocomplete="off" placeholder="Push / Lower / Recovery" /></span>' +
+        '<span class="bar-field" style="flex:1 1 62px"><span class="bar-label">Date</span><input type="text" autocomplete="off" /></span>' +
+        '<span class="bar-field" style="flex:1 1 44px"><span class="bar-label">Weight</span><input type="text" autocomplete="off" /></span>' +
+        '<span class="bar-field" style="flex:1 1 36px"><span class="bar-label">Sleep (hrs)</span><input type="text" autocomplete="off" /></span>';
       var rm = document.createElement("button");
       rm.className = "remove-day"; rm.type = "button"; rm.title = "Remove this day"; rm.textContent = "×";
       rm.addEventListener("click", function () { block.remove(); renumber(); saveState(); });
@@ -429,7 +488,7 @@
       var wrap = document.createElement("div");
       wrap.className = "table-wrap";
       var table = document.createElement("table");
-      renderHead(table, sets);
+      renderHead(table);
       var tbody = document.createElement("tbody");
       for (var r = 0; r < rowCount; r++) tbody.appendChild(makeRow(sets));
       table.appendChild(tbody);
@@ -443,44 +502,12 @@
         table.querySelector("tbody").appendChild(makeRow(parseInt(block.dataset.sets, 10)));
         saveState();
       });
-      var addSetBtn = mini("+ Set");
-      addSetBtn.addEventListener("click", function () { addSet(block); });
       ctrl.appendChild(addRowBtn);
-      ctrl.appendChild(addSetBtn);
       block.appendChild(ctrl);
 
       daysEl.appendChild(block);
       renumber();
       return block;
-    }
-
-    function addSet(block) {
-      var table = block.querySelector("table");
-      var sets = parseInt(block.dataset.sets, 10) + 1;
-      block.dataset.sets = sets;
-      renderHead(table, sets);
-      table.querySelectorAll("tbody tr").forEach(function (tr) {
-        tr.insertBefore(cell(true), tr.lastElementChild);   // reps
-        tr.insertBefore(cell(true), tr.lastElementChild);   // wt  (before Load/Notes)
-      });
-      saveState();
-    }
-
-    function deleteSet(block, s) {
-      var sets = parseInt(block.dataset.sets, 10);
-      if (sets <= 1) return; // keep at least one set
-      table_remove_set(block.querySelector("table"), s);
-      block.dataset.sets = sets - 1;
-      renderHead(block.querySelector("table"), sets - 1);
-      saveState();
-    }
-    function table_remove_set(table, s) {
-      // body cell indices for set s: [×]=0, movement=1, set s reps=2+2s, wt=3+2s
-      var reps = 2 + 2 * s, wt = 3 + 2 * s;
-      table.querySelectorAll("tbody tr").forEach(function (tr) {
-        if (tr.children[wt]) tr.removeChild(tr.children[wt]);
-        if (tr.children[reps]) tr.removeChild(tr.children[reps]);
-      });
     }
 
     function renumber() {
@@ -494,20 +521,16 @@
 
     document.getElementById("add-day").addEventListener("click", function () { buildDay(); saveState(); });
 
-    // delegated clicks: delete row / delete set
     document.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.classList) return;
       if (t.classList.contains("row-del")) {
         var tr = t.closest("tr");
         if (tr && tr.parentElement.children.length > 1) { tr.remove(); saveState(); }
-      } else if (t.classList.contains("set-del")) {
-        var block = t.closest(".day-block");
-        if (block) deleteSet(block, parseInt(t.getAttribute("data-set"), 10));
       }
     });
 
-    // column resize (pointer events → mouse + touch); per-table
+    // column resize (pointer events); col indices: 1=Movement, 3=Notes
     document.addEventListener("pointerdown", function (e) {
       var t = e.target;
       if (!t || !t.classList || !t.classList.contains("col-resizer")) return;
@@ -532,6 +555,8 @@
     function val(name) { var el = document.querySelector('[name="' + name + '"]'); return el ? el.value : ""; }
     function setVal(name, v) { var el = document.querySelector('[name="' + name + '"]'); if (el) el.value = v || ""; }
 
+    // State format per row: [movement, reps1, wt1, reps2, wt2, ..., notes]
+    // querySelectorAll("input, textarea") returns them in this DOM order naturally.
     function collectState() {
       var days = [];
       daysEl.querySelectorAll(".day-block").forEach(function (b) {
@@ -556,9 +581,7 @@
 
     function fillDay(block, d) {
       var bar = block.querySelectorAll(".day-bar .bar-field input");
-      // Backwards compat: sheets saved before the Name field stored
-      // [date, weight, sleep] only. If `d.name` is missing assume the
-      // legacy layout and shift the values forward.
+      // Backwards compat: sheets saved before the Name field stored [date, weight, sleep].
       var hasName = Object.prototype.hasOwnProperty.call(d, "name");
       bar[0].value = hasName ? (d.name || "") : "";
       bar[1].value = d.date || "";
@@ -567,13 +590,33 @@
       var trs = block.querySelectorAll("tbody tr");
       (d.rows || []).forEach(function (vals, ri) {
         if (!trs[ri]) return;
-        var ins = trs[ri].querySelectorAll("input, textarea");   // [movement, reps/wt..., notes] (× cell has no input)
+        var ins = trs[ri].querySelectorAll("input, textarea");
         vals.forEach(function (v, ci) {
           if (!ins[ci]) return;
           ins[ci].value = v;
           if (ins[ci].tagName === "TEXTAREA") autoGrow(ins[ci]);
         });
       });
+    }
+
+    // Restore a saved day with correct per-row set counts inferred from saved val arrays.
+    // Old format: all rows have d.sets sets → (vals.length - 2) / 2 = d.sets  ✓
+    // New format: each row may differ → inferred independently.
+    function restoreDay(d) {
+      var defaultSets = d.sets || DEFAULT_SETS;
+      var block = buildDay(defaultSets, 0);
+      var tbody = block.querySelector("tbody");
+      var rows = d.rows || [];
+      if (!rows.length) {
+        for (var r = 0; r < DEFAULT_ROWS; r++) tbody.appendChild(makeRow(DEFAULT_SETS));
+      } else {
+        rows.forEach(function (vals) {
+          var rowSets = vals.length > 2 ? Math.max(1, Math.floor((vals.length - 2) / 2)) : DEFAULT_SETS;
+          tbody.appendChild(makeRow(rowSets));
+        });
+      }
+      fillDay(block, d);
+      return block;
     }
 
     var flagTimer;
@@ -585,7 +628,7 @@
     var saveTimer;
     function saveState() {
       if (restoring) return;
-      if (SHEET_ID) { saveToServer(); return; }   // saved-sheet path: server is the source of truth
+      if (SHEET_ID) { saveToServer(); return; }
       clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
         try { localStorage.setItem(STORE_KEY, JSON.stringify(collectState())); flashSaved(); } catch (e) {}
@@ -598,10 +641,7 @@
       if (saved && saved.days && saved.days.length) {
         restoring = true;
         setVal("client_name", saved.client); setVal("goal", saved.goal); setVal("nutrition", saved.nutrition);
-        saved.days.forEach(function (d) {
-          var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
-          fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
-        });
+        saved.days.forEach(function (d) { restoreDay(d); });
         restoring = false;
         return true;
       }
@@ -632,7 +672,7 @@
         var heading = "Day " + (i + 1) + (name ? " · " + name : "");
         lines.push(""); lines.push(heading + (meta.length ? " — " + meta.join(" · ") : ""));
         b.querySelectorAll("tbody tr").forEach(function (tr) {
-          var ins = tr.querySelectorAll("input, textarea");  // [movement, reps/wt..., notes]
+          var ins = tr.querySelectorAll("input, textarea"); // [movement, reps1, wt1, ..., notes]
           var mv = ins[0].value.trim();
           if (!mv) return;
           var sets = [];
@@ -661,18 +701,13 @@
     // ────────────────────────────────────────────────────────────────
     // App-context sync layer
     // ────────────────────────────────────────────────────────────────
-    // When the sheet is embedded inside the Monroe Fit Coach app, the React
-    // parent posts in user info + the clients/sessions list + (optionally) a
-    // sheetId. The sheet then loads from / saves to Supabase via API routes,
-    // acquires a soft lock to coordinate coach ↔ client editing, and polls
-    // every 4s so the other side's view stays fresh.
-    var USER = null;             // { id, name, role }
-    var SHEET_ID = null;         // populated when sheet is saved (or opened from a saved row)
-    var CLIENT_LIST = [];        // [{ id, name }]
-    var SESSION_LIST = [];       // [{ id, label, client_id }]
+    var USER = null;
+    var SHEET_ID = null;
+    var CLIENT_LIST = [];
+    var SESSION_LIST = [];
     var LOCKED_BY_OTHER = false;
-    var LAST_REMOTE_AT = null;   // updated_at of last fetched row
-    var INITIAL_SNAPSHOT = null; // JSON of the state when the sheet was opened — Cancel reverts to this
+    var LAST_REMOTE_AT = null;
+    var INITIAL_SNAPSHOT = null;
     var pollTimer = null, heartbeatTimer = null, serverSaveTimer = null;
     var IS_IFRAME = window.parent && window.parent !== window;
     var INIT_HANDLED = false;
@@ -703,7 +738,6 @@
     function setLockedByOther(locked, holderName) {
       LOCKED_BY_OTHER = locked;
       document.body.classList.toggle("locked-by-other", locked);
-      // readOnly inputs (still focusable/selectable, but no edits)
       document.querySelectorAll("input, textarea").forEach(function (i) {
         if (locked) i.setAttribute("readonly", "");
         else i.removeAttribute("readonly");
@@ -723,7 +757,6 @@
           if (!json || !json.sheet) return null;
           var s = json.sheet;
           LAST_REMOTE_AT = s.updated_at;
-          // populate the editor with sheet_data
           restoring = true;
           daysEl.innerHTML = "";
           dayCount = 0;
@@ -732,12 +765,8 @@
           setVal("nutrition", (s.sheet_data && s.sheet_data.nutrition) || "");
           var days = (s.sheet_data && s.sheet_data.days) || [];
           if (days.length === 0) { buildDay(); buildDay(); }
-          else days.forEach(function (d) {
-            var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
-            fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
-          });
+          else days.forEach(function (d) { restoreDay(d); });
           restoring = false;
-          // Snapshot for the Cancel button — revert reverts to here.
           INITIAL_SNAPSHOT = JSON.stringify(collectState());
           return s;
         });
@@ -783,9 +812,8 @@
             if (otherHolds && !LOCKED_BY_OTHER) {
               setLockedByOther(true, holderLabel(s.lock_holder_id));
             } else if (!otherHolds && LOCKED_BY_OTHER) {
-              tryAcquireLock();   // attempt take-over
+              tryAcquireLock();
             }
-            // apply remote edits (only meaningful while we're read-only)
             if (s.updated_at !== LAST_REMOTE_AT) {
               LAST_REMOTE_AT = s.updated_at;
               if (LOCKED_BY_OTHER && s.sheet_data) {
@@ -795,12 +823,8 @@
                 setVal("client_name", s.sheet_data.client || "");
                 setVal("goal", s.sheet_data.goal || "");
                 setVal("nutrition", s.sheet_data.nutrition || "");
-                (s.sheet_data.days || []).forEach(function (d) {
-                  var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
-                  fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
-                });
+                (s.sheet_data.days || []).forEach(function (d) { restoreDay(d); });
                 restoring = false;
-                // re-apply read-only after rebuilding inputs
                 document.querySelectorAll("input, textarea").forEach(function (i) { i.setAttribute("readonly", ""); });
               }
             }
@@ -851,7 +875,6 @@
       var nameInput = document.getElementById("save-name");
       var title = document.getElementById("save-modal-title");
       document.getElementById("save-error").textContent = "";
-
       var currentClient = val("client_name");
       clientInput.value = currentClient;
       title.textContent = SHEET_ID ? "Update sheet" : "Save sheet";
@@ -881,7 +904,6 @@
         }).then(function (rj) {
           if (rj.ok && rj.j.sheet) {
             LAST_REMOTE_AT = rj.j.sheet.updated_at;
-            // Explicit save → current state is the new "starting point" for Cancel.
             INITIAL_SNAPSHOT = JSON.stringify(collectState());
             closeSaveModal();
             flashSaved();
@@ -906,7 +928,6 @@
             closeSaveModal();
             flashSaved();
             window.parent && window.parent.postMessage({ type: "mfc.workout-sheet.saved", sheet: rj.j.sheet }, "*");
-            // Cancel becomes available now that the sheet is saved.
             var cb = document.getElementById("cancel-btn"); if (cb) cb.style.display = "";
             tryAcquireLock();
             startPolling();
@@ -921,14 +942,10 @@
     document.getElementById("save-cancel").addEventListener("click", closeSaveModal);
     document.getElementById("save-confirm").addEventListener("click", confirmSave);
 
-    // ─── Clear ─────────────────────────────────────────────────────────
-    // Wipe the editor back to two empty day blocks (+ blank client fields).
-    // Unsaved sheets get a second confirmation since the work would be lost
-    // for good; saved sheets get one confirm (the cleared state auto-saves
-    // to the server like any other edit, so it's recoverable from history).
+    // ─── Clear ──────────────────────────────────────────────────────
     function sheetHasContent() {
       var inputs = document.querySelectorAll(
-        '.field input, .day-bar .bar-field input, tbody td input'
+        '.field input, .day-bar .bar-field input, tbody td input, tbody td textarea'
       );
       for (var i = 0; i < inputs.length; i++) {
         if ((inputs[i].value || "").trim()) return true;
@@ -943,7 +960,6 @@
       buildDay();
       buildDay();
       restoring = false;
-      // Persist the cleared state (server if saved, localStorage otherwise).
       saveState();
     }
     document.getElementById("clear-btn").addEventListener("click", function () {
@@ -958,7 +974,7 @@
       clearAllNow();
     });
 
-    // ─── Cancel (revert to the snapshot from when the sheet was opened) ─
+    // ─── Cancel (revert to opening snapshot) ────────────────────────
     function applySnapshot(snapJson) {
       var snap;
       try { snap = JSON.parse(snapJson); } catch (e) { return; }
@@ -971,22 +987,17 @@
       dayCount = 0;
       var days = (snap.days || []);
       if (days.length === 0) { buildDay(); buildDay(); }
-      else days.forEach(function (d) {
-        var rowN = (d.rows && d.rows.length) ? d.rows.length : DEFAULT_ROWS;
-        fillDay(buildDay(d.sets || DEFAULT_SETS, rowN), d);
-      });
+      else days.forEach(function (d) { restoreDay(d); });
       restoring = false;
     }
     document.getElementById("cancel-btn").addEventListener("click", function () {
       if (LOCKED_BY_OTHER || !SHEET_ID || !INITIAL_SNAPSHOT) return;
-      // No-op when there's nothing to undo
       var current = JSON.stringify(collectState());
       if (current === INITIAL_SNAPSHOT) return;
       if (!window.confirm("Discard edits and revert to the version you opened? The reverted state will auto-save.")) return;
       applySnapshot(INITIAL_SNAPSHOT);
-      saveState();   // push the reverted state back to the server
+      saveState();
     });
-
 
     document.getElementById("save-modal").addEventListener("click", function (e) {
       if (e.target.id === "save-modal") closeSaveModal();
@@ -999,7 +1010,7 @@
 
     window.addEventListener("beforeunload", function () { releaseLock(true); });
 
-    // ─── boot ────────────────────────────────────────────────────────
+    // ─── boot ───────────────────────────────────────────────────────
     function initFromLocal() {
       if (INIT_HANDLED) return;
       INIT_HANDLED = true;
@@ -1007,7 +1018,6 @@
     }
     function initSavedMode(sheetId) {
       SHEET_ID = sheetId;
-      // hide the local-storage flicker — clear default days that may have been built
       daysEl.innerHTML = "";
       dayCount = 0;
       loadSheet(sheetId).then(function () {
@@ -1026,7 +1036,6 @@
       populateClientDatalist();
       var saveBtn = document.getElementById("save-modal-trigger");
       if (saveBtn) saveBtn.style.display = "";
-      // Cancel only makes sense for a saved sheet (there's a known starting point).
       if (d.sheetId) {
         var cb = document.getElementById("cancel-btn");
         if (cb) cb.style.display = "";
@@ -1038,7 +1047,6 @@
 
     if (IS_IFRAME) {
       window.parent.postMessage({ type: "mfc.workout-sheet.ready" }, "*");
-      // fall back to local mode if the parent never sends init
       setTimeout(function () { if (!INIT_HANDLED) initFromLocal(); }, 800);
     } else {
       initFromLocal();
