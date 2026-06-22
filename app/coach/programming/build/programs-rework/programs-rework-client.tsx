@@ -42,6 +42,7 @@ type ProgramKind = "day" | "week";
 type ProgramState = {
   kind: ProgramKind;
   name: string;
+  timeframe: string;         // freeform, e.g. "2 weeks 6/23 - 7/7"
   durationWeeks: number;
   suggestedDaysPerWeek: number;
   dayCount: number;
@@ -100,6 +101,7 @@ function defaultProgram(): ProgramState {
   return {
     kind: "day",
     name: "New program",
+    timeframe: "",
     durationWeeks: 4,
     suggestedDaysPerWeek: 3,
     dayCount: 3,
@@ -459,9 +461,10 @@ export default function ProgramsReworkClient({
         </div>
       )}
 
-      {/* Program metadata row */}
+      {/* Program metadata */}
       <div className="card" style={{ marginBottom: "1rem" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.75fr 0.9fr 0.9fr 0.7fr 1fr", gap: "0.65rem", alignItems: "end" }}>
+        {/* Row 1 — name + timeframe */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: "0.65rem", marginBottom: "0.55rem" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
             <span className="stat-label">Program name</span>
             <input
@@ -470,6 +473,18 @@ export default function ProgramsReworkClient({
               onChange={(e) => patchProgram({ name: e.target.value })}
             />
           </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <span className="stat-label">Timeframe</span>
+            <input
+              className="input"
+              placeholder="e.g. 2 weeks 6/23 - 7/7"
+              value={program.timeframe}
+              onChange={(e) => patchProgram({ timeframe: e.target.value })}
+            />
+          </label>
+        </div>
+        {/* Row 2 — dates + structure */}
+        <div style={{ display: "grid", gridTemplateColumns: "0.75fr 0.9fr 0.9fr 0.7fr 1fr", gap: "0.65rem", alignItems: "end" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
             <span className="stat-label">Duration (wks)</span>
             <input
