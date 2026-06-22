@@ -181,9 +181,12 @@
   }
   tbody td.notes-cell textarea:focus { outline: none; background: #fbf7ef; }
 
-  tbody td.x-cell { padding: 0; text-align: center; }
-  .row-del { width: 100%; height: 100%; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 0.82rem; line-height: 1; padding: 0; }
+  tbody td.x-cell { padding: 0; text-align: center; vertical-align: top; }
+  .row-del, .row-dup { display: block; width: 100%; border: none; background: transparent; cursor: pointer; line-height: 1; padding: 2px 0; }
+  .row-del { color: var(--muted); font-size: 0.82rem; }
   .row-del:hover { color: var(--rust); }
+  .row-dup { color: #d5cbbf; font-size: 0.68rem; }
+  .row-dup:hover { color: var(--rust); }
   tbody tr:nth-child(even) td { background: #faf6ee; }
   tbody tr:nth-child(even) td input:focus,
   tbody tr:nth-child(even) td textarea:focus { background: #f3ecdd; }
@@ -365,7 +368,25 @@
       td.className = "x-cell";
       var b = document.createElement("button");
       b.type = "button"; b.className = "row-del"; b.title = "Delete row"; b.textContent = "×";
+      var dup = document.createElement("button");
+      dup.type = "button"; dup.className = "row-dup"; dup.title = "Duplicate row";
+      dup.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle"><rect x="2.5" y="2.5" width="6.5" height="6.5" rx="0.5" stroke="currentColor" stroke-width="1"/><rect x="1" y="1" width="6.5" height="6.5" rx="0.5" stroke="currentColor" stroke-width="1" fill="inherit"/></svg>';
+      dup.addEventListener("click", function () {
+        var tr = dup.closest("tr");
+        if (!tr) return;
+        var setCount = tr.querySelectorAll(".set-pair").length;
+        var newTr = makeRow(setCount);
+        var src = tr.querySelectorAll("input, textarea");
+        var dst = newTr.querySelectorAll("input, textarea");
+        for (var i = 0; i < src.length && i < dst.length; i++) {
+          dst[i].value = src[i].value;
+          if (dst[i].tagName === "TEXTAREA") autoGrow(dst[i]);
+        }
+        tr.parentNode.insertBefore(newTr, tr.nextSibling);
+        saveState();
+      });
       td.appendChild(b);
+      td.appendChild(dup);
       return td;
     }
 
