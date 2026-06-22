@@ -133,9 +133,13 @@
   tbody td.move-cell textarea:focus { outline: none; background: #fbf7ef; }
 
   /* Sets cell — per-row flex pairs (Reps · Wt) + inline + button */
-  tbody td.sets-cell { padding: 3px 4px; }
-  .sets-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
-  .set-pair { display: inline-flex; align-items: center; gap: 1px; }
+  tbody td.sets-cell { padding: 2px 3px; overflow: hidden; }
+  /* width + min-width 0 keeps the flex container inside its table cell so
+     flex-wrap actually kicks in instead of overflowing the row. */
+  .sets-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; width: 100%; min-width: 0; }
+  .set-pair { display: inline-flex; align-items: center; gap: 0; padding: 1px 5px; }
+  /* Light grey vertical rule between set pairs */
+  .set-pair + .set-pair { border-left: 1px solid #ddd8ce; }
   .set-pair input {
     font-family: "Georgia", serif; font-size: 0.82rem; color: var(--ink);
     background: transparent; border: none; border-bottom: 1px solid var(--line);
@@ -143,6 +147,8 @@
     box-sizing: border-box; min-height: 0;
   }
   .set-pair input:focus { outline: none; background: #fbf7ef; border-bottom-color: var(--rust); }
+  /* Smaller divider between Reps and Wt within a pair */
+  .set-pair .wt-in { border-left: 1px solid #ece5d8; margin-left: 2px; padding-left: 3px; }
   /* tiny × to remove an individual set pair */
   .pair-del {
     border: none; background: transparent; cursor: pointer;
@@ -387,9 +393,9 @@
       var pair = document.createElement("span");
       pair.className = "set-pair";
       var ri = document.createElement("input");
-      ri.type = "text"; ri.autocomplete = "off"; ri.placeholder = "Reps";
+      ri.type = "text"; ri.autocomplete = "off"; ri.className = "reps-in";
       var wi = document.createElement("input");
-      wi.type = "text"; wi.autocomplete = "off"; wi.placeholder = "Wt";
+      wi.type = "text"; wi.autocomplete = "off"; wi.className = "wt-in";
       var dx = document.createElement("button");
       dx.type = "button"; dx.className = "pair-del"; dx.title = "Remove set"; dx.textContent = "×";
       dx.addEventListener("click", function () {
