@@ -248,11 +248,12 @@ export default function NewWayClient({
     syncUrl({ client: c.id, type: "program", view });
   }
   function quickEditProgram(p: QuickDraftProgram) {
+    const t = p.program_kind === "in_gym" ? "template" : "program";
     setClientId(p.client_id);
-    setType("program");
+    setType(t);
     setApptId(""); setStartsAt(""); setEditProgramId(p.id);
     setStarted(true);
-    syncUrl({ client: p.client_id, type: "program", program: p.id, view });
+    syncUrl({ client: p.client_id, type: t, program: p.id, view });
   }
   function switchView(next: ViewMode) {
     if (next === view) return;
@@ -302,6 +303,7 @@ export default function NewWayClient({
             sessions={[]}
             sheetId={pairedSheetId ?? undefined}
             autofill={{ clientName: selectedClient?.full_name }}
+            clearLocal={!editProgramId}
           />
         </div>
       );
@@ -458,8 +460,8 @@ export default function NewWayClient({
       </QuickGroup>
 
       <QuickGroup
-        title="Recently drafted programs"
-        subLabel="unpublished, in progress"
+        title="Recently saved programs"
+        subLabel="at-home + templates, most recent first"
         count={draftPrograms.length}
         emptyLabel="No program drafts hanging around."
       >

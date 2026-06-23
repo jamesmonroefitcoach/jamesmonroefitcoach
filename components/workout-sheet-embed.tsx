@@ -28,12 +28,14 @@ export default function WorkoutSheetEmbed({
   clients,
   sessions,
   autofill,
+  clearLocal,
 }: {
   sheetId?: string | null;
   user?: UserLite | null;
   clients?: ClientLite[];
   sessions?: SessionLite[];
   autofill?: AutofillData | null;
+  clearLocal?: boolean;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const router = useRouter();
@@ -64,6 +66,7 @@ export default function WorkoutSheetEmbed({
             sessionList: sessions ?? [],
             sheetId: sheetId ?? null,
             autofill: autofill ?? null,
+            clearLocal: !sheetId && clearLocal ? true : undefined,
           },
           window.location.origin
         );

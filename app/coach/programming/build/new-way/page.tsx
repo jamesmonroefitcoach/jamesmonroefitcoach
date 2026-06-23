@@ -144,8 +144,6 @@ export default async function NewWayPage({
       .from("programs")
       .select("id, name, client_id, created_at, program_kind, is_published, builder_state")
       .eq("coach_id", user.id)
-      .eq("is_published", false)
-      .not("builder_state", "is", null)
       .is("archived_at", null)
       .order("created_at", { ascending: false })
       .limit(12);

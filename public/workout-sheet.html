@@ -1115,7 +1115,11 @@
         if (cb) cb.style.display = "";
         initSavedMode(d.sheetId);
       } else {
-        if (!daysEl.children.length) {
+        if (d.clearLocal) {
+          try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+          daysEl.innerHTML = ""; dayCount = 0;
+          buildDay(); buildDay();
+        } else if (!daysEl.children.length) {
           if (!restoreState()) { buildDay(); buildDay(); }
         }
         // Pre-fill header fields from autofill data (only if empty)
