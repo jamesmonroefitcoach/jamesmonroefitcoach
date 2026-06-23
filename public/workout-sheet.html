@@ -951,10 +951,18 @@
     function closeSaveModal() { document.getElementById("save-modal").classList.remove("show"); }
 
     function confirmSave() {
-      var name = document.getElementById("save-name").value.trim() || "Workout Sheet";
+      var rawName = document.getElementById("save-name").value.trim() || "Workout Sheet";
+      // Strip any existing suffix so re-saves don't double-append.
+      var baseName = rawName.replace(/ - Template$/, "");
+      var name = baseName + " - Template";
       var clientName = document.getElementById("save-client").value.trim();
       var sessionId = document.getElementById("save-session").value || null;
+      // Try exact match first, then case-insensitive fallback.
       var clientMatch = CLIENT_LIST.find(function (c) { return c.name === clientName; });
+      if (!clientMatch) {
+        var lower = clientName.toLowerCase();
+        clientMatch = CLIENT_LIST.find(function (c) { return c.name.toLowerCase() === lower; });
+      }
       var clientId = clientMatch ? clientMatch.id : null;
       var errEl = document.getElementById("save-error");
       errEl.textContent = "";

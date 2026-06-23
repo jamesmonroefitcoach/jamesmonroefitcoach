@@ -499,6 +499,10 @@ export type SaveDraftInput = {
   programKind: "in_gym" | "at_home";
   /** The whole WIP state — stored verbatim in programs.builder_state. */
   builderState: unknown;
+  /** When true, the new programs row is inserted with is_current=true so it
+   *  surfaces in View Programs immediately (rather than staying hidden as a
+   *  draft). In-App program builds set this; session builds do not. */
+  markCurrent?: boolean;
   /** Session being edited (in_gym only). When the draft is first
    *  created, the appointment's session_program_id is linked to it so
    *  the Old Way builder and the Template view both find the same row. */
@@ -579,7 +583,7 @@ export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: tru
       program_kind: input.programKind,
       builder_state: input.builderState,
       is_published: false,
-      is_current: false,
+      is_current: !!input.markCurrent,
       starts_on: new Date().toISOString().slice(0, 10),
       duration_weeks: 1,
     })

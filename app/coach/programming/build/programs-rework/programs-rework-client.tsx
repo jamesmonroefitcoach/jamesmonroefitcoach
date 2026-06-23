@@ -219,9 +219,10 @@ export default function ProgramsReworkClient({
       const res = await saveDraftProgram({
         draftId: draftId || undefined,
         clientId,
-        name: program.name,
+        name: program.name.trim() + " - In App",
         programKind: "at_home",
         builderState: program,
+        markCurrent: true,
       });
       if (res.ok) {
         if (!draftId) {
@@ -374,9 +375,10 @@ export default function ProgramsReworkClient({
     const res = await saveDraftProgram({
       draftId: draftId || undefined,
       clientId,
-      name: program.name,
+      name: program.name.trim() + " - In App",
       programKind: "at_home",
       builderState: program,
+      markCurrent: true,
     });
     if (res.ok) {
       if (!draftId) {
