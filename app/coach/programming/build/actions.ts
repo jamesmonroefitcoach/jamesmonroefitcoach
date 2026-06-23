@@ -342,6 +342,7 @@ export async function listInGymProgramsForClient(clientId: string): Promise<InGy
     .eq("coach_id", me.id)
     .eq("client_id", clientId)
     .eq("program_kind", "in_gym")
+    .is("archived_at", null)
     .order("starts_on", { ascending: false, nullsFirst: false });
   return (data ?? []) as InGymProgram[];
 }

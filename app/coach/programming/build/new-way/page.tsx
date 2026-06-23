@@ -15,7 +15,7 @@ export default async function NewWayPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    type?: "session" | "program";
+    type?: "session" | "program" | "template";
     client?: string;
     appt?: string;
     starts?: string;
@@ -28,8 +28,8 @@ export default async function NewWayPage({
   if (user.role !== "coach") redirect("/");
 
   const sp = await searchParams;
-  const type: "session" | "program" =
-    sp.type === "program" ? "program" : "session";
+  const type: "session" | "program" | "template" =
+    sp.type === "program" ? "program" : sp.type === "template" ? "template" : "session";
 
   const clients = await listClients(user.id);
   const libraryMovements = await listMovements();
