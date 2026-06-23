@@ -3,11 +3,10 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientRow, MovementRow } from "@/lib/data";
 import type { ClientProgramItem } from "../page";
-import type { ApptOption, ImportableProgram, InGymProgram } from "../actions";
+import type { ApptOption, ImportableProgram } from "../actions";
 import {
   getClientAppointments,
   listImportableProgramsForClient,
-  listInGymProgramsForClient,
   getOrCreatePairedSheetAction,
   getSessionProgramId,
   deleteDraftProgram,
@@ -45,7 +44,7 @@ export default function NewWayClient({
   quickDraftPrograms,
 }: {
   user: { id: string; name: string; role: "coach" | "client" | "admin" };
-  initialType: "session" | "program" | "template";
+  initialType: "session" | "program";
   clients: ClientRow[];
   libraryMovements: MovementRow[];
   initialClientId: string;
@@ -64,7 +63,7 @@ export default function NewWayClient({
   const [draftSessions, setDraftSessions] = useState(quickDraftSessions);
   const [draftPrograms, setDraftPrograms] = useState(quickDraftPrograms);
   const [clientId, setClientId] = useState(initialClientId);
-  const [type, setType] = useState<"session" | "program" | "template">(initialType);
+  const [type, setType] = useState<"session" | "program">(initialType);
   const [appts, setAppts] = useState<ApptOption[]>(initialAppts);
   const [apptId, setApptId] = useState(initialApptId);
   const [startsAt, setStartsAt] = useState(initialStartsAt);
@@ -74,9 +73,6 @@ export default function NewWayClient({
   // Program list for Step 3.
   const [programs, setPrograms] = useState<ImportableProgram[]>([]);
   const [programsLoading, startProgramsLoad] = useTransition();
-  // In-gym (Template) program list for Step 3 when type=template.
-  const [inGymPrograms, setInGymPrograms] = useState<InGymProgram[]>([]);
-  const [inGymLoading, startInGymLoad] = useTransition();
   /** localStorage backups for the picked client — surfaces the 'Recover
    *  previous draft' banner. Read fresh whenever clientId changes. */
   const [wipBackups, setWipBackups] = useState<WipBackup[]>([]);
@@ -117,15 +113,6 @@ export default function NewWayClient({
     });
   }, [clientId, type]);
 
-  // Fetch in-gym templates when in Template mode.
-  useEffect(() => {
-    if (!clientId || type !== "template") { setInGymPrograms([]); return; }
-    startInGymLoad(async () => {
-      const rows = await listInGymProgramsForClient(clientId);
-      setInGymPrograms(rows);
-    });
-  }, [clientId, type]);
-
   // Re-list WIP backups whenever the picked client (or backupTick) changes.
   useEffect(() => {
     if (!clientId || type !== "program") { setWipBackups([]); return; }
@@ -147,7 +134,7 @@ export default function NewWayClient({
       //      programs row Old Way or a prior session draft saved into).
       if (autosaveDraftId) {
         programIdToPair = autosaveDraftId;
-      } else if ((type === "program" || type === "template") && editProgramId) {
+      } else if (type === "program" && editProgramId) {
         programIdToPair = editProgramId;
       } else if (type === "session" && apptId) {
         programIdToPair = await getSessionProgramId(apptId);
@@ -185,19 +172,11 @@ export default function NewWayClient({
     setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
     syncUrl({ client: id, type });
   }
-  function pickType(next: "session" | "program" | "template") {
+  function pickType(next: "session" | "program") {
     if (next === type) return;
     setType(next);
     setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
     syncUrl({ client: clientId, type: next });
-  }
-  function startNewTemplate() {
-    setEditProgramId(""); setAutosaveDraftId(""); setStarted(true);
-    syncUrl({ client: clientId, type: "template" });
-  }
-  function editTemplate(p: InGymProgram) {
-    setEditProgramId(p.id); setStarted(true);
-    syncUrl({ client: clientId, type: "template", program: p.id });
   }
   function startSessionFor(a: ApptOption) {
     setApptId(a.id); setStartsAt(a.starts_at); setEditProgramId("");
@@ -248,12 +227,11 @@ export default function NewWayClient({
     syncUrl({ client: c.id, type: "program", view });
   }
   function quickEditProgram(p: QuickDraftProgram) {
-    const t = p.program_kind === "in_gym" ? "template" : "program";
     setClientId(p.client_id);
-    setType(t);
+    setType("program");
     setApptId(""); setStartsAt(""); setEditProgramId(p.id);
     setStarted(true);
-    syncUrl({ client: p.client_id, type: t, program: p.id, view });
+    syncUrl({ client: p.client_id, type: "program", program: p.id, view });
   }
   function switchView(next: ViewMode) {
     if (next === view) return;
@@ -283,32 +261,6 @@ export default function NewWayClient({
           };
         })()
       : null;
-    // ── Template type: standalone worksheet builder (creates in_gym program) ──
-    if (type === "template") {
-      return (
-        <div style={{ width: "min(1180px, 100% - 2rem)", margin: "0.6rem auto 0" }}>
-          <BackBar
-            clientName={selectedClient?.full_name ?? "—"}
-            typeLabel="Template · In-gym"
-            subLabel={editProgramId ? `Editing ${inGymPrograms.find((p) => p.id === editProgramId)?.name ?? "template"}` : "New template"}
-            view={view}
-            onSwitchView={switchView}
-            templateReady={false}
-            onBack={backToLobby}
-            hideToggle
-          />
-          <WorkoutSheetEmbed
-            user={{ id: user.id, name: user.name, role: user.role }}
-            clients={clientLite}
-            sessions={[]}
-            sheetId={pairedSheetId ?? undefined}
-            autofill={{ clientName: selectedClient?.full_name }}
-            clearLocal={!editProgramId}
-          />
-        </div>
-      );
-    }
-
     const subLabel =
       type === "session"
         ? apptId
@@ -515,7 +467,6 @@ export default function NewWayClient({
           >
             <Pill active={type === "session"} onClick={() => pickType("session")} label="Session" sub="In-gym" />
             <Pill active={type === "program"} onClick={() => pickType("program")} label="Program" sub="At-home" />
-            <Pill active={type === "template"} onClick={() => pickType("template")} label="Template" sub="In-gym · sheet" />
           </div>
         </section>
       )}
@@ -658,53 +609,6 @@ export default function NewWayClient({
               </li>
             )}
           </ul>
-        </section>
-      )}
-
-      {/* Step 3 — template */}
-      {clientId && type === "template" && (
-        <section className="card" style={{ padding: "1rem 1.15rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap" }}>
-            <StepLabel n={3} label="Pick a template — or start new" />
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ padding: "0.4rem 1rem", fontSize: "0.86rem" }}
-              onClick={startNewTemplate}
-            >
-              + New template
-            </button>
-          </div>
-          {inGymLoading ? (
-            <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>Loading templates…</p>
-          ) : inGymPrograms.length === 0 ? (
-            <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>No templates yet — start one above.</p>
-          ) : (
-            <ul style={{ listStyle: "none", margin: "0.6rem 0 0", padding: 0, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-              {inGymPrograms.map((p) => (
-                <li key={p.id} style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "0.55rem 0.7rem", border: "1px solid var(--line)", borderRadius: 4,
-                }}>
-                  <span style={{ display: "flex", flexDirection: "column", gap: "0.1rem" }}>
-                    <strong style={{ fontSize: "0.88rem" }}>{p.name}</strong>
-                    <span className="meta" style={{ fontSize: "0.7rem" }}>
-                      {p.starts_on ?? "no date"}{p.ends_on ? ` → ${p.ends_on}` : ""}
-                      {p.is_current && <span style={{ marginLeft: "0.4rem", color: "var(--sage)" }}>· current</span>}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    style={{ padding: "0.3rem 0.85rem", fontSize: "0.82rem" }}
-                    onClick={() => editTemplate(p)}
-                  >
-                    Edit →
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
         </section>
       )}
 

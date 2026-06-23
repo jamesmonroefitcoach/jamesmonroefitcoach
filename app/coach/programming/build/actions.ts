@@ -679,7 +679,7 @@ export async function deleteDraftProgram(programId: string): Promise<{ ok: boole
   const { error } = await supabase.from("programs").delete().eq("id", programId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/coach/programming");
+  revalidatePath("/coach/programming", "layout");
   return { ok: true };
 }
 
