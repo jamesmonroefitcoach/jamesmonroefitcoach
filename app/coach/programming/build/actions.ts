@@ -632,6 +632,70 @@ export async function getOrCreatePairedSheetAction(programId: string): Promise<{
   }
 }
 
+// ─── Delete helpers ───────────────────────────────────────────────────────────
+
+// Delete a draft program (used by the "Recently drafted programs" quick-group).
+export async function deleteDraftProgram(programId: string): Promise<{ ok: boolean; error?: string }> {
+  const me = await getSessionUser();
+  if (!me || (me.role !== "coach" && !me.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "no db" };
+
+  const supabase = createSupabaseAdmin();
+
+  // Unlink paired sheet before deleting
+  await supabase.from("workout_sheets").update({ program_id: null }).eq("program_id", programId);
+
+  const { data: days } = await supabase.from("program_days").select("id").eq("program_id", programId);
+  const dayIds = (days ?? []).map((d: { id: string }) => d.id);
+  if (dayIds.length) {
+    await supabase.from("program_movements").delete().in("program_day_id", dayIds);
+    await supabase.from("program_days").delete().eq("program_id", programId);
+  }
+
+  const { error } = await supabase.from("programs").delete().eq("id", programId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/coach/programming");
+  return { ok: true };
+}
+
+// Delete the draft program linked to an appointment, resetting it to "needs_programming".
+export async function deleteDraftSession(apptId: string): Promise<{ ok: boolean; error?: string }> {
+  const me = await getSessionUser();
+  if (!me || (me.role !== "coach" && !me.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "no db" };
+
+  const supabase = createSupabaseAdmin();
+
+  const { data: appt } = await supabase
+    .from("appointments")
+    .select("session_program_id")
+    .eq("id", apptId)
+    .maybeSingle<{ session_program_id: string | null }>();
+
+  const programId = appt?.session_program_id;
+
+  // Reset the appointment back to needs_programming regardless
+  await supabase
+    .from("appointments")
+    .update({ session_program_id: null, program_status: "needs_programming" })
+    .eq("id", apptId);
+
+  if (programId) {
+    await supabase.from("workout_sheets").update({ program_id: null }).eq("program_id", programId);
+    const { data: days } = await supabase.from("program_days").select("id").eq("program_id", programId);
+    const dayIds = (days ?? []).map((d: { id: string }) => d.id);
+    if (dayIds.length) {
+      await supabase.from("program_movements").delete().in("program_day_id", dayIds);
+      await supabase.from("program_days").delete().eq("program_id", programId);
+    }
+    await supabase.from("programs").delete().eq("id", programId);
+  }
+
+  revalidatePath("/coach/programming");
+  return { ok: true };
+}
+
 // Look up an appointment's session_program_id so the lobby can find the
 // program (and its paired sheet) for an existing session.
 export async function getSessionProgramId(apptId: string): Promise<string | null> {

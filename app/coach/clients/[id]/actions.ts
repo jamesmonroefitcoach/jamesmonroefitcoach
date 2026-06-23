@@ -4,6 +4,68 @@ import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import type { ReminderPrefs } from "@/lib/data";
+import { deleteWorkoutSheet } from "@/lib/workout-sheets.server";
+
+// ── Delete a program and its associated days/movements ───────────────────────
+export async function deleteProgram(
+  programId: string,
+  clientId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin" && !user.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "no db" };
+
+  const supabase = createSupabaseAdmin();
+
+  // Unlink the paired workout sheet before deleting (avoid FK issues)
+  await supabase
+    .from("workout_sheets")
+    .update({ program_id: null })
+    .eq("program_id", programId);
+
+  // Delete movements → days → program
+  const { data: days } = await supabase
+    .from("program_days")
+    .select("id")
+    .eq("program_id", programId);
+  const dayIds = (days ?? []).map((d: { id: string }) => d.id);
+  if (dayIds.length) {
+    await supabase.from("program_movements").delete().in("program_day_id", dayIds);
+    await supabase.from("program_days").delete().eq("program_id", programId);
+  }
+
+  const { error } = await supabase.from("programs").delete().eq("id", programId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/coach/clients/${clientId}`);
+  revalidatePath("/coach/programming");
+  return { ok: true };
+}
+
+// ── Delete a workout sheet and unlink any paired program ─────────────────────
+export async function deleteClientWorkoutSheet(
+  sheetId: string,
+  clientId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin" && !user.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "no db" };
+
+  const supabase = createSupabaseAdmin();
+
+  // Unlink the paired program before deleting (avoid FK issues)
+  await supabase
+    .from("programs")
+    .update({ workout_sheet_id: null })
+    .eq("workout_sheet_id", sheetId);
+
+  const ok = await deleteWorkoutSheet(sheetId);
+  if (!ok) return { ok: false, error: "delete failed" };
+
+  revalidatePath(`/coach/clients/${clientId}`);
+  revalidatePath("/coach/programming");
+  return { ok: true };
+}
 
 // ── Coach-provided fields ──────────────────────────────────────────────────
 export type CoachProfileInput = {

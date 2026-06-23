@@ -58,7 +58,7 @@ function MonthGroup({ clientId, month, sessions }: {
             return (
               <Link
                 key={s.id}
-                href={`/coach/programming/build?tab=session&client=${clientId}&appt=${s.id}${viewParam}`}
+                href={`/coach/programming/build/new-way?type=session&appt=${s.id}&client=${clientId}${viewParam}`}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem",
                   padding: "0.22rem 0.4rem", borderRadius: 3,
@@ -308,7 +308,7 @@ function ProgramListRow({ program, clientId, allowFeedback }: {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.45rem" }}>
         <Link
-          href={`/coach/programming/build?tab=program&client=${clientId}`}
+          href={`/coach/programming/build/new-way?type=program&client=${clientId}&program=${program.id}`}
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
             textDecoration: "none", color: "var(--ink)", flex: 1, minWidth: 0,

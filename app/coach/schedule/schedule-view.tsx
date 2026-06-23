@@ -1386,7 +1386,7 @@ export default function ScheduleView({
 
         <div
           ref={weekScrollRef}
-          className="card"
+          className="card no-scrollbar"
           style={{
             marginTop: "1rem",
             padding: 0,
@@ -1987,7 +1987,7 @@ export default function ScheduleView({
             cancelled only
           </span>
         </div>
-        <div className="card" style={{ marginTop: "0.55rem", padding: 0, overflow: "auto" }}>
+        <div className="card no-scrollbar" style={{ marginTop: "0.55rem", padding: 0, overflow: "auto" }}>
           <div style={{ minWidth: 760, display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
             {DAYS.map((d) => (
               <div key={d} style={{ textAlign: "center", padding: "0.5rem 0", borderBottom: "1px solid var(--line)", borderLeft: "1px solid var(--line)", background: "rgba(0,0,0,0.02)", fontWeight: 700, fontSize: "0.8rem" }}>{d}</div>
@@ -2060,7 +2060,7 @@ export default function ScheduleView({
         <div className="no-print" style={{ position: "fixed", inset: 0, background: "rgba(23,19,17,0.4)", zIndex: 50 }} onClick={close}>
           <aside
             onClick={(e) => e.stopPropagation()}
-            className="card"
+            className="card no-scrollbar"
             style={{
               position: "absolute",
               top: 0, right: 0, bottom: 0,
@@ -2132,7 +2132,7 @@ export default function ScheduleView({
                           .filter((c) => (c.lifecycle === "active" || c.lifecycle === "online") && (q === "" || c.full_name.toLowerCase().includes(q)))
                           .sort((a, b) => a.full_name.localeCompare(b.full_name));
                         return filtered.length > 0 ? (
-                          <div style={{
+                          <div className="no-scrollbar" style={{
                             position: "absolute",
                             top: "calc(100% + 2px)",
                             left: 0,
@@ -2769,6 +2769,7 @@ function GoalProgressStrip({
           wrapping. Horizontal scroll kicks in if there are too many
           to fit (8+ chips on a 1100px viewport). */}
       <div
+        className="no-scrollbar"
         style={{
           display: "flex",
           flexWrap: "nowrap",

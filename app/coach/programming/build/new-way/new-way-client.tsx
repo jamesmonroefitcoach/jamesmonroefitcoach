@@ -9,6 +9,8 @@ import {
   listImportableProgramsForClient,
   getOrCreatePairedSheetAction,
   getSessionProgramId,
+  deleteDraftProgram,
+  deleteDraftSession,
 } from "../actions";
 import ReworkClient from "../rework/rework-client";
 import ProgramsReworkClient from "../programs-rework/programs-rework-client";
@@ -58,6 +60,8 @@ export default function NewWayClient({
   quickDraftPrograms: QuickDraftProgram[];
 }) {
   const router = useRouter();
+  const [draftSessions, setDraftSessions] = useState(quickDraftSessions);
+  const [draftPrograms, setDraftPrograms] = useState(quickDraftPrograms);
   const [clientId, setClientId] = useState(initialClientId);
   const [type, setType] = useState<"session" | "program">(initialType);
   const [appts, setAppts] = useState<ApptOption[]>(initialAppts);
@@ -388,16 +392,20 @@ export default function NewWayClient({
       <QuickGroup
         title="Recently drafted sessions"
         subLabel="started but not finished"
-        count={quickDraftSessions.length}
+        count={draftSessions.length}
         emptyLabel="No session drafts hanging around."
       >
-        {quickDraftSessions.map((s) => (
+        {draftSessions.map((s) => (
           <QuickRow
             key={s.id}
             primary={fmtSessionWhen(s.starts_at)}
             secondary={s.client_name}
             ctaLabel="Edit draft →"
             onClick={() => quickProgramSession(s)}
+            onDelete={async () => {
+              await deleteDraftSession(s.id);
+              setDraftSessions((prev) => prev.filter((x) => x.id !== s.id));
+            }}
           />
         ))}
       </QuickGroup>
@@ -405,16 +413,20 @@ export default function NewWayClient({
       <QuickGroup
         title="Recently drafted programs"
         subLabel="unpublished, in progress"
-        count={quickDraftPrograms.length}
+        count={draftPrograms.length}
         emptyLabel="No program drafts hanging around."
       >
-        {quickDraftPrograms.map((p) => (
+        {draftPrograms.map((p) => (
           <QuickRow
             key={p.id}
             primary={p.name || "Untitled program"}
             secondary={`${p.client_name} · ${p.program_kind === "at_home" ? "at-home" : "in-gym"}`}
             ctaLabel="Edit program →"
             onClick={() => quickEditProgram(p)}
+            onDelete={async () => {
+              await deleteDraftProgram(p.id);
+              setDraftPrograms((prev) => prev.filter((x) => x.id !== p.id));
+            }}
           />
         ))}
       </QuickGroup>
@@ -716,13 +728,15 @@ function QuickGroup({
 }
 
 function QuickRow({
-  primary, secondary, ctaLabel, onClick,
+  primary, secondary, ctaLabel, onClick, onDelete,
 }: {
   primary: string;
   secondary: string;
   ctaLabel: string;
   onClick: () => void;
+  onDelete?: () => void;
 }) {
+  const [deleting, startDelete] = useTransition();
   return (
     <li
       style={{
@@ -746,6 +760,24 @@ function QuickRow({
       >
         {ctaLabel}
       </button>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => {
+            if (!confirm(`Delete "${primary}"?`)) return;
+            startDelete(async () => { await onDelete(); });
+          }}
+          disabled={deleting}
+          title="Delete"
+          style={{
+            fontSize: "0.68rem", lineHeight: 1,
+            padding: "0.18rem 0.38rem", borderRadius: 3,
+            border: "1px solid var(--line)", background: "transparent",
+            color: "var(--muted)", cursor: "pointer", fontFamily: "inherit",
+            flexShrink: 0,
+          }}
+        >{deleting ? "…" : "✕"}</button>
+      )}
     </li>
   );
 }

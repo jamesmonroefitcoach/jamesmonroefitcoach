@@ -152,7 +152,9 @@ function ProgramCell({ client, atHomeProg, daysLeft }: {
       </div>
       <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
         <Link
-          href={`/coach/programming/build?tab=program&client=${client.id}`}
+          href={atHomeProg
+            ? `/coach/programming/build/new-way?type=program&client=${client.id}&program=${atHomeProg.id}`
+            : `/coach/programming/build/new-way?type=program&client=${client.id}`}
           style={{
             fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
             borderRadius: 3, border: "1px solid var(--sage)", color: "var(--sage)",
@@ -374,7 +376,9 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
         <NextSessionCell iso={c.next_session_at} />
         {c.next_session_at && (
           <Link
-            href={`/coach/programming/build?tab=session&client=${c.id}${nextStatus ? `&appt=${nextStatus.apptId}` : ""}`}
+            href={nextStatus?.apptId
+              ? `/coach/programming/build/new-way?type=session&appt=${nextStatus.apptId}&client=${c.id}${nextStatus.programmed ? "&view=plan" : ""}`
+              : `/coach/programming/build/new-way?type=session&client=${c.id}`}
             style={{
               display: "inline-block", marginTop: "0.3rem",
               fontSize: "0.7rem", fontWeight: 600,

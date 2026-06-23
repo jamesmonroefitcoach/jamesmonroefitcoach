@@ -266,7 +266,7 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
 
   const { data: sheet } = await supabase
     .from("workout_sheets")
-    .select("id, name, coach_id, client_id, program_id, kind, sheet_data")
+    .select("id, name, coach_id, client_id, program_id, kind, sheet_data, session_id")
     .eq("id", sheetId)
     .maybeSingle<{
       id: string;
@@ -276,6 +276,7 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
       program_id: string | null;
       kind: "app" | "pdf";
       sheet_data: { timeframe?: string } | null;
+      session_id: string | null;
     }>();
   if (!sheet) return null;
   if (sheet.program_id) return sheet.program_id;
@@ -306,6 +307,16 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
     .from("workout_sheets")
     .update({ program_id: program.id })
     .eq("id", sheet.id);
+
+  // If this sheet was saved against a specific appointment, link it so the
+  // appointment shows "programmed" in the schedule and session views.
+  if (sheet.session_id) {
+    await supabase
+      .from("appointments")
+      .update({ session_program_id: program.id, program_status: "programmed" })
+      .eq("id", sheet.session_id);
+  }
+
   return program.id;
 }
 

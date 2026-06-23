@@ -264,6 +264,25 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
                   <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Past sessions:</span>{" "}
                   <span style={{ color: "var(--ink)" }}>{historicalSessions.length}</span>
                 </span>
+                {/* Current Template program — spans full row so it sits below the 3-column line */}
+                {active.sessions && (
+                  <span style={{ gridColumn: "1 / -1", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", fontSize: "0.62rem", color: "#8a7e72" }}>Template:</span>{" "}
+                    <span style={{ color: "var(--ink)" }}>{active.sessions.name}</span>
+                    {active.sessions.starts_on && (
+                      <>{" · "}<span style={{ color: "var(--muted)" }}>{fmtShortDate(active.sessions.starts_on)}{active.sessions.ends_on ? ` → ${fmtShortDate(active.sessions.ends_on)}` : ""}</span></>
+                    )}
+                    {" · "}
+                    {active.sessions.workout_sheet_id ? (
+                      <Link
+                        href={`/coach/programming/templates?sheet=${active.sessions.workout_sheet_id}`}
+                        style={{ color: "var(--rust)", fontWeight: 600, textDecoration: "underline" }}
+                      >Open</Link>
+                    ) : (
+                      <span style={{ color: "var(--muted)" }}>no sheet linked</span>
+                    )}
+                  </span>
+                )}
               </>
             )}
             {isProgramsView && (

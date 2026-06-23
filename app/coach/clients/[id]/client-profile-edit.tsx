@@ -24,8 +24,9 @@ const LIFECYCLE_COLORS: Record<string, { bg: string; color: string }> = {
 
 function fmtBirthday(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  // Parse YYYY-MM-DD directly to avoid UTC-to-local day shift
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

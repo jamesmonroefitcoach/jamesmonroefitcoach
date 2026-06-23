@@ -1621,6 +1621,10 @@ th.tbl-sticky-last {
   .schedule-legend-sep { display: none; }
 }
 
+/* Hide scrollbar chrome while keeping scroll functional */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Extra-small tier (<360px) — just keep things from breaking */
 @media (max-width: 360px) {
   .public-headline { font-size: 1.6rem; }
