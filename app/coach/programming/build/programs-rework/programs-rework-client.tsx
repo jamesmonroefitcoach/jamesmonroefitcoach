@@ -13,7 +13,8 @@ import {
   type Category, type Equipment, type Movement,
   type LibraryGroup, type LibraryNode, type LibraryLeaf,
 } from "@/lib/programs";
-import { saveDraftProgram, loadDraftProgram } from "../actions";
+import { saveDraftProgram, loadDraftProgram, saveProgram as publishProgram } from "../actions";
+import type { SaveProgramDay } from "../actions";
 import { fmtDate } from "@/lib/format";
 import type { ClientProgramItem } from "../page";
 
@@ -394,6 +395,67 @@ export default function ProgramsReworkClient({
       alert(`Saved to browser only — couldn't reach Supabase: ${res.error}`);
     }
   }
+  async function handlePublish() {
+    if (!clientId) { alert("Select a client first."); return; }
+    if (!confirm(`Publish "${program.name.trim()}" for ${clients.find((c) => c.id === clientId)?.full_name ?? "this client"}? This marks it as their active program.`)) return;
+
+    const today = todayISO();
+    const allItems = program.kind === "day" ? program.days.flatMap((d) => d.items) : program.weekItems;
+    const days: SaveProgramDay[] = program.kind === "day"
+      ? program.days.map((d, i) => ({
+          day_number: i + 1,
+          title: d.title,
+          items: d.items.map((slot) => ({
+            movement_id: slot.movement.id,
+            movement_name: slot.movement.name,
+            category: slot.movement.category,
+            is_warmup: false,
+            sets: slot.sets,
+            reps: slot.reps,
+            exertion: String(slot.exertion_score),
+            notes: slot.notes || null,
+          })),
+        }))
+      : [{
+          day_number: 1,
+          title: "Full Program",
+          items: allItems.map((slot) => ({
+            movement_id: slot.movement.id,
+            movement_name: slot.movement.name,
+            category: slot.movement.category,
+            is_warmup: false,
+            sets: slot.sets,
+            reps: slot.reps,
+            exertion: String(slot.exertion_score),
+            notes: slot.notes || null,
+          })),
+        }];
+
+    setSaveStatus("saving");
+    const res = await publishProgram({
+      program_id: draftId || undefined,
+      client_id: clientId,
+      name: program.name.trim() + " - In App",
+      starts_on: program.startsOn || today,
+      duration_weeks: program.durationWeeks || 4,
+      publish: true,
+      days,
+      program_kind: "at_home",
+      builder_state: program,
+    });
+    if (res.ok) {
+      if (res.data?.id && !draftId) {
+        setDraftId(res.data.id);
+        try { localStorage.setItem(draftIdKey, res.data.id); } catch {}
+        onDraftSaved?.(res.data.id);
+      }
+      setSaveStatus("saved");
+      alert("Published! Your client can now see this program in the app.");
+    } else {
+      setSaveStatus("error");
+      alert(`Failed to publish: ${res.error}`);
+    }
+  }
   function handleReset() {
     if (!confirm("Clear this draft and start over?")) return;
     if (clientId) clearProgram(clientId);
@@ -672,7 +734,8 @@ export default function ProgramsReworkClient({
             {saveStatus === "error" && <span style={{ color: "var(--red)", fontWeight: 600 }} title={saveError ?? ""}>⚠ Browser only — server save failed</span>}
             {saveStatus === "idle" && <span className="meta">Autosave on</span>}
           </span>
-          <button className="btn btn-primary" onClick={handleSaveDraft}>Save Draft</button>
+          <button className="btn btn-ghost" onClick={handleSaveDraft}>Save Draft</button>
+          <button className="btn btn-primary" onClick={handlePublish}>Publish</button>
         </div>
       </div>
 

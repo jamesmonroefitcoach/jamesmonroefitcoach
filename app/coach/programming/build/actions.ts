@@ -322,6 +322,30 @@ export async function listImportableProgramsForClient(clientId: string): Promise
   }));
 }
 
+// ─── In-gym (Template) programs for a client ──────────────────────────────
+export type InGymProgram = {
+  id: string;
+  name: string;
+  starts_on: string | null;
+  ends_on: string | null;
+  is_current: boolean;
+};
+
+export async function listInGymProgramsForClient(clientId: string): Promise<InGymProgram[]> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return [];
+  if (!hasSupabaseEnv()) return [];
+  const supabase = createSupabaseAdmin();
+  const { data } = await supabase
+    .from("programs")
+    .select("id, name, starts_on, ends_on, is_current")
+    .eq("coach_id", me.id)
+    .eq("client_id", clientId)
+    .eq("program_kind", "in_gym")
+    .order("starts_on", { ascending: false, nullsFirst: false });
+  return (data ?? []) as InGymProgram[];
+}
+
 // ─── Import: lightweight client list for the "other client" picker ─────────
 export async function listClientsForImport(): Promise<{ id: string; full_name: string }[]> {
   const me = await getSessionUser();
