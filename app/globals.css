@@ -757,6 +757,13 @@ th.tbl-sticky-last {
   max-width: 62ch;
 }
 .public-p-meta { color: var(--muted); font-size: 0.92rem; }
+.public-compassion-line {
+  margin-top: 0.85rem;
+  font-style: italic;
+  color: var(--rust);
+  font-size: 1.02rem;
+  letter-spacing: 0.01em;
+}
 
 .public-two-col {
   display: grid;
@@ -925,6 +932,13 @@ th.tbl-sticky-last {
   line-height: 1.55;
   color: var(--ink);
   max-width: 50ch;
+}
+.public-result-weights {
+  margin: 0.15rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  color: var(--muted);
 }
 
 @media (max-width: 640px) {

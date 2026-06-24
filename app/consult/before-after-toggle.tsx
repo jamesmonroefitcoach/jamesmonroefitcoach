@@ -7,6 +7,7 @@
 export default function BeforeAfterToggle({
   label,
   summary,
+  weights,
   index,
   beforeSrc,
   afterSrc,
@@ -16,6 +17,8 @@ export default function BeforeAfterToggle({
 }: {
   label: string;
   summary: string;
+  // Small caption under the summary for before → after lift numbers.
+  weights?: string;
   index: number;
   beforeSrc?: string;
   afterSrc?: string;
@@ -55,6 +58,7 @@ export default function BeforeAfterToggle({
           </span>
           <strong className="public-result-title">{label}</strong>
           <p className="public-result-summary">{summary}</p>
+          {weights && <p className="public-result-weights">{weights}</p>}
         </div>
       </div>
     </div>

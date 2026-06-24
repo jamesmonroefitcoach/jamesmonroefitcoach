@@ -20,11 +20,11 @@ import { allBeforeUrls, allAfterUrls } from "@/app/testimonials/types";
 const OFFERINGS = [
   {
     title: "Strength",
-    blurb: "Progressive overload, real lifts, real loading. Built so you peak and keep peaking.",
+    blurb: "Progressive overload built to your goal, whether that's a bigger lift, athletic power, or just getting genuinely strong. Real lifts, loaded on a real schedule.",
   },
   {
     title: "Boxing",
-    blurb: "Footwork, hands, conditioning, sparring prep. Whether you compete or just want sharper movement.",
+    blurb: "Beginner boxing, footwork, conditioning, mitt-work drills, and explosive movement.",
   },
   {
     title: "Body Recomposition",
@@ -32,15 +32,15 @@ const OFFERINGS = [
   },
   {
     title: "Nutrition",
-    blurb: "Practical fueling, recovery, and meal structure. No restrictive plan you can't keep up with.",
+    blurb: "Welcome back to Biology 101. Learn the ins and outs of metabolism, how and why we gain weight, how to push through plateaus, and how to eat well around your real lifestyle.",
   },
   {
     title: "Recovery",
-    blurb: "Mobility, sleep, stress, return-from-injury. The unsexy work that lets you train hard for years.",
+    blurb: "Mobility, sleep, stress, return-from-injury. The necessary, often overlooked work that lets you train hard for years.",
   },
   {
     title: "Coaching Training",
-    blurb: "For trainers and coaches: years of experience shared 1:1 to sharpen your skill, programming, and eye.",
+    blurb: "For trainers and coaches: years of experience shared 1:1 to sharpen your skill, programming, and eye, including how to build and keep a clientele roster.",
   },
 ];
 
@@ -48,35 +48,30 @@ const OFFERINGS = [
 // run alongside whichever offering above they pick.
 const SERVICES = [
   { title: "Custom weekly programming",  blurb: "Built around your gym, schedule, and goals. Never pulled from a template." },
-  { title: "Form review & cueing",       blurb: "Live in person, or video review for online clients." },
-  { title: "Movement & mobility screen",  blurb: "Identify weak links before they become injuries." },
-  { title: "Nutrition guidance",          blurb: "Practical fuel + recovery without a meal plan you'll hate." },
-  { title: "Weekly check-ins",            blurb: "Body comp, energy, sleep, soreness, all tracked in the app." },
+  { title: "Form review & cueing",       blurb: "Constant monitoring and feedback on your form, in and outside of sessions." },
+  { title: "Movement & range-of-motion development", blurb: "Identify and strengthen weak links before they become injuries." },
+  { title: "Nutrition education",         blurb: "Prescribed, not suggested. The why behind how you eat, structured to your lifestyle and dialed in to push through plateaus." },
+  { title: "Progress tracking",           blurb: "Body comp, energy, sleep, soreness, and weight, all reviewed regularly with James and trackable in your account." },
   { title: "Direct messaging access",     blurb: "Reach James between sessions when you need a quick answer." },
   { title: "Optional coaching app",       blurb: "Schedule, reschedule, log your sets, see programs, track payments, and view progress in one place. Use it as much or as little as you like." },
 ];
 
-// What the first 90 days look like, set up as a small numbered timeline.
+// How the early work unfolds, set up as a small numbered set of phases.
 const TIMELINE = [
   {
-    label: "Week 1",
-    title: "Assessment & first programming block",
-    blurb: "Movement screen, baseline lifts, history. Your first week of programming lands in the app the day we finish.",
+    label: "Phase 1",
+    title: "Assess & build the foundation",
+    blurb: "Education on how your body actually works. An LPHC (lumbo-pelvic-hip complex) routine maps your range of motion: what moves where, where it's tight, where pain shows up. Deep core and lower-back work start right away, the weak links James goes after first. You learn the six basic movements, then we layer in accessories. On nutrition, we lock in one or two habits.",
   },
   {
-    label: "Weeks 2-4",
-    title: "Pattern + progression",
-    blurb: "Dial in form on the big movements. Reps & loads progress on a real schedule. Weekly check-ins start.",
+    label: "Phase 2",
+    title: "Strength & load",
+    blurb: "Fewer reps, heavier weight. The basics progress on a real schedule while we habit-stack the nutrition wins from Phase 1.",
   },
   {
-    label: "Weeks 5-8",
-    title: "Build phase",
-    blurb: "Strength, capacity, and body comp targets begin to compound. We adjust based on what's actually working for you.",
-  },
-  {
-    label: "Weeks 9-12",
-    title: "Performance & next chapter",
-    blurb: "Test the lifts, reassess, set the next 90-day target. Most clients renew here. Many stay for years.",
+    label: "Phase 3",
+    title: "Explosive & repeat",
+    blurb: "We reassess and run it back, then layer explosive, powerful movement on top of the strength base. Every cycle compounds on the last.",
   },
 ];
 
@@ -87,9 +82,9 @@ const PRICING = [
   {
     name: "Free consultation",
     price: "Free",
-    cadence: "20 minutes",
+    cadence: "60 minutes",
     bullets: [
-      "A 20-minute conversation to hear what you're after, what's in the way, and whether we're a fit.",
+      "A full hour, no rush. We talk through what you're after and what's in the way, then run the LPHC routine so you get a real taste of training and cueing, and see where your body needs work head to toe.",
     ],
   },
   {
@@ -99,10 +94,8 @@ const PRICING = [
     featured: true,
     bullets: [
       "Strength, boxing, recomp. Pick the focus.",
-      "Programming built in",
+      "Weekly programming available",
       "In-person at Hyde Park Gym, Austin",
-      "Packages available. Ask on the consult.",
-      "Rate is the standard; we may tune it together if your situation calls for something different.",
     ],
   },
 ];
@@ -125,10 +118,11 @@ const TESTIMONIALS = [
   },
 ];
 
-const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterSrc?: string; fit?: "cover" | "contain"; beforeFit?: "cover" | "contain"; afterFit?: "cover" | "contain" }[] = [
+const BEFORE_AFTER: { label: string; summary: string; weights?: string; beforeSrc?: string; afterSrc?: string; fit?: "cover" | "contain"; beforeFit?: "cover" | "contain"; afterFit?: "cover" | "contain" }[] = [
   {
     label: "Body recomposition · Austin client",
     summary: "Strength + recomp focus. Leaner build, less softness, more confidence. Same person, different season.",
+    weights: "Lifts placeholder, James to add (e.g. Squat 135 → 225 lb · Deadlift 185 → 315 lb)",
     beforeSrc: "/results/client-1-before.jpg",
     afterSrc: "/results/client-1-after.jpg",
     // BEFORE crops like every other entry; AFTER letterboxes so the
@@ -138,12 +132,14 @@ const BEFORE_AFTER: { label: string; summary: string; beforeSrc?: string; afterS
   {
     label: "Lean-out · Austin client",
     summary: "Strength + recomp. Visible torso definition and tighter waist after consistent programming.",
+    weights: "Lifts placeholder, James to add (e.g. Bench 95 → 155 lb · Squat 135 → 225 lb)",
     beforeSrc: "/results/client-2-before.jpg",
     afterSrc: "/results/client-2-after.jpg",
   },
   {
     label: "Strength + lean-out · Austin client",
     summary: "Dropped body fat while keeping muscle mass. Clear waist taper and visible abs.",
+    weights: "Lifts placeholder, James to add (e.g. Deadlift 185 → 315 lb · Bench 135 → 205 lb)",
     beforeSrc: "/results/client-3-before.jpg",
     afterSrc: "/results/client-3-after.jpg",
   },
@@ -195,12 +191,14 @@ export default async function MarketingPage({
           <AvailabilityBadge />
           <span className="public-eyebrow">Monroe Fit Coach</span>
           <h1 className="public-headline">
-            Train under a coach who actually shows up.
+            Set a goal. Set a pace. Follow through.
           </h1>
           <p className="public-sub">
-            PLACEHOLDER. James Monroe builds programs around your life, your
-            injuries, and your real schedule. No templates. No guessing. Just
-            the next thing you need to do.
+            James Monroe takes a comprehensive approach to fitness, with
+            experience stemming from over five years of helping people lose
+            body fat, build muscle, and become more athletic overall. Whether
+            it&rsquo;s becoming wedding-ready or rehabbing an injury, James will
+            find a path to your goals.
           </p>
           <div className="public-cta-row">
             <ConsultModal triggerLabel="Book a free consultation" source="hero" />
@@ -257,6 +255,7 @@ export default async function MarketingPage({
               <li>Hyde Park Gym, Austin TX</li>
               <li>Strength, boxing, Muay Thai, yoga background</li>
               <li>Ages 8 to 80, recreational to competitive</li>
+              <li>Off the clock: skateboarding, piano, guitar</li>
             </ul>
           </div>
         </div>
@@ -306,11 +305,10 @@ export default async function MarketingPage({
       <section id="services" className="public-section">
         <div className="public-section-inner">
           <span className="public-eyebrow">What&rsquo;s included</span>
-          <h2 className="public-h2">Every plan runs on the same foundation.</h2>
+          <h2 className="public-h2">It all comes standard.</h2>
           <p className="public-p public-p-meta">
-            All of this is available. On the consult we figure out where
-            you actually need the focus. Nothing here is required; nothing is an
-            upsell.
+            Every client gets the whole foundation. On the consult we figure
+            out where you actually need the focus.
           </p>
           <div className="public-services-grid">
             {SERVICES.map((s) => (
@@ -330,7 +328,7 @@ export default async function MarketingPage({
       <section id="timeline" className="public-section public-section-tinted">
         <div className="public-section-inner">
           <span className="public-eyebrow">Timeline &amp; expectations</span>
-          <h2 className="public-h2">What the first 90 days look like.</h2>
+          <h2 className="public-h2">How the work unfolds.</h2>
           <p className="public-p public-p-meta">
             Every client is unique. The plan gets tailored to your body,
             history, and schedule. This is how the early arc typically runs.
@@ -347,6 +345,11 @@ export default async function MarketingPage({
               </li>
             ))}
           </ol>
+          <p className="public-p public-p-meta" style={{ marginTop: "1.25rem" }}>
+            From here the work is continuous: reassess, rebuild, repeat. Every
+            body is different, so the pace shifts from person to person. This is
+            the typical arc, not a fixed calendar.
+          </p>
         </div>
       </section>
 
@@ -448,11 +451,13 @@ export default async function MarketingPage({
               const fit = (b as { fit?: "cover" | "contain" }).fit;
               const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
               const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
+              const weights = (b as { weights?: string }).weights;
               return (
                 <BeforeAfterToggle
                   key={i}
                   label={b.label}
                   summary={b.summary}
+                  weights={weights}
                   index={i}
                   beforeSrc={beforeSrc}
                   afterSrc={afterSrc}
@@ -489,14 +494,17 @@ export default async function MarketingPage({
       <section id="start" className="public-section public-section-tinted">
         <div className="public-section-inner public-rate-block">
           <span className="public-eyebrow">Getting started</span>
-          <h2 className="public-h2">First call is free.</h2>
+          <h2 className="public-h2">You don&rsquo;t start until you start.</h2>
           <p className="public-p">
-            A 20-minute conversation to hear what you&rsquo;re after, what&rsquo;s
-            in the way, and whether we&rsquo;re a fit. No pitch. Rate &amp; format
-            confirmed after that call.
+            The hardest rep is the first decision. Book the call, a full hour
+            with no pressure, and let&rsquo;s find the path to your goals
+            together. I want to help you get there.
+          </p>
+          <p className="public-p public-compassion-line">
+            Every plan is driven by compassion, led by science.
           </p>
           <div className="public-cta-row">
-            <ConsultModal triggerLabel="Request your free consultation" source="bottom" />
+            <ConsultModal triggerLabel="Book your free consultation" source="bottom" />
           </div>
         </div>
       </section>
