@@ -10,6 +10,7 @@ import {
   listInGymProgramsForClient,
   getOrCreatePairedSheetAction,
   getSessionProgramId,
+  saveDraftProgram,
   deleteDraftProgram,
   deleteDraftSession,
 } from "../actions";
@@ -20,9 +21,14 @@ import { archiveActiveWip, listWipBackups, restoreWipBackup, deleteWipBackup, ty
 
 type ViewMode = "inapp" | "template";
 
-// New Way Build — lobby (client → type → entity) → workspace with an
-// In App | Template view toggle. Both views read/write through the
-// program↔sheet bridge, so editing in one updates the other.
+// New Way Build — 4-step lobby → workspace.
+//   1. Pick client
+//   2. Build type:   Gym Session (in_gym) | At-home Program (at_home)
+//   3. Build format: In App (structured builder) | Template (workout sheet)
+//   4. Pick an existing entity or start new
+// Both formats of a given type are the SAME programs record, kept in sync by
+// the program↔sheet bridge, so the workspace still exposes a toggle to flip
+// between them.
 type QuickSession = { id: string; starts_at: string; client_id: string; client_name: string };
 type QuickClient = { id: string; name: string };
 type QuickDraftProgram = { id: string; name: string; client_id: string; client_name: string; created_at: string; program_kind: "in_gym" | "at_home" };
@@ -45,7 +51,7 @@ export default function NewWayClient({
   quickDraftPrograms,
 }: {
   user: { id: string; name: string; role: "coach" | "client" | "admin" };
-  initialType: "session" | "program" | "template";
+  initialType: "session" | "program";
   clients: ClientRow[];
   libraryMovements: MovementRow[];
   initialClientId: string;
@@ -64,17 +70,17 @@ export default function NewWayClient({
   const [draftSessions, setDraftSessions] = useState(quickDraftSessions);
   const [draftPrograms, setDraftPrograms] = useState(quickDraftPrograms);
   const [clientId, setClientId] = useState(initialClientId);
-  const [type, setType] = useState<"session" | "program" | "template">(initialType);
+  const [type, setType] = useState<"session" | "program">(initialType);
   const [appts, setAppts] = useState<ApptOption[]>(initialAppts);
   const [apptId, setApptId] = useState(initialApptId);
   const [startsAt, setStartsAt] = useState(initialStartsAt);
   // Once user picks an entity in the lobby, mount the workspace.
   const [started, setStarted] = useState<boolean>(!!initialApptId || !!initialStartsAt || !!initialProgramId);
   const [loading, startLoad] = useTransition();
-  // Program list for Step 3.
+  // At-home program list for the Program Step-4 pickers (both formats).
   const [programs, setPrograms] = useState<ImportableProgram[]>([]);
   const [programsLoading, startProgramsLoad] = useTransition();
-  // Template (in-gym) list for Step 3 when type=template.
+  // In-gym program list for the Session + Template Step-4 picker.
   const [inGymPrograms, setInGymPrograms] = useState<InGymProgram[]>([]);
   const [inGymLoading, startInGymLoad] = useTransition();
   /** localStorage backups for the picked client — surfaces the 'Recover
@@ -93,8 +99,14 @@ export default function NewWayClient({
   /** The paired workout_sheets.id for the chosen program. Loaded lazily
    *  when the workspace mounts. Null when nothing is paired yet. */
   const [pairedSheetId, setPairedSheetId] = useState<string | null>(null);
-  /** Which view is showing in the workspace. */
+  /** Which view is showing in the workspace — also the build format picked
+   *  in Step 3. */
   const [view, setView] = useState<ViewMode>(initialView);
+  /** True once the coach has explicitly picked a build format in Step 3.
+   *  Gates Step 4 so we don't auto-advance on the default `view`. */
+  const [formatChosen, setFormatChosen] = useState<boolean>(
+    !!initialApptId || !!initialStartsAt || !!initialProgramId
+  );
 
   const activeClients = clients.filter((c) => c.lifecycle === "active" || c.lifecycle === "online");
 
@@ -117,14 +129,14 @@ export default function NewWayClient({
     });
   }, [clientId, type]);
 
-  // Fetch in-gym templates when in Template mode.
+  // Fetch in-gym programs for the Session + Template Step-4 picker.
   useEffect(() => {
-    if (!clientId || type !== "template") { setInGymPrograms([]); return; }
+    if (!clientId || type !== "session" || view !== "template") { setInGymPrograms([]); return; }
     startInGymLoad(async () => {
       const rows = await listInGymProgramsForClient(clientId);
       setInGymPrograms(rows);
     });
-  }, [clientId, type]);
+  }, [clientId, type, view]);
 
   // Re-list WIP backups whenever the picked client (or backupTick) changes.
   useEffect(() => {
@@ -147,12 +159,13 @@ export default function NewWayClient({
       //      programs row Old Way or a prior session draft saved into).
       if (autosaveDraftId) {
         programIdToPair = autosaveDraftId;
-      } else if ((type === "program" || type === "template") && editProgramId) {
+      } else if (editProgramId) {
         programIdToPair = editProgramId;
       } else if (type === "session" && apptId) {
         programIdToPair = await getSessionProgramId(apptId);
       }
-      // For type=template with no editProgramId: new sheet, programIdToPair stays null.
+      // New Template build with no program yet: programIdToPair stays null →
+      // the embed opens a blank sheet and pairs on first save.
       if (!programIdToPair) {
         if (!cancelled) setPairedSheetId(null);
         return;
@@ -182,22 +195,32 @@ export default function NewWayClient({
 
   function pickClient(id: string) {
     setClientId(id);
-    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
+    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId("");
+    setStarted(false); setFormatChosen(false);
     syncUrl({ client: id, type });
   }
-  function pickType(next: "session" | "program" | "template") {
+  function pickType(next: "session" | "program") {
     if (next === type) return;
     setType(next);
-    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
+    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId("");
+    setStarted(false); setFormatChosen(false);
     syncUrl({ client: clientId, type: next });
   }
+  // Step 3 — choose the build format (In App vs Template). Sets the view the
+  // workspace opens in and unlocks Step 4.
+  function pickFormat(next: ViewMode) {
+    setView(next); setFormatChosen(true);
+    setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId("");
+    syncUrl({ client: clientId, type, view: next });
+  }
+  // Session + Template Step-4 actions.
   function startNewTemplate() {
-    setEditProgramId(""); setAutosaveDraftId(""); setStarted(true);
-    syncUrl({ client: clientId, type: "template" });
+    setEditProgramId(""); setAutosaveDraftId(""); setView("template"); setStarted(true);
+    syncUrl({ client: clientId, type: "session", view: "template" });
   }
   function editTemplate(p: InGymProgram) {
-    setEditProgramId(p.id); setStarted(true);
-    syncUrl({ client: clientId, type: "template", program: p.id });
+    setEditProgramId(p.id); setView("template"); setStarted(true);
+    syncUrl({ client: clientId, type: "session", program: p.id, view: "template" });
   }
   function startSessionFor(a: ApptOption) {
     setApptId(a.id); setStartsAt(a.starts_at); setEditProgramId("");
@@ -214,46 +237,69 @@ export default function NewWayClient({
     // Archive the active WIP to a timestamped backup key instead of
     // destroying it — a misclicked '+ New' must not lose work.
     archiveActiveWip(clientId);
-    setEditProgramId("");
+    setEditProgramId(""); setView("inapp");
     setStarted(true);
-    syncUrl({ client: clientId, type: "program", view });
+    syncUrl({ client: clientId, type: "program", view: "inapp" });
+  }
+  // At-home Program + Template, "+ New": a brand-new client sheet would be
+  // born `in_gym` by the bridge, so pre-create an empty at_home draft first,
+  // then open its (correctly-kinded) paired sheet.
+  const [creatingTemplate, startCreateTemplate] = useTransition();
+  function startNewProgramTemplate() {
+    startCreateTemplate(async () => {
+      const res = await saveDraftProgram({
+        clientId,
+        name: "Untitled program",
+        programKind: "at_home",
+        builderState: {},
+      });
+      if (!res.ok) { alert(res.error || "Could not start the program."); return; }
+      setEditProgramId(res.draftId); setView("template"); setStarted(true);
+      syncUrl({ client: clientId, type: "program", program: res.draftId, view: "template" });
+    });
   }
   function editProgram(p: ImportableProgram) {
+    // Opens in whichever format is active (In App or Template) — both are the
+    // same at_home record via the bridge.
     setEditProgramId(p.id);
     setStarted(true);
     syncUrl({ client: clientId, type: "program", program: p.id, view });
   }
   function backToLobby() {
     setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId(""); setStarted(false);
-    syncUrl({ client: clientId, type });
+    syncUrl({ client: clientId, type, view });
   }
 
   // ── Quick-actions ── jumps straight into the workspace bypassing the
-  // 3-step lobby. Used by the four collapsibles above Step 1.
+  // 4-step lobby. Used by the four collapsibles above Step 1.
   function quickProgramSession(s: QuickSession) {
     setClientId(s.client_id);
-    setType("session");
+    setType("session"); setView("inapp"); setFormatChosen(true);
     setApptId(s.id);
     setStartsAt(s.starts_at);
     setEditProgramId("");
     setStarted(true);
-    syncUrl({ client: s.client_id, type: "session", appt: s.id, starts: s.starts_at, view });
+    syncUrl({ client: s.client_id, type: "session", appt: s.id, starts: s.starts_at, view: "inapp" });
   }
   function quickStartProgramForClient(c: QuickClient) {
     archiveActiveWip(c.id);
     setClientId(c.id);
-    setType("program");
+    setType("program"); setView("inapp"); setFormatChosen(true);
     setApptId(""); setStartsAt(""); setEditProgramId("");
     setStarted(true);
-    syncUrl({ client: c.id, type: "program", view });
+    syncUrl({ client: c.id, type: "program", view: "inapp" });
   }
   function quickEditProgram(p: QuickDraftProgram) {
-    const t = p.program_kind === "in_gym" ? "template" : "program";
+    // in_gym recently-saved rows are gym sheets (Session + Template); at_home
+    // rows open in the structured builder (Program + In App).
+    const isGym = p.program_kind === "in_gym";
+    const t = isGym ? "session" : "program";
+    const v: ViewMode = isGym ? "template" : "inapp";
     setClientId(p.client_id);
-    setType(t);
+    setType(t); setView(v); setFormatChosen(true);
     setApptId(""); setStartsAt(""); setEditProgramId(p.id);
     setStarted(true);
-    syncUrl({ client: p.client_id, type: t, program: p.id, view });
+    syncUrl({ client: p.client_id, type: t, program: p.id, view: v });
   }
   function switchView(next: ViewMode) {
     if (next === view) return;
@@ -263,13 +309,18 @@ export default function NewWayClient({
 
   const selectedClient = clients.find((c) => c.id === clientId) ?? null;
 
-  // ── STARTED: workspace with In App | Template toggle ─────────────────
+  // ── STARTED: workspace ───────────────────────────────────────────────
+  // Renders the editor for the chosen (type, format). The BackBar keeps an
+  // In App | Template toggle so the coach can flip between the two builds of
+  // the same record (bridge-synced).
   if (started && clientId) {
     const clientLite: ClientLite[] = clients
       .filter((c) => !!c.full_name)
       .map((c) => ({ id: c.id, name: c.full_name }));
 
-    // Autofill for session template: pre-populate client name, date, timeframe
+    const kindLabel = type === "session" ? "Gym Session" : "At-home Program";
+
+    // Autofill for a session sheet: pre-populate client name, date, timeframe.
     const sessionAutofill: AutofillData | null = type === "session" && startsAt
       ? (() => {
           const d = new Date(startsAt);
@@ -283,32 +334,34 @@ export default function NewWayClient({
           };
         })()
       : null;
-    // Template kind: standalone worksheet builder that creates an in_gym program.
-    if (type === "template") {
+
+    // ── Template format — the workout sheet (either build type). ──
+    if (view === "template") {
       return (
         <div style={{ width: "min(1180px, 100% - 2rem)", margin: "0.6rem auto 0" }}>
           <BackBar
             clientName={selectedClient?.full_name ?? "—"}
-            typeLabel="Template · In-gym"
-            subLabel={editProgramId ? `Editing ${inGymPrograms.find((p) => p.id === editProgramId)?.name ?? "template"}` : "New template"}
+            typeLabel={`${kindLabel} · Template`}
+            subLabel={editProgramId ? "Editing" : "New"}
             view={view}
             onSwitchView={switchView}
-            templateReady={false}
+            templateReady
             onBack={backToLobby}
-            hideToggle
           />
           <WorkoutSheetEmbed
             user={{ id: user.id, name: user.name, role: user.role }}
             clients={clientLite}
             sessions={[]}
             sheetId={pairedSheetId ?? undefined}
-            autofill={{ clientName: selectedClient?.full_name }}
-            clearLocal={!editProgramId}
+            autofill={type === "session" ? sessionAutofill : { clientName: selectedClient?.full_name }}
+            clearLocal={!editProgramId && !pairedSheetId}
+            onSaved={(id) => setPairedSheetId(id)}
           />
         </div>
       );
     }
 
+    // ── In App format — structured builders. ──
     const subLabel =
       type === "session"
         ? apptId
@@ -322,67 +375,36 @@ export default function NewWayClient({
       <div style={{ width: "min(1180px, 100% - 2rem)", margin: "0.6rem auto 0" }}>
         <BackBar
           clientName={selectedClient?.full_name ?? "—"}
-          typeLabel={type === "session" ? "Session · In-gym" : "Program · At-home"}
+          typeLabel={`${kindLabel} · In App`}
           subLabel={subLabel}
           view={view}
           onSwitchView={switchView}
           templateReady={!!pairedSheetId}
           onBack={backToLobby}
         />
-        {view === "inapp" ? (
-          type === "session" ? (
-            <ReworkClient
-              clients={clients}
-              initialClientId={clientId}
-              initialAppts={appts}
-              initialApptId={apptId}
-              initialStartsAt={startsAt}
-              libraryMovements={libraryMovements}
-              hideTabs
-              autoStart
-              onDraftSaved={setAutosaveDraftId}
-              initialDraftId={editProgramId || undefined}
-            />
-          ) : (
-            <ProgramsReworkClient
-              clients={clients}
-              initialClientId={clientId}
-              libraryMovements={libraryMovements}
-              clientProgramSummary={clientProgramSummary}
-              hideTabs
-              onDraftSaved={setAutosaveDraftId}
-              initialDraftId={editProgramId || undefined}
-            />
-          )
+        {type === "session" ? (
+          <ReworkClient
+            clients={clients}
+            initialClientId={clientId}
+            initialAppts={appts}
+            initialApptId={apptId}
+            initialStartsAt={startsAt}
+            libraryMovements={libraryMovements}
+            hideTabs
+            autoStart
+            onDraftSaved={setAutosaveDraftId}
+            initialDraftId={editProgramId || undefined}
+          />
         ) : (
-          // Template view — the workout sheet iframe for the paired sheet.
-          // The iframe's own Save flow writes back through the bridge so
-          // toggling to In App afterwards shows the updated rows.
-          pairedSheetId ? (
-            <WorkoutSheetEmbed
-              user={{ id: user.id, name: user.name, role: user.role }}
-              clients={clientLite}
-              sessions={[]}
-              sheetId={pairedSheetId}
-              autofill={sessionAutofill}
-            />
-          ) : (
-            <div className="card" style={{ padding: "1.5rem", textAlign: "center" }}>
-              <p style={{ marginTop: 0, fontWeight: 600 }}>Save once to enable the Template view</p>
-              <p className="meta" style={{ fontSize: "0.85rem" }}>
-                A paired sheet is created the first time the program is saved. Switch back to In App,
-                save your progress, and the Template view will load the paired sheet.
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => switchView("inapp")}
-                style={{ marginTop: "0.6rem", padding: "0.4rem 1rem" }}
-              >
-                ← Back to In App
-              </button>
-            </div>
-          )
+          <ProgramsReworkClient
+            clients={clients}
+            initialClientId={clientId}
+            libraryMovements={libraryMovements}
+            clientProgramSummary={clientProgramSummary}
+            hideTabs
+            onDraftSaved={setAutosaveDraftId}
+            initialDraftId={editProgramId || undefined}
+          />
         )}
       </div>
     );
@@ -501,7 +523,7 @@ export default function NewWayClient({
         </select>
       </section>
 
-      {/* Step 2 — build type */}
+      {/* Step 2 — build type (two options) */}
       {clientId && (
         <section className="card" style={{ padding: "1rem 1.15rem" }}>
           <StepLabel n={2} label="Build type" />
@@ -513,15 +535,36 @@ export default function NewWayClient({
               padding: "0.15rem", background: "var(--paper)",
             }}
           >
-            <Pill active={type === "session"} onClick={() => pickType("session")} label="Session" sub="In-gym" />
-            <Pill active={type === "program"} onClick={() => pickType("program")} label="Program" sub="At-home" />
-            <Pill active={type === "template"} onClick={() => pickType("template")} label="Template" sub="In-gym · sheet" />
+            <Pill active={type === "session"} onClick={() => pickType("session")} label="Gym Session" sub="in the gym" />
+            <Pill active={type === "program"} onClick={() => pickType("program")} label="At-home Program" sub="in the app" />
           </div>
         </section>
       )}
 
-      {/* Step 3 — session */}
-      {clientId && type === "session" && (() => {
+      {/* Step 3 — build format (two options) */}
+      {clientId && (
+        <section className="card" style={{ padding: "1rem 1.15rem" }}>
+          <StepLabel n={3} label="Build format" />
+          <div
+            role="tablist"
+            style={{
+              marginTop: "0.5rem", display: "inline-flex",
+              border: "1px solid var(--line)", borderRadius: 999,
+              padding: "0.15rem", background: "var(--paper)",
+            }}
+          >
+            <Pill active={formatChosen && view === "inapp"} onClick={() => pickFormat("inapp")} label="In App" sub="structured builder" />
+            <Pill active={formatChosen && view === "template"} onClick={() => pickFormat("template")} label="Template" sub="workout sheet" />
+          </div>
+          <p className="meta" style={{ marginTop: "0.55rem", fontSize: "0.74rem", maxWidth: "46ch" }}>
+            In App builds the structured plan clients follow in the app. Template is the
+            printable / sendable workout sheet. Both save to the same {type === "session" ? "session" : "program"}.
+          </p>
+        </section>
+      )}
+
+      {/* Step 4 — Gym Session · In App: pick an appointment or start new */}
+      {clientId && type === "session" && formatChosen && view === "inapp" && (() => {
         const pickedClient = clients.find((c) => c.id === clientId);
         const clientLabel = pickedClient?.full_name ?? "this client";
         // Order sessions by start time ascending so the next upcoming
@@ -529,7 +572,7 @@ export default function NewWayClient({
         const orderedAppts = [...appts].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
         return (
         <section className="card" style={{ padding: "1rem 1.15rem" }}>
-          <StepLabel n={3} label={`Pick a session for ${clientLabel} — or start new`} />
+          <StepLabel n={4} label={`Pick a session for ${clientLabel} — or start new`} />
           {loading ? (
             <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>Loading sessions…</p>
           ) : orderedAppts.length === 0 ? (
@@ -589,7 +632,7 @@ export default function NewWayClient({
       {/* Recovery banner — shown when localStorage holds prior WIP backups
           for the picked client. Each '+ New program' click moves the
           current draft into a backup slot; this is how you get it back. */}
-      {clientId && type === "program" && wipBackups.length > 0 && (
+      {clientId && type === "program" && formatChosen && view === "inapp" && wipBackups.length > 0 && (
         <section
           className="card"
           style={{
@@ -661,24 +704,24 @@ export default function NewWayClient({
         </section>
       )}
 
-      {/* Step 3 — template */}
-      {clientId && type === "template" && (
+      {/* Step 4 — Gym Session · Template: pick an existing sheet or start new */}
+      {clientId && type === "session" && formatChosen && view === "template" && (
         <section className="card" style={{ padding: "1rem 1.15rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap" }}>
-            <StepLabel n={3} label="Pick a template — or start new" />
+            <StepLabel n={4} label="Pick a sheet — or start new" />
             <button
               type="button"
               className="btn btn-primary"
               style={{ padding: "0.4rem 1rem", fontSize: "0.86rem" }}
               onClick={startNewTemplate}
             >
-              + New template
+              + New sheet
             </button>
           </div>
           {inGymLoading ? (
-            <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>Loading templates…</p>
+            <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>Loading sheets…</p>
           ) : inGymPrograms.length === 0 ? (
-            <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>No templates yet — start one above.</p>
+            <p className="meta" style={{ marginTop: "0.6rem", fontStyle: "italic" }}>No sheets yet — start one above.</p>
           ) : (
             <ul style={{ listStyle: "none", margin: "0.6rem 0 0", padding: 0, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
               {inGymPrograms.map((p) => (
@@ -708,18 +751,22 @@ export default function NewWayClient({
         </section>
       )}
 
-      {/* Step 3 — program */}
-      {clientId && type === "program" && (
+      {/* Step 4 — At-home Program (In App or Template): pick existing or start new */}
+      {clientId && type === "program" && formatChosen && (
         <section className="card" style={{ padding: "1rem 1.15rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap" }}>
-            <StepLabel n={3} label="Pick a program — or start new" />
+            <StepLabel
+              n={4}
+              label={view === "template" ? "Pick a program to open as a sheet — or start new" : "Pick a program — or start new"}
+            />
             <button
               type="button"
               className="btn btn-primary"
               style={{ padding: "0.4rem 1rem", fontSize: "0.86rem" }}
-              onClick={startNewProgram}
+              onClick={view === "template" ? startNewProgramTemplate : startNewProgram}
+              disabled={creatingTemplate}
             >
-              + New program
+              {creatingTemplate ? "Starting…" : "+ New program"}
             </button>
           </div>
           {programsLoading ? (
@@ -1024,7 +1071,7 @@ function StatusInline({ status }: { status: "programmed" | "draft" | "needs_prog
 
 // ── BackBar with the In App | Template view toggle ─────────────────────
 function BackBar({
-  clientName, typeLabel, subLabel, view, onSwitchView, templateReady, onBack, hideToggle = false,
+  clientName, typeLabel, subLabel, view, onSwitchView, templateReady, onBack,
 }: {
   clientName: string;
   typeLabel: string;
@@ -1033,7 +1080,6 @@ function BackBar({
   onSwitchView: (next: ViewMode) => void;
   templateReady: boolean;
   onBack: () => void;
-  hideToggle?: boolean;
 }) {
   return (
     <div
@@ -1051,8 +1097,8 @@ function BackBar({
         <span className="meta" style={{ fontSize: "0.7rem", color: "var(--rust)" }}>{subLabel}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-        {/* In App | Template segmented toggle — hidden for standalone template type */}
-        {!hideToggle && <div
+        {/* In App | Template segmented toggle — same record, both formats */}
+        <div
           role="tablist"
           style={{
             display: "inline-flex",
@@ -1067,7 +1113,7 @@ function BackBar({
             onClick={() => onSwitchView("template")}
             title={templateReady ? "Switch to the workout sheet for this program" : "Save once to enable Template view"}
           />
-        </div>}
+        </div>
         <button
           type="button"
           className="btn btn-ghost"

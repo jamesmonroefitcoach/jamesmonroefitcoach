@@ -29,6 +29,7 @@ export default function WorkoutSheetEmbed({
   sessions,
   autofill,
   clearLocal,
+  onSaved,
 }: {
   sheetId?: string | null;
   user?: UserLite | null;
@@ -36,6 +37,10 @@ export default function WorkoutSheetEmbed({
   sessions?: SessionLite[];
   autofill?: AutofillData | null;
   clearLocal?: boolean;
+  /** When provided, the parent owns post-save handling: we call this with the
+   *  saved sheet id and skip the internal router.push/refresh. Lets an embed
+   *  that lives inside a larger workspace stay mounted after the first save. */
+  onSaved?: (sheetId: string) => void;
 }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const router = useRouter();
@@ -73,10 +78,16 @@ export default function WorkoutSheetEmbed({
       }
       if (data.type === "mfc.workout-sheet.saved") {
         const saved = data as { type: string; sheet?: { id: string } };
-        if (!sheetId && saved.sheet?.id) {
+        const newId = saved.sheet?.id;
+        if (onSaved) {
+          // Parent-owned: hand back the id and stay put (no navigation).
+          if (newId) onSaved(newId);
+          return;
+        }
+        if (!sheetId && newId) {
           // First save — navigate so the URL reflects the new sheet id,
           // which also triggers a server-component refresh with the new sheet in the list.
-          router.push(`${pathname}?sheet=${saved.sheet.id}`);
+          router.push(`${pathname}?sheet=${newId}`);
         } else {
           router.refresh();
         }
@@ -84,7 +95,7 @@ export default function WorkoutSheetEmbed({
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [user, clients, sessions, sheetId, router, pathname, autofill]);
+  }, [user, clients, sessions, sheetId, router, pathname, autofill, onSaved]);
 
   function onLoad() {
     resize();

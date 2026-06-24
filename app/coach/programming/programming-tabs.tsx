@@ -4,13 +4,13 @@ import { usePathname } from "next/navigation";
 
 export default function ProgrammingTabs() {
   const path = usePathname() ?? "";
-  const isTemplates = path.startsWith("/coach/programming/templates");
   const isLibrary   = path.startsWith("/coach/programming/library");
-  // Build covers the new-way builder and every legacy /build/* path,
-  // but Templates is its own top-level tab now so a coach can land
-  // straight on the sheet without going through the builder.
-  const isBuild     = !isTemplates && path.startsWith("/coach/programming/build");
-  const isView      = !isTemplates && !isBuild && !isLibrary;
+  // Build covers the new-way builder and every legacy /build/* path.
+  // The Template format now lives inside Build Program (pick it as the
+  // build format after choosing a client + Session/Program), so there's
+  // no separate Templates tab.
+  const isBuild     = path.startsWith("/coach/programming/build") || path.startsWith("/coach/programming/templates");
+  const isView      = !isBuild && !isLibrary;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -44,9 +44,6 @@ export default function ProgrammingTabs() {
           overflowX: "auto",
         }}
       >
-        {/* Templates first — the no-builder path James can use right
-            now to download / send workout sheets. */}
-        <Link href="/coach/programming/templates" style={tabStyle(isTemplates)}>Templates</Link>
         <Link href="/coach/programming/build/new-way" style={tabStyle(isBuild)}>Build Program</Link>
         <Link href="/coach/programming" style={tabStyle(isView)}>View Programs</Link>
         <Link href="/coach/programming/library/exercise-library" style={tabStyle(isLibrary)}>Library</Link>
