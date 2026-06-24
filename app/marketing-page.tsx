@@ -496,9 +496,8 @@ export default async function MarketingPage({
           <span className="public-eyebrow">Getting started</span>
           <h2 className="public-h2">You don&rsquo;t start until you start.</h2>
           <p className="public-p">
-            The hardest rep is the first decision. Book the call, a full hour
-            with no pressure, and let&rsquo;s find the path to your goals
-            together. I want to help you get there.
+            Let&rsquo;s find the path to your goals together. Book the call, a
+            full hour with no pressure. I want to help you get there.
           </p>
           <p className="public-p public-compassion-line">
             Every plan is driven by compassion, led by science.

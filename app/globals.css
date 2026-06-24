@@ -852,6 +852,13 @@ th.tbl-sticky-last {
 }
 .public-credit-list li::before { content: "›  "; color: var(--rust); }
 
+/* Stacked (phone/tablet): center the portrait card below the bio instead
+   of pinning it to the right edge. Placed after the base .public-card-portrait
+   rule so it wins the cascade at equal specificity. */
+@media (max-width: 800px) {
+  .public-card-portrait { justify-self: center; }
+}
+
 /* Offerings grid */
 .public-offerings-grid {
   margin-top: 1.5rem;
