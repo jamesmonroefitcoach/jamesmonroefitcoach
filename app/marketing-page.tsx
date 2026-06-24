@@ -253,9 +253,9 @@ export default async function MarketingPage({
             <ul className="public-credit-list">
               <li>NASM Certified Personal Trainer</li>
               <li>Hyde Park Gym, Austin TX</li>
-              <li>Strength, boxing, Muay Thai, yoga background</li>
+              <li>Strength, boxing, Muay Thai, skateboarding, yoga background</li>
               <li>Ages 8 to 80, recreational to competitive</li>
-              <li>Off the clock: skateboarding, piano, guitar</li>
+              <li>Off the clock: piano, guitar, running, reading</li>
             </ul>
           </div>
         </div>
