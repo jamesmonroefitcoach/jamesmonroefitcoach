@@ -543,13 +543,13 @@ export default async function MarketingPage({
 // the badge honest as James fills the schedule. The badge has two visual
 // states: "open" (sage with a pulse dot) and "limited" / "full" (muted).
 function AvailabilityBadge() {
-  const HOURS_AVAILABLE = 30;          // PLACEHOLDER — adjust as James fills up
+  const HOURS_AVAILABLE = 6;           // Adjust as James fills up
   const ACCEPTING = HOURS_AVAILABLE > 0;
   return (
     <div className="public-availability" data-state={ACCEPTING ? "open" : "closed"}>
       <span className="public-availability-dot" aria-hidden />
       {ACCEPTING
-        ? <>Accepting new clients · <strong>~{HOURS_AVAILABLE} hrs/week</strong> open this season</>
+        ? <>Accepting new clients · <strong>{HOURS_AVAILABLE} hours per week</strong> open currently</>
         : <>Currently full · waitlist open</>}
     </div>
   );

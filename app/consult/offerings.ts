@@ -37,3 +37,20 @@ export const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
   advanced:       "Advanced — programming my own",
   former_athlete: "Former athlete returning",
 };
+
+export const ACTIVITY_LEVELS = [
+  "sedentary",
+  "light",
+  "moderate",
+  "active",
+  "very_active",
+] as const;
+export type ActivityLevel = typeof ACTIVITY_LEVELS[number];
+
+export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
+  sedentary:   "Sedentary — mostly sitting",
+  light:       "Lightly active — on my feet sometimes",
+  moderate:    "Moderately active — exercise a few times a week",
+  active:      "Active — exercise most days",
+  very_active: "Very active — daily training or a physical job",
+};

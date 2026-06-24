@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import {
-  OFFERING_KEYS, EXPERIENCE_LEVELS,
+  OFFERING_KEYS, EXPERIENCE_LEVELS, ACTIVITY_LEVELS,
   type OfferingKey,
 } from "./offerings";
 
@@ -26,6 +26,7 @@ export type ConsultationRequest = {
   goals_text: string | null;
   injuries_text: string | null;
   experience_level: string | null;
+  activity_level: string | null;
   availability_text: string | null;
 };
 
@@ -49,6 +50,7 @@ export async function submitConsultationRequest(input: {
   goals_text?: string;
   injuries_text?: string;
   experience_level?: string;
+  activity_level?: string;
   availability_text?: string;
 }): Promise<Result> {
   const name = (input.name ?? "").trim();
@@ -76,16 +78,26 @@ export async function submitConsultationRequest(input: {
   const experience = (EXPERIENCE_LEVELS as readonly string[]).includes(experienceLevel)
     ? experienceLevel
     : null;
+  const activityLevel = (input.activity_level ?? "").trim();
+  const activity = (ACTIVITY_LEVELS as readonly string[]).includes(activityLevel)
+    ? activityLevel
+    : null;
 
   const sb = createSupabaseAdmin();
-  const { error } = await sb.from("consultation_requests").insert({
-    name, email, phone, message, source, status: "new",
+  const base = {
+    name, email, phone, message, source, status: "new" as const,
     offerings_interest: offerings.length > 0 ? offerings : null,
     goals_text: goalsText,
     injuries_text: injuriesText,
     experience_level: experience,
     availability_text: availabilityText,
-  });
+  };
+  let { error } = await sb.from("consultation_requests").insert({ ...base, activity_level: activity });
+  // If the activity_level column hasn't been migrated on this DB yet, retry
+  // without it so a live submission never fails on account of a pending column.
+  if (error && /activity_level/i.test(error.message ?? "")) {
+    ({ error } = await sb.from("consultation_requests").insert(base));
+  }
 
   if (error) return { ok: false, error: error.message };
 

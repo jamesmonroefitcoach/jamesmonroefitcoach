@@ -5,7 +5,8 @@ import { submitConsultationRequest } from "./actions";
 import {
   OFFERING_KEYS, OFFERING_LABELS,
   EXPERIENCE_LEVELS, EXPERIENCE_LABELS,
-  type OfferingKey, type ExperienceLevel,
+  ACTIVITY_LEVELS, ACTIVITY_LABELS,
+  type OfferingKey, type ExperienceLevel, type ActivityLevel,
 } from "./offerings";
 
 // CTA button → centered modal with the full consult intake form.
@@ -28,6 +29,7 @@ export default function ConsultModal({
   const [goalsText, setGoalsText] = useState("");
   const [injuriesText, setInjuriesText] = useState("");
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | "">("");
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | "">("");
   const [availabilityText, setAvailabilityText] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -57,7 +59,7 @@ export default function ConsultModal({
   function resetFields() {
     setName(""); setEmail(""); setPhone("");
     setOfferings([]); setGoalsText(""); setInjuriesText("");
-    setExperienceLevel(""); setAvailabilityText("");
+    setExperienceLevel(""); setActivityLevel(""); setAvailabilityText("");
     setMessage("");
   }
 
@@ -72,6 +74,7 @@ export default function ConsultModal({
       goals_text: goalsText,
       injuries_text: injuriesText,
       experience_level: experienceLevel || undefined,
+      activity_level: activityLevel || undefined,
       availability_text: availabilityText,
     });
     setSubmitting(false);
@@ -179,19 +182,33 @@ export default function ConsultModal({
                   </div>
                 </fieldset>
 
-                {/* Experience */}
-                <label className="public-field">
-                  <span>Training experience <em>(optional)</em></span>
-                  <select
-                    value={experienceLevel}
-                    onChange={(e) => setExperienceLevel(e.target.value as ExperienceLevel | "")}
-                  >
-                    <option value="">— pick one —</option>
-                    {EXPERIENCE_LEVELS.map((k) => (
-                      <option key={k} value={k}>{EXPERIENCE_LABELS[k]}</option>
-                    ))}
-                  </select>
-                </label>
+                {/* Experience + current activity level */}
+                <div className="public-field-grid">
+                  <label className="public-field">
+                    <span>Training experience <em>(optional)</em></span>
+                    <select
+                      value={experienceLevel}
+                      onChange={(e) => setExperienceLevel(e.target.value as ExperienceLevel | "")}
+                    >
+                      <option value="">— pick one —</option>
+                      {EXPERIENCE_LEVELS.map((k) => (
+                        <option key={k} value={k}>{EXPERIENCE_LABELS[k]}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="public-field">
+                    <span>Current activity level <em>(optional)</em></span>
+                    <select
+                      value={activityLevel}
+                      onChange={(e) => setActivityLevel(e.target.value as ActivityLevel | "")}
+                    >
+                      <option value="">— pick one —</option>
+                      {ACTIVITY_LEVELS.map((k) => (
+                        <option key={k} value={k}>{ACTIVITY_LABELS[k]}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
 
                 {/* Goals + injuries */}
                 <label className="public-field">

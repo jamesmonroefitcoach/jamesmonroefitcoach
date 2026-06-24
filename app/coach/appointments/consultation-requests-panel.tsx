@@ -11,8 +11,10 @@ import {
 import {
   OFFERING_LABELS,
   EXPERIENCE_LABELS,
+  ACTIVITY_LABELS,
   type OfferingKey,
   type ExperienceLevel,
+  type ActivityLevel,
 } from "@/app/consult/offerings";
 
 // Collapsible panel listing public-form submissions. Newest first, with
@@ -244,10 +246,13 @@ function ConsultRow({
             ))}
           </div>
         )}
-        {(row.experience_level || row.availability_text) && (
+        {(row.experience_level || row.activity_level || row.availability_text) && (
           <div className="meta" style={{ marginTop: "0.3rem", fontSize: "0.78rem", display: "flex", gap: "0.7rem", flexWrap: "wrap" }}>
             {row.experience_level && (
               <span><strong style={{ color: "var(--ink)" }}>Experience:</strong> {EXPERIENCE_LABELS[row.experience_level as ExperienceLevel] ?? row.experience_level}</span>
+            )}
+            {row.activity_level && (
+              <span><strong style={{ color: "var(--ink)" }}>Activity:</strong> {ACTIVITY_LABELS[row.activity_level as ActivityLevel] ?? row.activity_level}</span>
             )}
             {row.availability_text && (
               <span><strong style={{ color: "var(--ink)" }}>Trains:</strong> {row.availability_text}</span>
