@@ -322,7 +322,7 @@
     <section class="fields">
       <div class="field"><span class="field-label">Client Name</span><input type="text" name="client_name" autocomplete="off" list="clients-datalist" /><datalist id="clients-datalist"></datalist></div>
       <div class="field"><span class="field-label">Goal</span><input type="text" name="goal" autocomplete="off" /></div>
-      <div class="field"><span class="field-label">Start &rarr; End date</span><div style="display:flex;gap:0.3rem;align-items:center"><input type="date" name="start_date" autocomplete="off" style="flex:1 1 0;min-width:0" /><input type="date" name="end_date" autocomplete="off" style="flex:1 1 0;min-width:0" /></div></div>
+      <div class="field"><span class="field-label">Start &rarr; End date</span><div style="display:flex;gap:0.3rem;align-items:center"><input type="date" name="start_date" autocomplete="off" style="flex:1 1 0;min-width:0" /><input type="date" name="end_date" autocomplete="off" style="flex:1 1 0;min-width:0" /></div><span id="date-span" style="font-size:0.6rem;color:var(--muted);font-family:Georgia,serif;margin-top:0.1rem"></span></div>
       <div class="field wide"><span class="field-label">Deficit / Nutrition</span><input type="text" name="nutrition" placeholder="e.g. target kcal, protein, notes" autocomplete="off" /></div>
     </section>
 
@@ -640,6 +640,18 @@
       if (ed) return "thru " + mdShort(ed);
       return "";
     }
+    // Tiny "N weeks · N days" summary under the date pickers.
+    function computeDateSpan() {
+      var el = document.getElementById("date-span");
+      if (!el) return;
+      var sd = val("start_date"), ed = val("end_date");
+      if (!sd || !ed) { el.textContent = ""; return; }
+      var d0 = new Date(sd + "T00:00:00"), d1 = new Date(ed + "T00:00:00");
+      var days = Math.round((d1.getTime() - d0.getTime()) / 86400000) + 1; // inclusive
+      if (days <= 0) { el.textContent = ""; return; }
+      var weeks = Math.round(days / 7);
+      el.textContent = weeks + " week" + (weeks === 1 ? "" : "s") + " · " + days + " days";
+    }
 
     // Freeze James's published prescription for a client viewer. The client
     // can only edit the weight (.wt-in), notes, and their bodyweight/sleep on
@@ -748,6 +760,7 @@
         setVal("client_name", saved.client); setVal("goal", saved.goal); setVal("start_date", saved.startDate); setVal("end_date", saved.endDate); setVal("nutrition", saved.nutrition);
         saved.days.forEach(function (d) { restoreDay(d); });
         restoring = false;
+        computeDateSpan();
         return true;
       }
       return false;
@@ -757,6 +770,7 @@
       if (!e.target) return;
       var t = e.target.tagName;
       if (t === "INPUT" || t === "TEXTAREA") saveState();
+      if (e.target.name === "start_date" || e.target.name === "end_date") computeDateSpan();
     });
 
     // ---------- send / share ----------
@@ -890,6 +904,7 @@
           if (days.length === 0) { buildDay(); buildDay(); }
           else days.forEach(function (d) { restoreDay(d); });
           restoring = false;
+          computeDateSpan();
           INITIAL_SNAPSHOT = JSON.stringify(collectState());
           return s;
         });
