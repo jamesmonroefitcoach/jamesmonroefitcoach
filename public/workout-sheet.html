@@ -237,6 +237,20 @@
   body.locked-by-other input:not([type=submit]):not([type=button]),
   body.locked-by-other textarea { background: #fbf7ef !important; }
 
+  /* Client viewer: James's published prescription is read-only. The client
+     can only fill in weight, notes, and their bodyweight/sleep. Structure
+     controls (add/remove row, set, day, clear) are hidden. */
+  body.client-locked .row-del,
+  body.client-locked .row-dup,
+  body.client-locked .pair-del,
+  body.client-locked .row-add-set,
+  body.client-locked .remove-day,
+  body.client-locked .col-resizer,
+  body.client-locked #add-day,
+  body.client-locked #clear-btn { display: none !important; }
+  body.client-locked input[readonly],
+  body.client-locked textarea[readonly] { background: #f6f1e7; color: var(--ink); }
+
   /* save modal */
   .modal {
     position: fixed; inset: 0;
@@ -626,6 +640,25 @@
       if (sd) return "from " + mdShort(sd);
       if (ed) return "thru " + mdShort(ed);
       return "";
+    }
+
+    // Freeze James's published prescription for a client viewer. The client
+    // can only edit the weight (.wt-in), notes, and their bodyweight/sleep on
+    // the day bar. Idempotent — safe to call after every render. Re-applied via
+    // a MutationObserver so it covers async sheet loads too.
+    function applyClientLock() {
+      if (!USER || USER.role !== "client") return;
+      document.body.classList.add("client-locked");
+      ["client_name", "goal", "start_date", "end_date", "nutrition"].forEach(function (n) {
+        var el = document.querySelector('[name="' + n + '"]'); if (el) el.readOnly = true;
+      });
+      daysEl.querySelectorAll(".move-cell textarea, .reps-in").forEach(function (el) { el.readOnly = true; });
+      daysEl.querySelectorAll(".day-block").forEach(function (block) {
+        var bar = block.querySelectorAll(".day-bar .bar-field input"); // [name, date, weight, sleep]
+        if (bar[0]) bar[0].readOnly = true; // day name (James's)
+        if (bar[1]) bar[1].readOnly = true; // date (James's)
+        // bar[2] bodyweight + bar[3] sleep stay editable for the client to log.
+      });
     }
 
     // State format per row: [movement, reps1, wt1, reps2, wt2, ..., notes]
@@ -1143,6 +1176,12 @@
       CLIENT_LIST = Array.isArray(d.clientList) ? d.clientList : [];
       SESSION_LIST = Array.isArray(d.sessionList) ? d.sessionList : [];
       populateClientDatalist();
+      // Client viewer: freeze the published prescription now and keep it frozen
+      // as rows render (sheet loads are async). Re-apply on any row change.
+      if (USER && USER.role === "client") {
+        applyClientLock();
+        try { new MutationObserver(applyClientLock).observe(daysEl, { childList: true, subtree: true }); } catch (e) {}
+      }
       var saveBtn = document.getElementById("save-modal-trigger");
       if (saveBtn) saveBtn.style.display = "";
       if (d.sheetId) {
