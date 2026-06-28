@@ -323,24 +323,32 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
               Programs view: client + active program (when known). */}
           {(() => {
             const params: string[] = [`client=${block.clientId}`];
+            // Label by status: a current/published program reads "View" (opens
+            // the plan; James can edit from there), a draft "Edit", else "Build".
+            let verb = "Build";
+            let viewParam = "";
             if (isSessionsView) {
               params.unshift("type=session");
               if (nextSession) {
                 params.push(`appt=${nextSession.id}`);
                 params.push(`starts=${encodeURIComponent(nextSession.starts_at)}`);
               }
+              verb = nextSession?.status === "Programmed" ? "View" : nextSession?.status === "Drafted" ? "Edit" : "Build";
+              if (nextSession?.status === "Programmed") viewParam = "&view=plan";
             } else {
               params.unshift("type=program");
               if (active.program) params.push(`program=${active.program.id}`);
+              verb = programStatusLabel === "Programmed" ? "View" : programStatusLabel === "Drafted" ? "Edit" : "Build";
+              if (programStatusLabel === "Programmed") viewParam = "&view=plan";
             }
-            const href = `/coach/programming/build/new-way?${params.join("&")}`;
+            const href = `/coach/programming/build/new-way?${params.join("&")}${viewParam}`;
             return (
               <Link
                 href={href}
                 className="btn btn-primary"
-                title="Open in New Way Build — pre-filled with this row"
+                title={`${verb} in New Way Build — pre-filled with this row`}
                 style={{ fontSize: "0.7rem", padding: "0.2rem 0.65rem", whiteSpace: "nowrap" }}
-              >Build →</Link>
+              >{verb} →</Link>
             );
           })()}
           <button
@@ -377,19 +385,27 @@ function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
   // programming, drop into Program mode (with the active program prefilled
   // when one exists); otherwise drop into Session mode with the next
   // session prefilled when one's scheduled.
+  let rosterVerb = "Build";
   const buildHref = (() => {
     const params: string[] = [`client=${block.clientId}`];
+    let viewParam = "";
     if (block.needsAtHomeProgramming) {
       params.unshift("type=program");
       if (block.active.program) params.push(`program=${block.active.program.id}`);
+      rosterVerb = block.active.programStatus === "published" ? "View"
+        : block.active.programStatus === "draft" ? "Edit" : "Build";
+      if (block.active.programStatus === "published") viewParam = "&view=plan";
     } else {
       params.unshift("type=session");
       if (block.nextSession) {
         params.push(`appt=${block.nextSession.id}`);
         params.push(`starts=${encodeURIComponent(block.nextSession.starts_at)}`);
+        rosterVerb = block.nextSession.status === "Programmed" ? "View"
+          : block.nextSession.status === "Drafted" ? "Edit" : "Build";
+        if (block.nextSession.status === "Programmed") viewParam = "&view=plan";
       }
     }
-    return `/coach/programming/build/new-way?${params.join("&")}`;
+    return `/coach/programming/build/new-way?${params.join("&")}${viewParam}`;
   })();
   return (
     <div
@@ -433,10 +449,10 @@ function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
       <Link
         href={buildHref}
         className="btn btn-primary"
-        title={block.needsAtHomeProgramming ? "Open New Way Build · Program mode" : "Open New Way Build · Session mode"}
+        title={block.needsAtHomeProgramming ? `${rosterVerb} · Program mode` : `${rosterVerb} · Session mode`}
         style={{ padding: "0.22rem 0.7rem", fontSize: "0.72rem", whiteSpace: "nowrap" }}
       >
-        Build →
+        {rosterVerb} →
       </Link>
     </div>
   );
