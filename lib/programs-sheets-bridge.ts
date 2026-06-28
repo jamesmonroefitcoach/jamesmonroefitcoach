@@ -275,7 +275,7 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
       client_id: string | null;
       program_id: string | null;
       kind: "app" | "pdf";
-      sheet_data: { timeframe?: string } | null;
+      sheet_data: { startDate?: string; endDate?: string; timeframe?: string } | null;
       session_id: string | null;
     }>();
   if (!sheet) return null;
@@ -283,7 +283,13 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
   if (!sheet.client_id) return null; // can't create a programs row without a client
 
   const todayISO = new Date().toISOString().slice(0, 10);
-  const { startsOn, endsOn } = parseTimeframeDates(sheet.sheet_data?.timeframe, todayISO);
+  // Prefer the sheet's explicit start/end date pickers; fall back to parsing
+  // the legacy free-text timeframe for older sheets.
+  const sd = sheet.sheet_data?.startDate;
+  const ed = sheet.sheet_data?.endDate;
+  const { startsOn, endsOn } = sd
+    ? { startsOn: sd, endsOn: ed || null }
+    : parseTimeframeDates(sheet.sheet_data?.timeframe, todayISO);
 
   const { data: program } = await supabase
     .from("programs")
@@ -358,4 +364,14 @@ export async function syncSheetToProgram(sheetId: string): Promise<void> {
   if (!programId) return;
 
   await syncSheetDataToProgram(programId, sheet.sheet_data);
+
+  // Keep the program's window in sync with the sheet's date pickers so the
+  // active / past / future status stays accurate when the coach edits dates.
+  const sd = sheet.sheet_data?.startDate;
+  if (sd) {
+    await createSupabaseAdmin()
+      .from("programs")
+      .update({ starts_on: sd, ends_on: sheet.sheet_data?.endDate || null })
+      .eq("id", programId);
+  }
 }

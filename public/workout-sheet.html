@@ -308,7 +308,8 @@
     <section class="fields">
       <div class="field"><span class="field-label">Client Name</span><input type="text" name="client_name" autocomplete="off" list="clients-datalist" /><datalist id="clients-datalist"></datalist></div>
       <div class="field"><span class="field-label">Goal</span><input type="text" name="goal" autocomplete="off" /></div>
-      <div class="field"><span class="field-label">Timeframe</span><input type="text" name="timeframe" autocomplete="off" placeholder="e.g. 2 weeks 6/23 - 7/7" /></div>
+      <div class="field"><span class="field-label">Start date</span><input type="date" name="start_date" autocomplete="off" /></div>
+      <div class="field"><span class="field-label">End date</span><input type="date" name="end_date" autocomplete="off" /></div>
       <div class="field wide"><span class="field-label">Deficit / Nutrition</span><input type="text" name="nutrition" placeholder="e.g. target kcal, protein, notes" autocomplete="off" /></div>
     </section>
 
@@ -616,6 +617,16 @@
     // ---------- save / restore ----------
     function val(name) { var el = document.querySelector('[name="' + name + '"]'); return el ? el.value : ""; }
     function setVal(name, v) { var el = document.querySelector('[name="' + name + '"]'); if (el) el.value = v || ""; }
+    // Start/end dates (YYYY-MM-DD) → a short "M/D - M/D" string for the
+    // share text and any back-compat readers of sheet_data.timeframe.
+    function mdShort(iso) { if (!iso) return ""; var p = String(iso).split("-"); return p.length === 3 ? (parseInt(p[1], 10) + "/" + parseInt(p[2], 10)) : String(iso); }
+    function timeframeStr() {
+      var sd = val("start_date"), ed = val("end_date");
+      if (sd && ed) return mdShort(sd) + " - " + mdShort(ed);
+      if (sd) return "from " + mdShort(sd);
+      if (ed) return "thru " + mdShort(ed);
+      return "";
+    }
 
     // State format per row: [movement, reps1, wt1, reps2, wt2, ..., notes]
     // querySelectorAll("input, textarea") returns them in this DOM order naturally.
@@ -638,7 +649,7 @@
           rows: rows,
         });
       });
-      return { client: val("client_name"), goal: val("goal"), timeframe: val("timeframe"), nutrition: val("nutrition"), days: days };
+      return { client: val("client_name"), goal: val("goal"), startDate: val("start_date"), endDate: val("end_date"), timeframe: timeframeStr(), nutrition: val("nutrition"), days: days };
     }
 
     function fillDay(block, d) {
@@ -702,7 +713,7 @@
       try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (e) {}
       if (saved && saved.days && saved.days.length) {
         restoring = true;
-        setVal("client_name", saved.client); setVal("goal", saved.goal); setVal("timeframe", saved.timeframe); setVal("nutrition", saved.nutrition);
+        setVal("client_name", saved.client); setVal("goal", saved.goal); setVal("start_date", saved.startDate); setVal("end_date", saved.endDate); setVal("nutrition", saved.nutrition);
         saved.days.forEach(function (d) { restoreDay(d); });
         restoring = false;
         return true;
@@ -723,7 +734,7 @@
       lines.push("MONROE FIT COACH — Workout Sheet");
       if (client) lines.push("Client: " + client);
       if (val("goal").trim()) lines.push("Goal: " + val("goal").trim());
-      if (val("timeframe").trim()) lines.push("Timeframe: " + val("timeframe").trim());
+      if (timeframeStr()) lines.push("Timeframe: " + timeframeStr());
       if (val("nutrition").trim()) lines.push("Deficit / Nutrition: " + val("nutrition").trim());
       daysEl.querySelectorAll(".day-block").forEach(function (b, i) {
         var bar = b.querySelectorAll(".day-bar .bar-field input");
@@ -840,7 +851,8 @@
           dayCount = 0;
           setVal("client_name", (s.sheet_data && s.sheet_data.client) || "");
           setVal("goal", (s.sheet_data && s.sheet_data.goal) || "");
-          setVal("timeframe", (s.sheet_data && s.sheet_data.timeframe) || "");
+          setVal("start_date", (s.sheet_data && s.sheet_data.startDate) || "");
+          setVal("end_date", (s.sheet_data && s.sheet_data.endDate) || "");
           setVal("nutrition", (s.sheet_data && s.sheet_data.nutrition) || "");
           var days = (s.sheet_data && s.sheet_data.days) || [];
           if (days.length === 0) { buildDay(); buildDay(); }
@@ -901,7 +913,8 @@
                 dayCount = 0;
                 setVal("client_name", s.sheet_data.client || "");
                 setVal("goal", s.sheet_data.goal || "");
-                setVal("timeframe", s.sheet_data.timeframe || "");
+                setVal("start_date", s.sheet_data.startDate || "");
+                setVal("end_date", s.sheet_data.endDate || "");
                 setVal("nutrition", s.sheet_data.nutrition || "");
                 (s.sheet_data.days || []).forEach(function (d) { restoreDay(d); });
                 restoring = false;
@@ -1042,7 +1055,7 @@
     }
     function clearAllNow() {
       restoring = true;
-      ["client_name", "goal", "timeframe", "nutrition"].forEach(function (n) { setVal(n, ""); });
+      ["client_name", "goal", "start_date", "end_date", "nutrition"].forEach(function (n) { setVal(n, ""); });
       daysEl.innerHTML = "";
       dayCount = 0;
       buildDay();
@@ -1070,7 +1083,8 @@
       restoring = true;
       setVal("client_name", snap.client || "");
       setVal("goal", snap.goal || "");
-      setVal("timeframe", snap.timeframe || "");
+      setVal("start_date", snap.startDate || "");
+      setVal("end_date", snap.endDate || "");
       setVal("nutrition", snap.nutrition || "");
       daysEl.innerHTML = "";
       dayCount = 0;

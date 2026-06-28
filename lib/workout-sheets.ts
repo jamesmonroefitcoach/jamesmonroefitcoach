@@ -16,6 +16,11 @@ export type SheetData = {
   client?: string;
   goal?: string;
   nutrition?: string;
+  /** Program window. startDate/endDate are YYYY-MM-DD from the sheet's date
+   *  pickers; timeframe is a derived "M/D - M/D" string kept for back-compat. */
+  startDate?: string;
+  endDate?: string;
+  timeframe?: string;
   days: SheetDay[];
 };
 
