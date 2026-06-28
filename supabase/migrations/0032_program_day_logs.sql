@@ -7,7 +7,7 @@
 -- program's weeks, so multiple dated rows per day_index are expected.
 
 create table if not exists program_day_logs (
-  id          uuid primary key default gen_random_uuid(),
+  id          uuid primary key default uuid_generate_v4(),
   program_id  uuid not null references programs(id) on delete cascade,
   client_id   uuid not null,
   coach_id    uuid,
