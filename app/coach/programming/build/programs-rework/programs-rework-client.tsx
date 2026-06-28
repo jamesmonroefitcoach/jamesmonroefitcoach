@@ -220,7 +220,7 @@ export default function ProgramsReworkClient({
       const res = await saveDraftProgram({
         draftId: draftId || undefined,
         clientId,
-        name: program.name.trim() + " - In App",
+        name: program.name.trim() || "Untitled program",
         programKind: "at_home",
         builderState: program,
         markCurrent: true,
@@ -376,7 +376,7 @@ export default function ProgramsReworkClient({
     const res = await saveDraftProgram({
       draftId: draftId || undefined,
       clientId,
-      name: program.name.trim() + " - In App",
+      name: program.name.trim() || "Untitled program",
       programKind: "at_home",
       builderState: program,
       markCurrent: true,
@@ -435,7 +435,7 @@ export default function ProgramsReworkClient({
     const res = await publishProgram({
       program_id: draftId || undefined,
       client_id: clientId,
-      name: program.name.trim() + " - In App",
+      name: program.name.trim() || "Untitled program",
       starts_on: program.startsOn || today,
       duration_weeks: program.durationWeeks || 4,
       publish: true,

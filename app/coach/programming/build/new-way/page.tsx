@@ -117,16 +117,37 @@ export default async function NewWayPage({
       client_name: a.client_name ?? clientNameById.get(a.client_id ?? "") ?? "—",
     }));
 
-  // Clients flagged for at-home programming who don't currently have an
-  // active at-home program — i.e. the ones who need one started.
+  // Clients flagged for at-home programming. We surface ALL active flagged
+  // clients: those WITHOUT a current at-home program lead the list (need one
+  // started); those WITH one drop to the bottom showing the program as status.
+  // Reads the live `programs` table (not demo data) so saving/publishing a
+  // program updates this list on the next load.
+  const currentAtHomeByClient = new Map<string, string>(); // client_id → program name
+  if (hasSupabaseEnv()) {
+    const { data } = await createSupabaseAdmin()
+      .from("programs")
+      .select("client_id, name")
+      .eq("coach_id", user.id)
+      .eq("program_kind", "at_home")
+      .eq("is_current", true)
+      .is("archived_at", null);
+    (data ?? []).forEach((p: { client_id: string; name: string }) => {
+      if (p.client_id && !currentAtHomeByClient.has(p.client_id)) {
+        currentAtHomeByClient.set(p.client_id, p.name);
+      }
+    });
+  }
   const quickClientsNeeding = clients
-    .filter((c) =>
-      c.lifecycle === "active" &&
-      c.needs_at_home_programming &&
-      !pastProgramsForClient(c.id).some((p) => p.is_current && p.program_kind === "at_home")
-    )
-    .slice(0, 12)
-    .map((c) => ({ id: c.id, name: c.full_name }));
+    .filter((c) => c.lifecycle === "active" && c.needs_at_home_programming)
+    .map((c) => ({
+      id: c.id,
+      name: c.full_name,
+      hasCurrent: currentAtHomeByClient.has(c.id),
+      programName: currentAtHomeByClient.get(c.id) ?? null,
+    }))
+    // Needs-one first; clients already covered sink to the bottom.
+    .sort((a, b) => Number(a.hasCurrent) - Number(b.hasCurrent))
+    .slice(0, 20);
 
   // Recently drafted programs — is_published=false rows with a builder_state
   // (so we know there's actual in-progress work to come back to).

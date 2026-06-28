@@ -1090,11 +1090,17 @@
       INIT_HANDLED = true;
       if (!restoreState()) { buildDay(); buildDay(); }
     }
-    function initSavedMode(sheetId) {
+    function initSavedMode(sheetId, autofill) {
       SHEET_ID = sheetId;
       daysEl.innerHTML = "";
       dayCount = 0;
       loadSheet(sheetId).then(function () {
+        // Prefill header fields from the build context (e.g. the client the
+        // program was started for) when the loaded sheet left them blank.
+        if (autofill) {
+          if (autofill.clientName && !val("client_name")) setVal("client_name", autofill.clientName);
+          if (autofill.timeframe && !val("timeframe")) setVal("timeframe", autofill.timeframe);
+        }
         tryAcquireLock();
         startPolling();
       });
@@ -1113,7 +1119,7 @@
       if (d.sheetId) {
         var cb = document.getElementById("cancel-btn");
         if (cb) cb.style.display = "";
-        initSavedMode(d.sheetId);
+        initSavedMode(d.sheetId, d.autofill);
       } else {
         if (d.clearLocal) {
           try { localStorage.removeItem(STORE_KEY); } catch (e) {}

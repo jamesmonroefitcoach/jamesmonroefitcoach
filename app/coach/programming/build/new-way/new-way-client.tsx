@@ -30,7 +30,7 @@ type ViewMode = "inapp" | "template";
 // the program↔sheet bridge, so the workspace still exposes a toggle to flip
 // between them.
 type QuickSession = { id: string; starts_at: string; client_id: string; client_name: string };
-type QuickClient = { id: string; name: string };
+type QuickClient = { id: string; name: string; hasCurrent: boolean; programName: string | null };
 type QuickDraftProgram = { id: string; name: string; client_id: string; client_name: string; created_at: string; program_kind: "in_gym" | "at_home" };
 
 export default function NewWayClient({
@@ -445,16 +445,16 @@ export default function NewWayClient({
 
       <QuickGroup
         title="Clients needing programming"
-        subLabel="flagged for at-home, no active program"
+        subLabel="flagged for at-home · covered ones sink to the bottom"
         count={quickClientsNeeding.length}
-        emptyLabel="Every flagged client has an active program."
+        emptyLabel="No clients flagged for at-home programming."
       >
         {quickClientsNeeding.map((c) => (
           <QuickRow
             key={c.id}
             primary={c.name}
-            secondary="No current at-home program"
-            ctaLabel="Create →"
+            secondary={c.hasCurrent ? `Active: ${c.programName ?? "program"}` : "No current at-home program"}
+            ctaLabel={c.hasCurrent ? "Update →" : "Create →"}
             onClick={() => quickStartProgramForClient(c)}
           />
         ))}
