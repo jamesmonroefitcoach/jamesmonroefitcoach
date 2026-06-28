@@ -694,12 +694,18 @@ export default function ScheduleView({
         const timeOffsetMin = origAppt
           ? Math.round((new Date(draft.starts_at).getTime() - new Date(origAppt.starts_at).getTime()) / 60000)
           : 0;
+        // Normalise every future appointment to the edited one's length so a
+        // duration change (e.g. 60 → 90 min) propagates across the series.
+        const durationMin = Math.round(
+          (new Date(draft.ends_at).getTime() - new Date(draft.starts_at).getTime()) / 60000
+        );
         const res = await editSeries({
           series_id: draft.series_id,
           from_date: draft.starts_at,
           rate: draft.rate ? Number(draft.rate) : null,
           notes: draft.notes || null,
           time_offset_min: timeOffsetMin || undefined,
+          duration_min: durationMin > 0 ? durationMin : undefined,
         });
         if (!res.ok) {
           if (res.error.startsWith("Supabase not configured")) {

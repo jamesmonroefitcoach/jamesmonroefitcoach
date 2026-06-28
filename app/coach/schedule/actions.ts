@@ -198,7 +198,9 @@ export type EditSeriesInput = {
   from_date: string;          // ISO — update this appointment and all future ones in the series
   rate?: number | null;
   notes?: string | null;
-  time_offset_min?: number;   // shift starts_at/ends_at by this many minutes (0 = no change)
+  time_offset_min?: number;   // shift starts_at/ends_at by this many minutes (a whole-day
+                              // multiple here also moves the series' day of week)
+  duration_min?: number;      // when set, normalise every appointment's length to this
 };
 
 export async function editSeries(input: EditSeriesInput): Promise<Result<{ count: number }>> {
@@ -211,8 +213,10 @@ export async function editSeries(input: EditSeriesInput): Promise<Result<{ count
   if (input.rate !== undefined) baseUpdates.rate = input.rate;
   if (input.notes !== undefined) baseUpdates.notes = input.notes;
 
-  if (input.time_offset_min) {
-    // Time shift: fetch each appointment and update individually
+  const offset = input.time_offset_min ?? 0;
+  // Per-row pass when the time shifts (covers day-of-week via whole-day
+  // multiples) or the duration is being normalised across the series.
+  if (offset || input.duration_min !== undefined) {
     const { data: rows, error: fetchErr } = await supabase
       .from("appointments")
       .select("id, starts_at, ends_at")
@@ -222,8 +226,10 @@ export async function editSeries(input: EditSeriesInput): Promise<Result<{ count
       .not("status", "in", '("cancelled","no_show")');
     if (fetchErr) return { ok: false, error: fetchErr.message };
     for (const a of rows ?? []) {
-      const newStart = new Date(new Date(a.starts_at).getTime() + input.time_offset_min * 60000);
-      const newEnd = new Date(new Date(a.ends_at).getTime() + input.time_offset_min * 60000);
+      const newStart = new Date(new Date(a.starts_at).getTime() + offset * 60000);
+      const newEnd = input.duration_min !== undefined
+        ? new Date(newStart.getTime() + input.duration_min * 60000)
+        : new Date(new Date(a.ends_at).getTime() + offset * 60000);
       const { error } = await supabase.from("appointments").update({
         ...baseUpdates,
         starts_at: newStart.toISOString(),
