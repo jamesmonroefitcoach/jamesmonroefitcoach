@@ -12,6 +12,7 @@ import Link from "next/link";
 import type { ClientProgramRow } from "@/lib/data";
 import { fmtDate } from "@/lib/format";
 import { sendProgramFeedback } from "@/app/coach/clients/[id]/program-feedback-actions";
+import { submitProgramDayLog, type DayLogEntry } from "@/app/client/programming/log-actions";
 
 // ── Minimal builder_state shape we care about ────────────────────────────
 type StateExercise = {
@@ -147,6 +148,51 @@ export default function ClientProgramLogView({
     });
   }
 
+  // ── Submit a completed day/week to James (persists to the DB) ──────────
+  const [loggedDate, setLoggedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [submitting, startSubmit] = useTransition();
+  const [sentKeys, setSentKeys] = useState<Set<string>>(new Set());
+
+  function buildEntries(target: number | "week"): Record<string, DayLogEntry> {
+    const items = target === "week" ? (days[0]?.items ?? []) : (days[target]?.items ?? []);
+    const dl = target === "week" ? log.week : log.byDay?.[target];
+    const out: Record<string, DayLogEntry> = {};
+    items.forEach((ex, i) => {
+      const key = exerciseKey(target, i, ex);
+      const el = dl?.exercises?.[key];
+      out[key] = {
+        name: ex.movement?.name ?? `Exercise ${i + 1}`,
+        weights: el?.weights ?? [],
+        reps: el?.actualReps ?? [],
+        done: !!el?.done,
+        notes: el?.notes ?? "",
+      };
+    });
+    return out;
+  }
+
+  function submitTarget(target: number | "week") {
+    startSubmit(async () => {
+      const note = target === "week" ? (log.week?.postSessionNote ?? "") : (log.byDay?.[target]?.postSessionNote ?? "");
+      const title = target === "week" ? "Week" : (days[target]?.title || `Day ${target + 1}`);
+      const res = await submitProgramDayLog({
+        programId: program.id,
+        dayIndex: target === "week" ? 0 : target,
+        dayTitle: title,
+        loggedDate,
+        entries: buildEntries(target),
+        note,
+      });
+      setSentKeys((s) => new Set(s).add(String(target)));
+      setShowPost(null);
+      // The day is always saved locally; only surface genuinely unexpected
+      // errors (not "no DB" / pre-migration "table missing").
+      if (!res.ok && !/not configured|program_day_logs|does not exist|schema cache/i.test(res.error)) {
+        alert(res.error);
+      }
+    });
+  }
+
   // Days[idx].items default
   const activeDayObj = activeDay != null ? days[activeDay] : null;
   const activeDayItems = activeDayObj?.items ?? [];
@@ -206,6 +252,10 @@ export default function ClientProgramLogView({
           onChange={(t) => setPostNote(showPost, t)}
           onClose={() => setShowPost(null)}
           label={showPost === "week" ? "How was the week?" : `How was Day ${(showPost as number) + 1}?`}
+          loggedDate={loggedDate}
+          onChangeDate={setLoggedDate}
+          onSubmit={() => submitTarget(showPost)}
+          submitting={submitting}
         />
       )}
     </main>
@@ -505,11 +555,15 @@ function ExerciseLogRow({
 // ──────────────────────────────────────────────────────────────────────────
 // Post-session prompt (modal)
 // ──────────────────────────────────────────────────────────────────────────
-function PostSessionPrompt({ note, onChange, onClose, label }: {
+function PostSessionPrompt({ note, onChange, onClose, label, loggedDate, onChangeDate, onSubmit, submitting }: {
   note: string;
   onChange: (t: string) => void;
   onClose: () => void;
   label: string;
+  loggedDate: string;
+  onChangeDate: (d: string) => void;
+  onSubmit: () => void;
+  submitting: boolean;
 }) {
   return (
     <div
@@ -519,6 +573,16 @@ function PostSessionPrompt({ note, onChange, onClose, label }: {
       <div className="card" style={{ width: "min(440px, 96vw)", padding: "1rem 1.2rem" }} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: 0 }}>Post-session check-in</h3>
         <hr className="divider" />
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.7rem" }}>
+          <span className="meta" style={{ fontSize: "0.78rem" }}>Date trained</span>
+          <input
+            type="date"
+            className="input"
+            value={loggedDate}
+            onChange={(e) => onChangeDate(e.target.value)}
+            style={{ fontSize: "0.86rem", padding: "0.35rem 0.5rem" }}
+          />
+        </label>
         <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
           <span className="meta" style={{ fontSize: "0.78rem" }}>{label}</span>
           <textarea
@@ -530,8 +594,11 @@ function PostSessionPrompt({ note, onChange, onClose, label }: {
             style={{ fontSize: "0.86rem", padding: "0.4rem 0.5rem", resize: "vertical" }}
           />
         </label>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.85rem" }}>
-          <button className="btn btn-primary" onClick={onClose}>Done</button>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", marginTop: "0.85rem" }}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={submitting}>Close</button>
+          <button className="btn btn-primary" onClick={onSubmit} disabled={submitting}>
+            {submitting ? "Sending…" : "Send to James"}
+          </button>
         </div>
       </div>
     </div>

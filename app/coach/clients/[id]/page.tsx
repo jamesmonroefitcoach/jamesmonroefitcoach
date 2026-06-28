@@ -12,6 +12,8 @@ import WorkoutSheetsSection from "./workout-sheets-section";
 import LogPaymentButton, { type PaymentApptRow } from "./log-payment-modal";
 import IntakeFormDisplay from "@/components/intake-form-display";
 import ProgramsSection from "./programs-section";
+import ProgramDayLogsSection from "./program-logs-section";
+import { listProgramDayLogsForClient } from "@/app/client/programming/log-actions";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
@@ -19,12 +21,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   if (user.role !== "coach" && user.role !== "admin" && !user.is_admin) redirect("/");
 
   const { id } = await params;
-  const [client, reminderPrefs, highLevelPlan, programs, appts] = await Promise.all([
+  const [client, reminderPrefs, highLevelPlan, programs, appts, dayLogs] = await Promise.all([
     getClient(id),
     getClientReminderPrefs(id),
     getHighLevelPlan(id),
     listProgramsForClient(id),
     listAppointmentsForClient(id),
+    listProgramDayLogsForClient(id),
   ]);
   if (!client) notFound();
 
@@ -156,6 +159,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <hr className="divider" />
 
         <ProgramsSection clientId={client.id} initialPrograms={programs} />
+
+        <ProgramDayLogsSection logs={dayLogs} />
 
         {pastSessions.length > 0 && (
           <div style={{ marginTop: "1.25rem" }}>
