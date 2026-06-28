@@ -291,7 +291,7 @@
       <button class="btn ghost" id="cancel-btn" type="button" style="display:none;" title="Discard edits — revert to the version you opened">Cancel</button>
       <button class="btn ghost" id="save-modal-trigger" type="button" style="display:none;">Save</button>
       <button class="btn ghost" id="send-btn" type="button">Send</button>
-      <button class="btn" onclick="window.print()" type="button">Save PDF</button>
+      <button class="btn" onclick="savePdf()" type="button">Save PDF</button>
     </div>
   </div>
 
@@ -751,6 +751,21 @@
         });
       });
       return lines.join("\n");
+    }
+
+    // Save PDF via the browser print dialog. The print-to-PDF default
+    // filename is the document title, so we swap in "<Client> Program <date>"
+    // for the print and restore the original title afterward.
+    function savePdf() {
+      var client = val("client_name").trim() || "Client";
+      var d = new Date();
+      var dateStr = (d.getMonth() + 1) + "-" + d.getDate() + "-" + d.getFullYear();
+      var prev = document.title;
+      document.title = client + " Program " + dateStr;
+      var restore = function () { document.title = prev; window.removeEventListener("afterprint", restore); };
+      window.addEventListener("afterprint", restore);
+      window.print();
+      setTimeout(restore, 3000); // fallback if afterprint doesn't fire
     }
 
     document.getElementById("send-btn").addEventListener("click", function () {
