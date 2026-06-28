@@ -187,8 +187,22 @@ export default function MessagesClient({
                     background: active === t.id ? "rgba(168,61,43,0.06)" : undefined
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
-                    <strong style={{ fontSize: "0.82rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.client_name}</strong>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem", alignItems: "center" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.35rem", minWidth: 0 }}>
+                      <strong style={{ fontSize: "0.82rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.client_name}</strong>
+                      {t.unread_count > 0 && (
+                        <span
+                          title={`${t.unread_count} unread`}
+                          style={{
+                            flexShrink: 0,
+                            minWidth: 16, height: 16, padding: "0 4px",
+                            borderRadius: 999, background: "var(--rust)", color: "#fff",
+                            fontSize: "0.6rem", fontWeight: 700, lineHeight: "16px",
+                            textAlign: "center",
+                          }}
+                        >{t.unread_count}</span>
+                      )}
+                    </span>
                     <span className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", flexShrink: 0 }}>{t.last_at ? new Date(t.last_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span>
                   </div>
                   <p className="meta" style={{ margin: "0.1rem 0 0", fontSize: "0.72rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.last_message}</p>

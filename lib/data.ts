@@ -654,14 +654,18 @@ export type ThreadPreview = {
   last_message: string;
   last_at: string;
   unread: boolean;
+  /** Total messages received from this person that the coach hasn't read.
+   *  Drives the unread dot + count; one row per person aggregates all of
+   *  their threads. */
+  unread_count: number;
 };
 
 export async function listCoachThreads(coachId: string): Promise<ThreadPreview[]> {
   if (!hasSupabaseEnv()) {
     return [
-      { id: "thread-1", client_id: "demo-client-acacia", client_name: "Acacia Chan", last_message: "Can we move Tuesday to Wed?", last_at: new Date(Date.now() - 3600000).toISOString(), unread: true },
-      { id: "thread-2", client_id: "demo-client-jen", client_name: "Jen Loving", last_message: "Loved that pull session — knees felt great", last_at: new Date(Date.now() - 7200000).toISOString(), unread: false },
-      { id: "thread-3", client_id: "demo-client-abbey", client_name: "Abbey Archer", last_message: "Heading out of town next week.", last_at: new Date(Date.now() - 26 * 3600000).toISOString(), unread: true }
+      { id: "thread-1", client_id: "demo-client-acacia", client_name: "Acacia Chan", last_message: "Can we move Tuesday to Wed?", last_at: new Date(Date.now() - 3600000).toISOString(), unread: true, unread_count: 2 },
+      { id: "thread-2", client_id: "demo-client-jen", client_name: "Jen Loving", last_message: "Loved that pull session — knees felt great", last_at: new Date(Date.now() - 7200000).toISOString(), unread: false, unread_count: 0 },
+      { id: "thread-3", client_id: "demo-client-abbey", client_name: "Abbey Archer", last_message: "Heading out of town next week.", last_at: new Date(Date.now() - 26 * 3600000).toISOString(), unread: true, unread_count: 1 }
     ];
   }
   const supabase = createSupabaseAdmin();
@@ -670,27 +674,45 @@ export async function listCoachThreads(coachId: string): Promise<ThreadPreview[]
     .select("id, client_id, profiles:client_id ( full_name ), messages ( body, created_at, read_at, sender_id )")
     .eq("coach_id", coachId)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(50);
   if (!data) return [];
-  return data.map((t: any) => {
+  const perThread = data.map((t: any) => {
     // Sort messages by created_at so we always grab the truly-latest one,
     // regardless of how Supabase returned the nested array.
     const messages = ([...(t.messages ?? [])] as { body: string; created_at: string; read_at: string | null; sender_id: string }[])
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
     const last = messages.slice(-1)[0];
-    // Only flag the thread as unread for the inbox if the LAST message was
-    // sent by the client AND has not yet been read by the coach. A thread
-    // where the coach just wrote the last message is never "received unread".
-    const isReceivedUnread = !!last && last.sender_id !== coachId && !last.read_at;
+    // Count every message received from the client that the coach hasn't read.
+    const unreadCount = messages.filter((m) => m.sender_id !== coachId && !m.read_at).length;
     return {
       id: t.id,
       client_id: t.client_id,
       client_name: Array.isArray(t.profiles) ? t.profiles[0]?.full_name : t.profiles?.full_name,
       last_message: last?.body ?? "",
       last_at: last?.created_at ?? "",
-      unread: isReceivedUnread,
+      unread: unreadCount > 0,
+      unread_count: unreadCount,
     } as ThreadPreview;
   });
+  // Collapse to one row per person: keep the most-recent thread as the row's
+  // target, sum unread across all of that person's threads.
+  const byClient = new Map<string, ThreadPreview>();
+  for (const t of perThread) {
+    const existing = byClient.get(t.client_id);
+    if (!existing) {
+      byClient.set(t.client_id, { ...t });
+    } else {
+      existing.unread_count += t.unread_count;
+      existing.unread = existing.unread_count > 0;
+      // Newer activity wins for the representative row (id, preview, time).
+      if ((t.last_at || "") > (existing.last_at || "")) {
+        existing.id = t.id;
+        existing.last_message = t.last_message;
+        existing.last_at = t.last_at;
+      }
+    }
+  }
+  return Array.from(byClient.values()).sort((a, b) => (b.last_at || "").localeCompare(a.last_at || ""));
 }
 
 // ─── Change Request History ───────────────────────────────────────────
