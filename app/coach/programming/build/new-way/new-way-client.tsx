@@ -10,6 +10,7 @@ import {
   listInGymProgramsForClient,
   getOrCreatePairedSheetAction,
   getSessionProgramId,
+  getProgramBuildFormat,
   saveDraftProgram,
   deleteDraftProgram,
   deleteDraftSession,
@@ -107,6 +108,9 @@ export default function NewWayClient({
   const [formatChosen, setFormatChosen] = useState<boolean>(
     !!initialApptId || !!initialStartsAt || !!initialProgramId
   );
+  /** True when the open program was built as a template (sheet) — it's
+   *  sheet-only, so we force the Template view and hide the In App toggle. */
+  const [sheetOnly, setSheetOnly] = useState(false);
 
   const activeClients = clients.filter((c) => c.lifecycle === "active" || c.lifecycle === "online");
 
@@ -176,6 +180,21 @@ export default function NewWayClient({
     })();
     return () => { cancelled = true; };
   }, [started, type, editProgramId, apptId, autosaveDraftId]);
+
+  // A Program built as a template is sheet-only: every view/edit opens the
+  // latest sheet. Detect it when the workspace mounts on a program and force
+  // the Template view + hide the In App toggle. (Sessions keep their toggle.)
+  useEffect(() => {
+    if (!started || type !== "program" || !editProgramId) { setSheetOnly(false); return; }
+    let cancelled = false;
+    (async () => {
+      const fmt = await getProgramBuildFormat(editProgramId);
+      if (cancelled) return;
+      if (fmt === "template") { setSheetOnly(true); setView("template"); }
+      else setSheetOnly(false);
+    })();
+    return () => { cancelled = true; };
+  }, [started, type, editProgramId]);
 
   function syncUrl(params: { client?: string; type?: string; appt?: string; starts?: string; program?: string; view?: string }) {
     const url = new URL(window.location.href);
@@ -252,6 +271,7 @@ export default function NewWayClient({
         name: "Untitled program",
         programKind: "at_home",
         builderState: {},
+        buildFormat: "template",
       });
       if (!res.ok) { alert(res.error || "Could not start the program."); return; }
       setEditProgramId(res.draftId); setView("template"); setStarted(true);
@@ -347,6 +367,7 @@ export default function NewWayClient({
             onSwitchView={switchView}
             templateReady
             onBack={backToLobby}
+            hideToggle={sheetOnly}
           />
           <WorkoutSheetEmbed
             user={{ id: user.id, name: user.name, role: user.role }}
@@ -1071,7 +1092,7 @@ function StatusInline({ status }: { status: "programmed" | "draft" | "needs_prog
 
 // ── BackBar with the In App | Template view toggle ─────────────────────
 function BackBar({
-  clientName, typeLabel, subLabel, view, onSwitchView, templateReady, onBack,
+  clientName, typeLabel, subLabel, view, onSwitchView, templateReady, onBack, hideToggle = false,
 }: {
   clientName: string;
   typeLabel: string;
@@ -1080,6 +1101,8 @@ function BackBar({
   onSwitchView: (next: ViewMode) => void;
   templateReady: boolean;
   onBack: () => void;
+  /** Sheet-only programs hide the In App | Template toggle entirely. */
+  hideToggle?: boolean;
 }) {
   return (
     <div
@@ -1097,23 +1120,26 @@ function BackBar({
         <span className="meta" style={{ fontSize: "0.7rem", color: "var(--rust)" }}>{subLabel}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-        {/* In App | Template segmented toggle — same record, both formats */}
-        <div
-          role="tablist"
-          style={{
-            display: "inline-flex",
-            border: "1px solid var(--line)", borderRadius: 999,
-            padding: "0.15rem", background: "var(--bg)",
-          }}
-        >
-          <ViewTab active={view === "inapp"} label="In App" onClick={() => onSwitchView("inapp")} />
-          <ViewTab
-            active={view === "template"}
-            label="Template"
-            onClick={() => onSwitchView("template")}
-            title={templateReady ? "Switch to the workout sheet for this program" : "Save once to enable Template view"}
-          />
-        </div>
+        {/* In App | Template segmented toggle — same record, both formats.
+            Hidden for sheet-only (template-built) programs. */}
+        {!hideToggle && (
+          <div
+            role="tablist"
+            style={{
+              display: "inline-flex",
+              border: "1px solid var(--line)", borderRadius: 999,
+              padding: "0.15rem", background: "var(--bg)",
+            }}
+          >
+            <ViewTab active={view === "inapp"} label="In App" onClick={() => onSwitchView("inapp")} />
+            <ViewTab
+              active={view === "template"}
+              label="Template"
+              onClick={() => onSwitchView("template")}
+              title={templateReady ? "Switch to the workout sheet for this program" : "Save once to enable Template view"}
+            />
+          </div>
+        )}
         <button
           type="button"
           className="btn btn-ghost"

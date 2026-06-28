@@ -274,6 +274,21 @@ export type ImportableProgram = {
   has_builder_state: boolean;
 };
 
+/** Returns how a program was built ("template" = sheet-only). Returns
+ *  "in_app" when the build_format column hasn't been migrated yet, so callers
+ *  degrade to the structured builder until the migration runs. */
+export async function getProgramBuildFormat(programId: string): Promise<"in_app" | "template"> {
+  if (!programId || !hasSupabaseEnv()) return "in_app";
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("programs")
+    .select("build_format")
+    .eq("id", programId)
+    .maybeSingle<{ build_format: string | null }>();
+  if (error || !data) return "in_app";
+  return data.build_format === "template" ? "template" : "in_app";
+}
+
 export async function listImportableProgramsForClient(clientId: string): Promise<ImportableProgram[]> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return [];
@@ -532,6 +547,10 @@ export type SaveDraftInput = {
    *  created, the appointment's session_program_id is linked to it so
    *  the Old Way builder and the Template view both find the same row. */
   apptId?: string;
+  /** How this program is built. "template" marks it sheet-only — later
+   *  views/edits open the workout sheet, not the In-App builder. Defaults
+   *  to "in_app" (the DB column default) when omitted. */
+  buildFormat?: "in_app" | "template";
 };
 
 export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: true; draftId: string } | { ok: false; error: string }> {
@@ -599,21 +618,26 @@ export async function saveDraftProgram(input: SaveDraftInput): Promise<{ ok: tru
   }
 
   // New draft.
-  const { data, error } = await supabase
-    .from("programs")
-    .insert({
-      coach_id: me.id,
-      client_id: input.clientId,
-      name,
-      program_kind: input.programKind,
-      builder_state: input.builderState,
-      is_published: false,
-      is_current: !!input.markCurrent,
-      starts_on: new Date().toISOString().slice(0, 10),
-      duration_weeks: 1,
-    })
-    .select("id")
-    .single<{ id: string }>();
+  const baseInsert: Record<string, unknown> = {
+    coach_id: me.id,
+    client_id: input.clientId,
+    name,
+    program_kind: input.programKind,
+    builder_state: input.builderState,
+    is_published: false,
+    is_current: !!input.markCurrent,
+    starts_on: new Date().toISOString().slice(0, 10),
+    duration_weeks: 1,
+  };
+  // Only set build_format for template builds; in-app relies on the DB default.
+  if (input.buildFormat) baseInsert.build_format = input.buildFormat;
+  let res = await supabase.from("programs").insert(baseInsert).select("id").single<{ id: string }>();
+  // Graceful fallback if the build_format column hasn't been migrated yet.
+  if (res.error && /build_format/i.test(res.error.message ?? "")) {
+    delete baseInsert.build_format;
+    res = await supabase.from("programs").insert(baseInsert).select("id").single<{ id: string }>();
+  }
+  const { data, error } = res;
   if (error || !data) return { ok: false, error: error?.message ?? "create failed" };
 
   // Link to the appointment so cross-builder hydration finds this row.

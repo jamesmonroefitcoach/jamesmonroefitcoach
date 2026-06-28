@@ -291,22 +291,25 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
     ? { startsOn: sd, endsOn: ed || null }
     : parseTimeframeDates(sheet.sheet_data?.timeframe, todayISO);
 
-  const { data: program } = await supabase
-    .from("programs")
-    .insert({
-      client_id: sheet.client_id,
-      coach_id: sheet.coach_id,
-      name: sheet.name,
-      program_kind: "in_gym",
-      starts_on: startsOn,
-      ends_on: endsOn,
-      duration_weeks: 1,
-      is_published: sheet.kind === "pdf",       // PDFs are inherently "submitted"
-      is_current: true,
-      workout_sheet_id: sheet.id,
-    })
-    .select("id")
-    .single<{ id: string }>();
+  const programInsert: Record<string, unknown> = {
+    client_id: sheet.client_id,
+    coach_id: sheet.coach_id,
+    name: sheet.name,
+    program_kind: "in_gym",
+    starts_on: startsOn,
+    ends_on: endsOn,
+    duration_weeks: 1,
+    is_published: sheet.kind === "pdf",       // PDFs are inherently "submitted"
+    is_current: true,
+    workout_sheet_id: sheet.id,
+    build_format: "template",                 // sheet-origin → sheet is canonical
+  };
+  let progRes = await supabase.from("programs").insert(programInsert).select("id").single<{ id: string }>();
+  if (progRes.error && /build_format/i.test(progRes.error.message ?? "")) {
+    delete programInsert.build_format;
+    progRes = await supabase.from("programs").insert(programInsert).select("id").single<{ id: string }>();
+  }
+  const program = progRes.data;
   if (!program) return null;
 
   await supabase
