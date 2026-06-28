@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { SessionUser } from "@/lib/types";
 
 type NavLink = { href: string; label: string };
@@ -36,6 +36,36 @@ export default function Sidebar({ user }: { user: SessionUser }) {
   const [pending, start] = useTransition();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ── Last-view persistence (mainly for phones) ──────────────────────────
+  // Remember the last meaningful route so backgrounding the app and coming
+  // back returns you to where you were instead of snapping to the dashboard.
+  // sessionStorage marks "this app session" — it survives reloads/backgrounding
+  // but is cleared on a complete close, so only a full close+reopen resets to
+  // the dashboard (matches the requested behavior).
+  useEffect(() => {
+    if (!pathname) return;
+    if (pathname === "/preview" || pathname.startsWith("/preview/")) return;
+    // Don't store the bare home roots — we want to restore to a real view.
+    if (pathname !== "/coach" && pathname !== "/client" && pathname !== "/admin") {
+      try { localStorage.setItem("mfc:lastPath", pathname); } catch {}
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    // Runs once per full page load (Sidebar persists across client nav).
+    try {
+      const fresh = !sessionStorage.getItem("mfc:alive");
+      sessionStorage.setItem("mfc:alive", "1");
+      if (fresh) return; // complete reopen → leave on the dashboard
+      const onHomeRoot = pathname === "/coach" || pathname === "/client" || pathname === "/admin";
+      if (onHomeRoot) {
+        const last = localStorage.getItem("mfc:lastPath");
+        if (last && last !== pathname) router.replace(last);
+      }
+    } catch { /* storage unavailable — no-op */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // /preview is the marketing site rendered inside an app tab. The
   // sidebar would be useless overhead there, so suppress it entirely.
