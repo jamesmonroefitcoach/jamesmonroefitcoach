@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
-import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, editSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
+import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, editSeries, extendSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
 import { CANCEL_REASONS, CANCEL_REASON_LABELS, cancelReasonLabel } from "@/lib/cancel-reasons";
 
 // 44 px per hour. 13-hour stretch (7am→8pm) = 572 px which fits inside
@@ -799,6 +799,24 @@ export default function ScheduleView({
       }
       // Remove all future series appointments from local state
       setAppts((cur) => cur.filter((a) => !(a.series_id === seriesId && a.starts_at >= fromDate)));
+      close();
+    });
+  }
+
+  // Extend the series — add N more occurrences after the last one, following
+  // the existing cadence. New sessions land in future weeks (fetched fresh on
+  // navigation), so we just close after.
+  const [extendN, setExtendN] = useState(4);
+  function extendDraftSeries() {
+    if (!draft?.series_id) return;
+    const seriesId = draft.series_id;
+    setSaveError(null);
+    startSave(async () => {
+      const res = await extendSeries(seriesId, extendN);
+      if (!res.ok && !res.error.startsWith("Supabase not configured")) {
+        setSaveError(res.error);
+        return;
+      }
       close();
     });
   }
@@ -2506,6 +2524,23 @@ export default function ScheduleView({
                   >
                     Cancel series from this date forward
                   </button>
+                </div>
+                <div style={{ marginTop: "0.45rem", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                  <span className="meta" style={{ fontSize: "0.72rem" }}>Extend series:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={52}
+                    value={extendN}
+                    onChange={(e) => setExtendN(Math.max(1, Math.min(52, Number(e.target.value) || 1)))}
+                    style={{ width: 52, padding: "0.18rem 0.35rem", fontSize: "0.72rem", border: "1px solid var(--line)", borderRadius: 3, fontFamily: "inherit" }}
+                  />
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: "0.3rem 0.55rem", fontSize: "0.72rem" }}
+                    onClick={extendDraftSeries}
+                    disabled={savePending}
+                  >+ Add sessions</button>
                 </div>
               </div>
             ) : null}

@@ -268,6 +268,55 @@ export async function cancelSeries(seriesId: string, opts: { fromDate?: string }
   return { ok: true, data: { count: (data ?? []).length } };
 }
 
+// Add more occurrences to the end of a series, following its existing cadence
+// (inferred from the gap between the last two appointments; defaults to weekly).
+export async function extendSeries(seriesId: string, addCount: number): Promise<Result<{ count: number }>> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  const n = Math.max(1, Math.min(52, Math.floor(addCount || 0)));
+  const supabase = createSupabaseAdmin();
+  const { data: rows, error } = await supabase
+    .from("appointments")
+    .select("client_id, coach_id, starts_at, ends_at, session_type, rate, call_type, notes")
+    .eq("series_id", seriesId)
+    .eq("coach_id", me.id)
+    .order("starts_at", { ascending: true });
+  if (error) return { ok: false, error: error.message };
+  if (!rows || rows.length === 0) return { ok: false, error: "Series not found." };
+  const last = rows[rows.length - 1] as Record<string, unknown> & { starts_at: string; ends_at: string };
+  let cadenceDays = 7;
+  if (rows.length >= 2) {
+    const prev = rows[rows.length - 2] as { starts_at: string };
+    const gap = Math.round((new Date(last.starts_at).getTime() - new Date(prev.starts_at).getTime()) / 86400000);
+    if (gap >= 1) cadenceDays = gap;
+  }
+  const dayMs = 86400000;
+  const inserts = [];
+  for (let i = 1; i <= n; i++) {
+    const start = new Date(new Date(last.starts_at).getTime() + i * cadenceDays * dayMs);
+    const end = new Date(new Date(last.ends_at).getTime() + i * cadenceDays * dayMs);
+    inserts.push({
+      client_id: last.client_id,
+      coach_id: last.coach_id,
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString(),
+      session_type: last.session_type,
+      rate: last.rate,
+      call_type: last.call_type,
+      notes: last.notes,
+      series_id: seriesId,
+      status: "scheduled",
+      change_count: 0,
+    });
+  }
+  const { error: insErr } = await supabase.from("appointments").insert(inserts);
+  if (insErr) return { ok: false, error: insErr.message };
+  revalidatePath("/coach/schedule");
+  revalidatePath("/coach");
+  return { ok: true, data: { count: n } };
+}
+
 export async function approveChangeRequest(apptId: string): Promise<Result> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
