@@ -231,7 +231,7 @@ export default async function MarketingPage({
               you.
             </p>
             <p className="public-p">
-              The current roster runs the full range: men, women, kids,
+              The current roster runs the full range: men, women,
               families, couples, and groups training together. From high
               school youth to senior citizens, beginners through competitive
               athletes. James works with
