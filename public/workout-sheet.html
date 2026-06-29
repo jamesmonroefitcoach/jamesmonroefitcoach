@@ -251,6 +251,23 @@
   body.client-locked input[readonly],
   body.client-locked textarea[readonly] { background: #f6f1e7; color: var(--ink); }
 
+  /* View-only (coach opening a program to read it): everything is locked and
+     every editing control is hidden. Save PDF stays so it can be printed. */
+  body.view-only .row-del,
+  body.view-only .row-dup,
+  body.view-only .pair-del,
+  body.view-only .row-add-set,
+  body.view-only .remove-day,
+  body.view-only .col-resizer,
+  body.view-only #add-day,
+  body.view-only #clear-btn,
+  body.view-only #save-modal-trigger,
+  body.view-only #send-btn,
+  body.view-only #cancel-btn,
+  body.view-only .x-cell,
+  body.view-only .intro-note { display: none !important; }
+  body.view-only input, body.view-only textarea { background: transparent; }
+
   /* save modal */
   .modal {
     position: fixed; inset: 0;
@@ -669,6 +686,17 @@
         if (bar[0]) bar[0].readOnly = true; // day name (James's)
         if (bar[1]) bar[1].readOnly = true; // date (James's)
         // bar[2] bodyweight + bar[3] sleep stay editable for the client to log.
+      });
+    }
+
+    // Full read-only mode (coach opens a program to view it). Locks every
+    // field and hides editing controls (CSS via body.view-only). Idempotent.
+    var VIEW_ONLY = false;
+    function applyViewOnly() {
+      if (!VIEW_ONLY) return;
+      document.body.classList.add("view-only");
+      document.querySelectorAll("input, textarea").forEach(function (el) {
+        if (el.type !== "button" && el.type !== "submit") el.readOnly = true;
       });
     }
 
@@ -1195,6 +1223,12 @@
       if (USER && USER.role === "client") {
         applyClientLock();
         try { new MutationObserver(applyClientLock).observe(daysEl, { childList: true, subtree: true }); } catch (e) {}
+      }
+      // Coach view-only: full read-only render of the program (latest state).
+      if (d.viewOnly) {
+        VIEW_ONLY = true;
+        applyViewOnly();
+        try { new MutationObserver(applyViewOnly).observe(daysEl, { childList: true, subtree: true }); } catch (e) {}
       }
       var saveBtn = document.getElementById("save-modal-trigger");
       if (saveBtn) saveBtn.style.display = "";

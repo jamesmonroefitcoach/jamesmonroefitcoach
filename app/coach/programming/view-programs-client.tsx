@@ -289,9 +289,13 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
               <>
                 {/* Program — date range first, status link to the right */}
                 {(() => {
-                  const viewParam = programStatusLabel === "Programmed" ? "&view=plan" : "";
+                  // Programmed → open the read-only program view directly.
+                  // Drafted / none → drop into the builder.
                   const programParam = active.program ? `&program=${active.program.id}` : "";
-                  const href = `/coach/programming/build/new-way?type=program&client=${block.clientId}${programParam}${viewParam}`;
+                  const buildHref = `/coach/programming/build/new-way?type=program&client=${block.clientId}${programParam}`;
+                  const href = programStatusLabel === "Programmed" && active.program
+                    ? `/coach/programming/view/${active.program.id}`
+                    : buildHref;
                   const verb = programStatusLabel === "Programmed" ? "View"
                     : programStatusLabel === "Drafted" ? "Edit"
                     : "Build";
@@ -323,10 +327,11 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
               Programs view: client + active program (when known). */}
           {(() => {
             const params: string[] = [`client=${block.clientId}`];
-            // Label by status: a current/published program reads "View" (opens
-            // the plan; James can edit from there), a draft "Edit", else "Build".
+            // Programmed reads "View" (read-only program page); draft "Edit"
+            // (builder); none "Build". Sessions keep their plan link.
             let verb = "Build";
             let viewParam = "";
+            let viewRoute = "";
             if (isSessionsView) {
               params.unshift("type=session");
               if (nextSession) {
@@ -339,14 +344,14 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
               params.unshift("type=program");
               if (active.program) params.push(`program=${active.program.id}`);
               verb = programStatusLabel === "Programmed" ? "View" : programStatusLabel === "Drafted" ? "Edit" : "Build";
-              if (programStatusLabel === "Programmed") viewParam = "&view=plan";
+              if (verb === "View" && active.program) viewRoute = `/coach/programming/view/${active.program.id}`;
             }
-            const href = `/coach/programming/build/new-way?${params.join("&")}${viewParam}`;
+            const href = viewRoute || `/coach/programming/build/new-way?${params.join("&")}${viewParam}`;
             return (
               <Link
                 href={href}
                 className="btn btn-primary"
-                title={`${verb} in New Way Build — pre-filled with this row`}
+                title={verb === "View" ? "Open the program (read-only)" : `${verb} in New Way Build`}
                 style={{ fontSize: "0.7rem", padding: "0.2rem 0.65rem", whiteSpace: "nowrap" }}
               >{verb} →</Link>
             );

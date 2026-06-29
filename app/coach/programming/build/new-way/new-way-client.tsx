@@ -181,17 +181,17 @@ export default function NewWayClient({
     return () => { cancelled = true; };
   }, [started, type, editProgramId, apptId, autosaveDraftId]);
 
-  // A Program built as a template is sheet-only: every view/edit opens the
-  // latest sheet. Detect it when the workspace mounts on a program and force
-  // the Template view + hide the In App toggle. (Sessions keep their toggle.)
+  // A program is shown as the one thing it is — no In App | Template toggle.
+  // When editing an existing program, snap to its built format. (Sessions keep
+  // their toggle.)
   useEffect(() => {
-    if (!started || type !== "program" || !editProgramId) { setSheetOnly(false); return; }
+    if (!started || type !== "program") { setSheetOnly(false); return; }
+    setSheetOnly(true);
+    if (!editProgramId) return; // new program keeps the format chosen in Step 3
     let cancelled = false;
     (async () => {
       const fmt = await getProgramBuildFormat(editProgramId);
-      if (cancelled) return;
-      if (fmt === "template") { setSheetOnly(true); setView("template"); }
-      else setSheetOnly(false);
+      if (!cancelled) setView(fmt === "template" ? "template" : "inapp");
     })();
     return () => { cancelled = true; };
   }, [started, type, editProgramId]);
@@ -402,6 +402,7 @@ export default function NewWayClient({
           onSwitchView={switchView}
           templateReady={!!pairedSheetId}
           onBack={backToLobby}
+          hideToggle={sheetOnly}
         />
         {type === "session" ? (
           <ReworkClient

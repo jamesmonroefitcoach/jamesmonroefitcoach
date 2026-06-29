@@ -30,6 +30,7 @@ export default function WorkoutSheetEmbed({
   autofill,
   clearLocal,
   onSaved,
+  viewOnly,
 }: {
   sheetId?: string | null;
   user?: UserLite | null;
@@ -37,6 +38,8 @@ export default function WorkoutSheetEmbed({
   sessions?: SessionLite[];
   autofill?: AutofillData | null;
   clearLocal?: boolean;
+  /** Coach opening a program to read it — full read-only, no editing. */
+  viewOnly?: boolean;
   /** When provided, the parent owns post-save handling: we call this with the
    *  saved sheet id and skip the internal router.push/refresh. Lets an embed
    *  that lives inside a larger workspace stay mounted after the first save. */
@@ -72,6 +75,7 @@ export default function WorkoutSheetEmbed({
             sheetId: sheetId ?? null,
             autofill: autofill ?? null,
             clearLocal: !sheetId && clearLocal ? true : undefined,
+            viewOnly: viewOnly ? true : undefined,
           },
           window.location.origin
         );
@@ -95,7 +99,7 @@ export default function WorkoutSheetEmbed({
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [user, clients, sessions, sheetId, router, pathname, autofill, onSaved]);
+  }, [user, clients, sessions, sheetId, router, pathname, autofill, onSaved, viewOnly]);
 
   function onLoad() {
     resize();
