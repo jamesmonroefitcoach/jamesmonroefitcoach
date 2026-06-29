@@ -45,6 +45,18 @@ export default function MessagesClient({
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [newClientId, setNewClientId] = useState<string>("");
   const [newClientSearch, setNewClientSearch] = useState("");
+  // Search across the conversation list (by name + last message).
+  const [threadSearch, setThreadSearch] = useState("");
+
+  const filteredThreads = useMemo(() => {
+    const q = threadSearch.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter(
+      (t) =>
+        (t.client_name ?? "").toLowerCase().includes(q) ||
+        (t.last_message ?? "").toLowerCase().includes(q),
+    );
+  }, [threads, threadSearch]);
 
   // Filtered + sorted client list for the new-message picker
   const filteredClients = useMemo(() => {
@@ -178,9 +190,22 @@ export default function MessagesClient({
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(200px, 1fr) 2fr", gap: "0.85rem" }}>
         <div className="card" style={{ padding: 0, alignSelf: "start", maxHeight: 360, overflowY: "auto" }}>
-          {threads.length === 0 ? <p className="meta" style={{ padding: "0.6rem 0.7rem", fontSize: "0.78rem" }}>No threads yet.</p> : (
+          <div style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--paper)", borderBottom: "1px solid var(--line)", padding: "0.4rem 0.5rem" }}>
+            <input
+              type="search"
+              value={threadSearch}
+              onChange={(e) => setThreadSearch(e.target.value)}
+              placeholder="Search chats…"
+              style={{ width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid var(--line)", borderRadius: 4, fontFamily: "inherit", background: "#fff" }}
+            />
+          </div>
+          {filteredThreads.length === 0 ? (
+            <p className="meta" style={{ padding: "0.6rem 0.7rem", fontSize: "0.78rem" }}>
+              {threadSearch.trim() ? "No chats match your search." : "No threads yet."}
+            </p>
+          ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {threads.map((t) => (
+              {filteredThreads.map((t) => (
                 <li
                   key={t.id}
                   onClick={() => pickThread(t.id)}
