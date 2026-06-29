@@ -289,10 +289,11 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
               <>
                 {/* Program — date range first, status link to the right */}
                 {(() => {
-                  // Programmed → open the read-only program view directly.
-                  // Drafted / none → drop into the builder.
+                  // Programmed → open the read-only program view (shows it in
+                  // whichever format it was built). Drafted / none → drop into
+                  // the builder in Template (sheet) view.
                   const programParam = active.program ? `&program=${active.program.id}` : "";
-                  const buildHref = `/coach/programming/build/new-way?type=program&client=${block.clientId}${programParam}`;
+                  const buildHref = `/coach/programming/build/new-way?type=program&client=${block.clientId}${programParam}&view=template`;
                   const href = programStatusLabel === "Programmed" && active.program
                     ? `/coach/programming/view/${active.program.id}`
                     : buildHref;
@@ -345,6 +346,7 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
               if (active.program) params.push(`program=${active.program.id}`);
               verb = programStatusLabel === "Programmed" ? "View" : programStatusLabel === "Drafted" ? "Edit" : "Build";
               if (verb === "View" && active.program) viewRoute = `/coach/programming/view/${active.program.id}`;
+              else params.push("view=template"); // Build/Edit a program → Template sheet
             }
             const href = viewRoute || `/coach/programming/build/new-way?${params.join("&")}${viewParam}`;
             return (
@@ -395,11 +397,16 @@ function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
     const params: string[] = [`client=${block.clientId}`];
     let viewParam = "";
     if (block.needsAtHomeProgramming) {
+      // Published → open the read-only program view (in its built format).
+      // Otherwise build/edit it as a Template sheet.
+      if (block.active.programStatus === "published" && block.active.program) {
+        rosterVerb = "View";
+        return `/coach/programming/view/${block.active.program.id}`;
+      }
       params.unshift("type=program");
       if (block.active.program) params.push(`program=${block.active.program.id}`);
-      rosterVerb = block.active.programStatus === "published" ? "View"
-        : block.active.programStatus === "draft" ? "Edit" : "Build";
-      if (block.active.programStatus === "published") viewParam = "&view=plan";
+      rosterVerb = block.active.programStatus === "draft" ? "Edit" : "Build";
+      viewParam = "&view=template";
     } else {
       params.unshift("type=session");
       if (block.nextSession) {

@@ -181,13 +181,19 @@ export default function NewWayClient({
     return () => { cancelled = true; };
   }, [started, type, editProgramId, apptId, autosaveDraftId]);
 
-  // A program is shown as the one thing it is — no In App | Template toggle.
-  // When editing an existing program, snap to its built format. (Sessions keep
-  // their toggle.)
+  // Toggle policy for programs:
+  //   • New program (Build) → keep the In App | Template toggle available so
+  //     James can flip between the sheet and the structured builder.
+  //   • Existing program (Edit/View) → it's the one thing it was built as, so
+  //     hide the toggle and snap to its built format.
+  // (Sessions always keep their toggle.)
   useEffect(() => {
     if (!started || type !== "program") { setSheetOnly(false); return; }
+    if (!editProgramId) { setSheetOnly(false); return; } // new → toggle stays
     setSheetOnly(true);
-    if (!editProgramId) return; // new program keeps the format chosen in Step 3
+    // Edit-from-view arrives with an explicit ?view=template — honor it and
+    // open the editable sheet directly, no build-format snap.
+    if (initialView === "template") { setView("template"); return; }
     let cancelled = false;
     (async () => {
       const fmt = await getProgramBuildFormat(editProgramId);
@@ -304,10 +310,12 @@ export default function NewWayClient({
   function quickStartProgramForClient(c: QuickClient) {
     archiveActiveWip(c.id);
     setClientId(c.id);
-    setType("program"); setView("inapp"); setFormatChosen(true);
+    // Build a new program straight into the Template (sheet) view; the In App
+    // toggle stays available in the workspace so James can switch if he wants.
+    setType("program"); setView("template"); setFormatChosen(true);
     setApptId(""); setStartsAt(""); setEditProgramId("");
     setStarted(true);
-    syncUrl({ client: c.id, type: "program", view: "inapp" });
+    syncUrl({ client: c.id, type: "program", view: "template" });
   }
   function quickEditProgram(p: QuickDraftProgram) {
     // in_gym recently-saved rows are gym sheets (Session + Template); at_home
@@ -374,9 +382,10 @@ export default function NewWayClient({
             clients={clientLite}
             sessions={[]}
             sheetId={pairedSheetId ?? undefined}
-            autofill={type === "session" ? sessionAutofill : { clientName: selectedClient?.full_name }}
+            autofill={sessionAutofill ?? { clientName: selectedClient?.full_name }}
             clearLocal={!editProgramId && !pairedSheetId}
             onSaved={(id) => setPairedSheetId(id)}
+            sessionMode={type === "session"}
           />
         </div>
       );

@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
-import { getOrCreatePairedSheet } from "@/lib/programs-sheets-bridge";
+import { getOrCreatePairedSheet, syncProgramToSheet } from "@/lib/programs-sheets-bridge";
 import WorkoutSheetEmbed from "@/components/workout-sheet-embed";
 
 // Coach read-only view of a program. Shows the program's latest sheet
@@ -23,14 +23,22 @@ export default async function CoachProgramView({
   const supabase = createSupabaseAdmin();
   const { data: prog } = await supabase
     .from("programs")
-    .select("id, name, coach_id, client_id, starts_on, ends_on")
+    .select("id, name, coach_id, client_id, starts_on, ends_on, build_format")
     .eq("id", programId)
     .eq("coach_id", user.id)
-    .maybeSingle<{ id: string; name: string; coach_id: string; client_id: string | null; starts_on: string | null; ends_on: string | null }>();
+    .maybeSingle<{ id: string; name: string; coach_id: string; client_id: string | null; starts_on: string | null; ends_on: string | null; build_format: string | null }>();
   if (!prog) return notFound();
 
+  // For an In-App-built program the paired sheet is created empty, so render it
+  // from the structured plan first (otherwise the read-only sheet shows up
+  // blank). Template-built programs own their sheet_data already, so leave it.
+  if (prog.build_format !== "template") {
+    await syncProgramToSheet(programId);
+  }
   const sheetId = await getOrCreatePairedSheet(programId);
-  const editHref = `/coach/programming/build/new-way?type=program&client=${prog.client_id ?? ""}&program=${prog.id}`;
+  // Edit opens the editable workout sheet directly (Template view, no toggle) —
+  // the same sheet shown here, with the build page's save controls.
+  const editHref = `/coach/programming/build/new-way?type=program&client=${prog.client_id ?? ""}&program=${prog.id}&view=template`;
 
   return (
     <main className="shell" style={{ paddingTop: "0.75rem" }}>

@@ -268,6 +268,12 @@
   body.view-only .intro-note { display: none !important; }
   body.view-only input, body.view-only textarea { background: transparent; }
 
+  /* Session mode: a single in-person session sheet — one day, no date range,
+     no Add Day, no remove-day. It's one day with James, not a multi-week plan. */
+  body.session-mode #date-range-field,
+  body.session-mode #add-day,
+  body.session-mode .remove-day { display: none !important; }
+
   /* save modal */
   .modal {
     position: fixed; inset: 0;
@@ -339,7 +345,7 @@
     <section class="fields">
       <div class="field"><span class="field-label">Client Name</span><input type="text" name="client_name" autocomplete="off" list="clients-datalist" /><datalist id="clients-datalist"></datalist></div>
       <div class="field"><span class="field-label">Goal</span><input type="text" name="goal" autocomplete="off" /></div>
-      <div class="field"><span class="field-label">Start &rarr; End date</span><div style="display:flex;gap:0.3rem;align-items:center"><input type="date" name="start_date" autocomplete="off" style="flex:1 1 0;min-width:0" /><input type="date" name="end_date" autocomplete="off" style="flex:1 1 0;min-width:0" /></div><span id="date-span" style="font-size:0.6rem;color:var(--muted);font-family:Georgia,serif;margin-top:0.1rem"></span></div>
+      <div class="field" id="date-range-field"><span class="field-label">Start &rarr; End date</span><div style="display:flex;gap:0.3rem;align-items:center"><input type="date" name="start_date" autocomplete="off" style="flex:1 1 0;min-width:0" /><input type="date" name="end_date" autocomplete="off" style="flex:1 1 0;min-width:0" /></div><span id="date-span" style="font-size:0.6rem;color:var(--muted);font-family:Georgia,serif;margin-top:0.1rem"></span></div>
       <div class="field wide"><span class="field-label">Deficit / Nutrition</span><input type="text" name="nutrition" placeholder="e.g. target kcal, protein, notes" autocomplete="off" /></div>
     </section>
 
@@ -688,6 +694,12 @@
         // bar[2] bodyweight + bar[3] sleep stay editable for the client to log.
       });
     }
+
+    // Single in-person session sheet: one day, no date range / Add Day.
+    var SESSION_MODE = false;
+    // Build the starting day(s) for a fresh sheet: one in session mode, two
+    // otherwise (a typical short program seed).
+    function buildInitialDays() { buildDay(); if (!SESSION_MODE) buildDay(); }
 
     // Full read-only mode (coach opens a program to view it). Locks every
     // field and hides editing controls (CSS via body.view-only). Idempotent.
@@ -1192,7 +1204,7 @@
     function initFromLocal() {
       if (INIT_HANDLED) return;
       INIT_HANDLED = true;
-      if (!restoreState()) { buildDay(); buildDay(); }
+      if (!restoreState()) { buildInitialDays(); }
     }
     function initSavedMode(sheetId, autofill) {
       SHEET_ID = sheetId;
@@ -1230,6 +1242,8 @@
         applyViewOnly();
         try { new MutationObserver(applyViewOnly).observe(daysEl, { childList: true, subtree: true }); } catch (e) {}
       }
+      // Single in-person session sheet: one day, no date range / Add Day.
+      if (d.sessionMode) { SESSION_MODE = true; document.body.classList.add("session-mode"); }
       var saveBtn = document.getElementById("save-modal-trigger");
       if (saveBtn) saveBtn.style.display = "";
       if (d.sheetId) {
@@ -1240,9 +1254,9 @@
         if (d.clearLocal) {
           try { localStorage.removeItem(STORE_KEY); } catch (e) {}
           daysEl.innerHTML = ""; dayCount = 0;
-          buildDay(); buildDay();
+          buildInitialDays();
         } else if (!daysEl.children.length) {
-          if (!restoreState()) { buildDay(); buildDay(); }
+          if (!restoreState()) { buildInitialDays(); }
         }
         // Pre-fill header fields from autofill data (only if empty)
         if (d.autofill) {
