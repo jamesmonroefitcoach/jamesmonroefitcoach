@@ -2,8 +2,37 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
+import { loadThreadMessages, type ThreadMessage } from "@/lib/messages";
 
 type Result = { ok: true } | { ok: false; error: string };
+
+// Load a thread's messages for the coach and mark received ones read. Used
+// when a conversation is opened in the inbox so the chat actually shows (and
+// persists) its messages instead of clearing.
+export async function loadThread(
+  threadId: string,
+): Promise<{ ok: true; messages: ThreadMessage[] } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: true, messages: await loadThreadMessages(threadId) };
+  const supabase = createSupabaseAdmin();
+  const { data: thread } = await supabase
+    .from("message_threads")
+    .select("id")
+    .eq("id", threadId)
+    .eq("coach_id", me.id)
+    .maybeSingle<{ id: string }>();
+  if (!thread) return { ok: false, error: "Thread not found." };
+  await supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("thread_id", threadId)
+    .neq("sender_id", me.id)
+    .is("read_at", null);
+  const messages = await loadThreadMessages(threadId);
+  revalidatePath("/coach/messages");
+  return { ok: true, messages };
+}
 
 export async function sendMessage(threadId: string, body: string): Promise<Result> {
   const me = await getSessionUser();

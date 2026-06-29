@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ThreadPreview } from "@/lib/data";
 import type { ThreadMessage } from "@/lib/messages";
-import { sendMessage, announceToAllClients, startThreadWithClient } from "./actions";
+import { sendMessage, announceToAllClients, startThreadWithClient, loadThread } from "./actions";
 
 type ClientPick = { id: string; full_name: string };
 
@@ -103,8 +103,13 @@ export default function MessagesClient({
 
   function pickThread(id: string) {
     setActive(id);
-    // demo: just clear; in real app would fetch
     setMessages([]);
+    start(async () => {
+      const res = await loadThread(id);
+      if (res.ok) setMessages(res.messages);
+      // Refresh the list so the unread badge clears now that it's read.
+      router.refresh();
+    });
   }
 
   function send() {
