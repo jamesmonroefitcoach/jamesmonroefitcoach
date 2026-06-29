@@ -216,15 +216,15 @@ export default async function MarketingPage({
             <p className="public-p">
               Born and raised in Portland, Oregon, James grew up playing
               sports from soccer to wrestling. He started weight training at
-              twelve and later took up boxing, Muay Thai, and yoga. Over the
-              years he&rsquo;s worked with clients from eight to eighty,
-              including physique competitors, recreational athletes, and
-              people coming back from injury, helping them lose body fat,
-              gain muscle, and lead more active lives.
+              twelve and later took up boxing, Muay Thai, and yoga. He got
+              into coaching because of family members and close friends who
+              struggled to build healthy habits and lose weight. Over the
+              years he&rsquo;s worked with clients from high school youth to
+              senior citizens, including physique competitors, recreational
+              athletes, and people coming back from injury, helping them lose
+              body fat, gain muscle, and lead more active lives.
             </p>
             <p className="public-p">
-              He got into coaching because of family members and close
-              friends who struggled to build healthy habits and lose weight.
               His sessions are concentrated, but also fun and enjoyable.
               Your goal is his goal. Whether you want to compete, recover,
               or just feel like yourself again, the plan gets built around
@@ -232,8 +232,9 @@ export default async function MarketingPage({
             </p>
             <p className="public-p">
               The current roster runs the full range: men, women, kids,
-              families, couples, and groups training together. Ages eight to
-              eighty, beginners through competitive athletes. James works with
+              families, couples, and groups training together. From high
+              school youth to senior citizens, beginners through competitive
+              athletes. James works with
               LGBTQIA+ clients and has experience supporting transitioning men
               and women through training that meets them where they are.
               Goals run just as wide: first pull-up, getting back to lifting
@@ -254,7 +255,7 @@ export default async function MarketingPage({
               <li>NASM Certified Personal Trainer</li>
               <li>Hyde Park Gym, Austin TX</li>
               <li>Strength, boxing, Muay Thai, skateboarding, yoga background</li>
-              <li>Ages 8 to 80, recreational to competitive</li>
+              <li>High school youth to senior citizens, recreational to competitive</li>
               <li>Off the clock: piano, guitar, running, reading</li>
             </ul>
           </div>
