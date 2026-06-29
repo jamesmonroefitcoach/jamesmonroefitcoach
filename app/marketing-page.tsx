@@ -57,21 +57,42 @@ const SERVICES = [
 ];
 
 // How the early work unfolds, set up as a small numbered set of phases.
+// Each phase is a set of focus areas, not a fixed calendar.
 const TIMELINE = [
   {
     label: "Phase 1",
     title: "Assess & build the foundation",
-    blurb: "Education on how your body actually works. An LPHC (lumbo-pelvic-hip complex) routine maps your range of motion: what moves where, where it's tight, where pain shows up. Deep core and lower-back work start right away, the weak links James goes after first. You learn the six basic movements, then we layer in accessories. On nutrition, we lock in one or two habits.",
+    points: [
+      "Intro to deep core training",
+      "Muscular balance assessment and correction",
+      "Intro to nutrition: the science and how to apply it",
+      "Intro to basic strength training and muscular development",
+      "Lifestyle habit assessment",
+      "Goal creation",
+    ],
   },
   {
     label: "Phase 2",
-    title: "Strength & load",
-    blurb: "Fewer reps, heavier weight. The basics progress on a real schedule while we habit-stack the nutrition wins from Phase 1.",
+    title: "Build strength & independence",
+    points: [
+      "Goal tracking",
+      "Continued muscular balance development",
+      "More advanced lifting techniques",
+      "Intro to cardio training",
+      "Continued lifestyle habit development",
+      "Independent homework in the gym and at home",
+    ],
   },
   {
     label: "Phase 3",
-    title: "Explosive & repeat",
-    blurb: "We reassess and run it back, then layer explosive, powerful movement on top of the strength base. Every cycle compounds on the last.",
+    title: "Power, conditioning & athleticism",
+    points: [
+      "Continued progress tracking",
+      "Maximal strength development and continued evolution of strength training",
+      "Intro to explosive conditioning",
+      "Continued cardiovascular development",
+      "Speed, agility, and quickness",
+    ],
   },
 ];
 
@@ -341,15 +362,22 @@ export default async function MarketingPage({
                 <div>
                   <span className="public-timeline-label">{t.label}</span>
                   <h3 className="public-timeline-title">{t.title}</h3>
-                  <p className="public-timeline-blurb">{t.blurb}</p>
+                  <ul className="public-timeline-list">
+                    {t.points.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
                 </div>
               </li>
             ))}
           </ol>
           <p className="public-p public-p-meta" style={{ marginTop: "1.25rem" }}>
-            From here the work is continuous: reassess, rebuild, repeat. Every
-            body is different, so the pace shifts from person to person. This is
-            the typical arc, not a fixed calendar.
+            Where you start depends on your current condition and lifestyle
+            habits, so not everyone begins at Phase 1. The phases are not strictly
+            linear, and you do not move on until the current one is done. The more
+            consistent you are, the faster you move through. Some people advance
+            quickly, others stay in a phase longer, and that is exactly how it
+            should be.
           </p>
         </div>
       </section>

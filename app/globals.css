@@ -1195,6 +1195,21 @@ th.tbl-sticky-last {
   line-height: 1.55;
   color: var(--ink);
 }
+.public-timeline-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.public-timeline-list li {
+  padding-left: 0.15rem;
+}
+.public-timeline-list li::marker {
+  color: var(--rust);
+}
 
 /* Pricing */
 .public-pricing-grid {

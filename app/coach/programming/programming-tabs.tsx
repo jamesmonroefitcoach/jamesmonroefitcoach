@@ -44,8 +44,8 @@ export default function ProgrammingTabs() {
           overflowX: "auto",
         }}
       >
-        <Link href="/coach/programming/build/new-way" style={tabStyle(isBuild)}>Build Program</Link>
         <Link href="/coach/programming" style={tabStyle(isView)}>View Programs</Link>
+        <Link href="/coach/programming/build/new-way" style={tabStyle(isBuild)}>Build Program</Link>
         <Link href="/coach/programming/library/exercise-library" style={tabStyle(isLibrary)}>Library</Link>
       </nav>
     </div>
