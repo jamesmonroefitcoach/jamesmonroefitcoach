@@ -164,6 +164,16 @@ const BEFORE_AFTER: { label: string; summary: string; weights?: string; beforeSr
     beforeSrc: "/results/client-3-before.jpg",
     afterSrc: "/results/client-3-after.jpg",
   },
+  {
+    label: "Transformation placeholder · Austin client",
+    summary: "Placeholder slot. James to drop in this client's before and after.",
+    weights: "Lifts placeholder, James to add (e.g. Squat 95 → 185 lb · Press 65 → 115 lb)",
+  },
+  {
+    label: "Transformation placeholder · Austin client",
+    summary: "Placeholder slot. James to drop in this client's before and after.",
+    weights: "Lifts placeholder, James to add (e.g. Deadlift 135 → 275 lb · Bench 85 → 145 lb)",
+  },
 ];
 
 export default async function MarketingPage({
