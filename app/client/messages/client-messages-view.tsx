@@ -1,14 +1,41 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import type { ThreadMessage } from "@/lib/messages";
 import { sendMessage } from "@/app/coach/messages/actions";
+import { pollClientThread } from "./actions";
+
+// Fold the latest server messages over local state, preserving any optimistic
+// (tmp-) bubbles the server hasn't persisted yet so a just-sent message doesn't
+// blink out between send and the next poll.
+function mergeServerMessages(server: ThreadMessage[], current: ThreadMessage[]): ThreadMessage[] {
+  const pending = current.filter(
+    (m) => m.id.startsWith("tmp-") && !server.some((s) => s.sender_id === m.sender_id && s.body === m.body),
+  );
+  return [...server, ...pending];
+}
 
 export default function ClientMessagesView({ threadId, initial, myId }: { threadId: string | null; initial: ThreadMessage[]; myId: string }) {
   const [messages, setMessages] = useState<ThreadMessage[]>(initial);
   const [body, setBody] = useState("");
   const [pending, start] = useTransition();
   const [info, setInfo] = useState<string | null>(null);
+
+  // Poll the conversation so James's replies show up without a manual refresh.
+  // The first sync on open runs unconditionally; the recurring poll pauses while
+  // the tab is hidden.
+  useEffect(() => {
+    if (!threadId) return;
+    let cancelled = false;
+    const poll = async (respectVisibility: boolean) => {
+      if (respectVisibility && typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      const res = await pollClientThread(threadId);
+      if (!cancelled && res.ok) setMessages((cur) => mergeServerMessages(res.messages, cur));
+    };
+    poll(false); // sync as soon as the conversation is opened
+    const iv = setInterval(() => poll(true), 6000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [threadId]);
 
   function send() {
     if (!threadId || !body.trim()) return;

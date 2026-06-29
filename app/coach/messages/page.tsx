@@ -19,6 +19,14 @@ export default async function CoachMessagesPage({ searchParams }: { searchParams
   const activeId = sp.thread ?? threads[0]?.id ?? null;
   const messages = activeId ? await loadThreadMessages(activeId) : [];
 
+  // The conversation that's shown counts as opened: zero its unread badge in the
+  // list handed to the client. The client view marks it read in the DB on mount
+  // (an effect, so prefetching the page can't clear unread prematurely), which
+  // also drops it from the dashboard Inbox.
+  const threadsForClient = threads.map((t) =>
+    t.id === activeId ? { ...t, unread: false, unread_count: 0 } : t,
+  );
+
   // Trim clients down to {id, full_name} for the new-message picker
   const clientPicker = clients.map((c) => ({ id: c.id, full_name: c.full_name }));
 
@@ -58,7 +66,7 @@ export default async function CoachMessagesPage({ searchParams }: { searchParams
       </header>
       <hr className="divider" />
       <MessagesClient
-        threads={threads}
+        threads={threadsForClient}
         activeId={activeId}
         initialMessages={messages}
         myId={user.id}

@@ -1,10 +1,20 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ThreadPreview } from "@/lib/data";
 import type { ThreadMessage } from "@/lib/messages";
-import { sendMessage, announceToAllClients, startThreadWithClient, loadThread } from "./actions";
+import { sendMessage, announceToAllClients, startThreadWithClient, loadThread, pollThread } from "./actions";
+
+// Fold the latest server messages over local state, preserving any optimistic
+// (tmp-) bubbles the server hasn't persisted yet so a just-sent message doesn't
+// blink out between send and the next poll.
+function mergeServerMessages(server: ThreadMessage[], current: ThreadMessage[]): ThreadMessage[] {
+  const pending = current.filter(
+    (m) => m.id.startsWith("tmp-") && !server.some((s) => s.sender_id === m.sender_id && s.body === m.body),
+  );
+  return [...server, ...pending];
+}
 
 type ClientPick = { id: string; full_name: string };
 
@@ -123,6 +133,23 @@ export default function MessagesClient({
       router.refresh();
     });
   }
+
+  // Poll the open conversation so a reply from the client shows up without a
+  // manual refresh, and keep it marked read. The first sync on open runs
+  // unconditionally (the coach just opened it); the recurring poll pauses while
+  // the tab is hidden.
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const poll = async (respectVisibility: boolean) => {
+      if (respectVisibility && typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      const res = await pollThread(active);
+      if (!cancelled && res.ok) setMessages((cur) => mergeServerMessages(res.messages, cur));
+    };
+    poll(false); // mark read + sync as soon as the conversation is opened
+    const iv = setInterval(() => poll(true), 6000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [active]);
 
   function send() {
     if (!active || !body.trim()) return;

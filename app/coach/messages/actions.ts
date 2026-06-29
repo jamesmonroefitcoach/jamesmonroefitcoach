@@ -31,6 +31,35 @@ export async function loadThread(
     .is("read_at", null);
   const messages = await loadThreadMessages(threadId);
   revalidatePath("/coach/messages");
+  // Also drop it from the dashboard "Inbox" unread list now that it's read.
+  revalidatePath("/coach");
+  return { ok: true, messages };
+}
+
+// Lightweight poll for the conversation that's currently open: returns the
+// latest messages and keeps the thread marked read while the coach is looking
+// at it. No revalidate — the inbox list isn't re-fetched on every tick.
+export async function pollThread(
+  threadId: string,
+): Promise<{ ok: true; messages: ThreadMessage[] } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: true, messages: await loadThreadMessages(threadId) };
+  const supabase = createSupabaseAdmin();
+  const { data: thread } = await supabase
+    .from("message_threads")
+    .select("id")
+    .eq("id", threadId)
+    .eq("coach_id", me.id)
+    .maybeSingle<{ id: string }>();
+  if (!thread) return { ok: false, error: "Thread not found." };
+  await supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("thread_id", threadId)
+    .neq("sender_id", me.id)
+    .is("read_at", null);
+  const messages = await loadThreadMessages(threadId);
   return { ok: true, messages };
 }
 
