@@ -592,9 +592,11 @@ function WeekSessionRow({
 
 export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBlock[] }) {
   const [query, setQuery] = useState("");
-  const [sessionsOpen, setSessionsOpen] = useState(true);
-  const [programsOpen, setProgramsOpen] = useState(true);
-  const [upcomingOpen, setUpcomingOpen] = useState(true);
+  // Everything starts collapsed so the tab opens to a clean, scannable list of
+  // sections; James expands the one he wants.
+  const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [programsOpen, setProgramsOpen] = useState(false);
+  const [upcomingOpen, setUpcomingOpen] = useState(false);
   const [clientListOpen, setClientListOpen] = useState(false);
 
   const filtered = useMemo(() => {

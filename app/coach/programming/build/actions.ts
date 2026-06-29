@@ -294,14 +294,15 @@ export async function listImportableProgramsForClient(clientId: string): Promise
   if (!me || me.role !== "coach") return [];
   if (!hasSupabaseEnv()) return [];
   const supabase = createSupabaseAdmin();
-  // Pull published programs for this client. Older drafts are filtered out so
-  // the picker only shows finalised work.
+  // Pull this client's programs (current + past) so Step 4 can list them all.
+  // Drafts are included too — James expects to find and reopen anything he
+  // started, not just published work. Archived rows stay hidden.
   const { data: progs } = await supabase
     .from("programs")
     .select("id, name, program_kind, starts_on, ends_on, duration_weeks, is_current, builder_state")
     .eq("coach_id", me.id)
     .eq("client_id", clientId)
-    .eq("is_published", true)
+    .is("archived_at", null)
     .order("starts_on", { ascending: false, nullsFirst: false });
   if (!progs || progs.length === 0) return [];
   const ids = progs.map((p: { id: string }) => p.id);

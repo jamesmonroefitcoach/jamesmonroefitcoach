@@ -42,6 +42,47 @@ export async function deleteProgram(
   return { ok: true };
 }
 
+// ── Delete a client profile entirely (for fixing mistakes) ───────────────────
+// Hard-deletes the profile. The DB cascades to client_details, programs,
+// appointments, messages, goals, workout_sheets, etc. (all client_id FKs are
+// ON DELETE CASCADE). Guarded to client profiles only so a coach/admin can
+// never be removed through this path.
+export async function deleteClientProfile(
+  clientId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin" && !user.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "no db" };
+
+  const supabase = createSupabaseAdmin();
+  // Confirm the target is a client before touching anything.
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("id, role, full_name")
+    .eq("id", clientId)
+    .maybeSingle<{ id: string; role: string; full_name: string }>();
+  if (!target) return { ok: false, error: "Profile not found." };
+  if (target.role !== "client") return { ok: false, error: "Only client profiles can be deleted here." };
+
+  // Unlink workout sheets from any paired programs first so the program delete
+  // can't trip the 1:1 bridge constraint, then let the cascade do the rest.
+  const { data: progs } = await supabase
+    .from("programs")
+    .select("id")
+    .eq("client_id", clientId);
+  const progIds = (progs ?? []).map((p: { id: string }) => p.id);
+  if (progIds.length) {
+    await supabase.from("workout_sheets").update({ program_id: null }).in("program_id", progIds);
+  }
+
+  const { error } = await supabase.from("profiles").delete().eq("id", clientId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/coach/clients");
+  revalidatePath("/coach/programming");
+  return { ok: true };
+}
+
 // ── Delete a workout sheet and unlink any paired program ─────────────────────
 export async function deleteClientWorkoutSheet(
   sheetId: string,

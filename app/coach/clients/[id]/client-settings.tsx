@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { ClientRow, ReminderPrefs } from "@/lib/data";
-import { saveReminderPrefs, setRequiresConfirmation } from "./actions";
+import { saveReminderPrefs, setRequiresConfirmation, deleteClientProfile } from "./actions";
 
 const OFFSET_OPTIONS: { value: number; label: string }[] = [
   { value: 2880, label: "2 days before" },
@@ -19,11 +20,30 @@ export default function ClientSettings({
   client: ClientRow;
   reminderPrefs: ReminderPrefs;
 }) {
+  const router = useRouter();
   const [prefs, setPrefs] = useState(reminderPrefs);
   const [reqConfirm, setReqConfirm] = useState(client.requires_confirmation);
   const [saved, setSaved] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [deleting, startDelete] = useTransition();
+
+  function handleDeleteProfile() {
+    const ok = window.confirm(
+      `Permanently delete ${client.full_name}'s profile?\n\nThis removes their programs, sessions, messages, goals, and all history. This cannot be undone.`,
+    );
+    if (!ok) return;
+    setErr(null);
+    startDelete(async () => {
+      const res = await deleteClientProfile(client.id);
+      if (res.ok) {
+        router.push("/coach/clients");
+        router.refresh();
+      } else {
+        setErr(res.error ?? "Could not delete profile.");
+      }
+    });
+  }
 
   function toggleOffset(val: number) {
     setPrefs((p) => ({
@@ -132,6 +152,33 @@ export default function ClientSettings({
       </div>
 
       {err && <p style={{ color: "var(--red)", fontSize: "0.78rem", marginTop: "0.5rem" }}>{err}</p>}
+
+      <hr className="divider" />
+
+      {/* Danger zone — hard-delete the profile. For fixing mistakes (a profile
+          created in error). Confirmed via a native prompt before anything runs. */}
+      <div>
+        <div style={{ fontWeight: 600, fontSize: "0.82rem", color: "var(--rust)", marginBottom: "0.35rem" }}>
+          Danger zone
+        </div>
+        <p className="meta" style={{ fontSize: "0.74rem", marginBottom: "0.6rem", maxWidth: "44ch" }}>
+          Deleting removes this client and everything tied to them. Use only to undo a profile
+          created by mistake.
+        </p>
+        <button
+          type="button"
+          onClick={handleDeleteProfile}
+          disabled={deleting}
+          style={{
+            fontSize: "0.8rem", padding: "0.35rem 0.85rem",
+            border: "1px solid var(--rust)", borderRadius: 4,
+            background: "transparent", color: "var(--rust)",
+            cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
+          }}
+        >
+          {deleting ? "Deleting…" : "Delete profile"}
+        </button>
+      </div>
     </div>
   );
 }

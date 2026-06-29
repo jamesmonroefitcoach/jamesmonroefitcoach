@@ -493,8 +493,13 @@ async function attachDerivedProgramStatus<T extends {
   }
   return rows.map((r) => {
     if (r.session_type === "personal") return { ...r, program_status: "n/a" as const };
-    if (!r.session_program_id) return { ...r, program_status: "needs_programming" as const };
-    const isPub = publishedMap.get(r.session_program_id);
+    const pid = r.session_program_id;
+    if (!pid) return { ...r, program_status: "needs_programming" as const };
+    // The link can dangle if the program was deleted/cleared. Only call it
+    // "programmed" when the program still exists and is published; a missing
+    // program means there's nothing programmed, not a draft.
+    if (!publishedMap.has(pid)) return { ...r, program_status: "needs_programming" as const };
+    const isPub = publishedMap.get(pid);
     return { ...r, program_status: (isPub ? "programmed" : "draft") as AppointmentRow["program_status"] };
   });
 }
