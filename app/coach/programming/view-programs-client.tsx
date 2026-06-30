@@ -95,7 +95,11 @@ function ClientHistoricals({ block }: { block: ClientProgramBlock }) {
     return Array.from(map.entries());
   }, [block.historicalSessions]);
 
-  const programs = block.historicalPrograms;
+  // History shows ALL of this client's programs — the current one first, then
+  // past ones (deduped so the current program isn't listed twice).
+  const programs = block.active.program
+    ? [block.active.program, ...block.historicalPrograms.filter((p) => p.id !== block.active.program!.id)]
+    : block.historicalPrograms;
   if (sessionsByMonth.length === 0 && programs.length === 0) {
     return <p className="meta" style={{ fontSize: "0.74rem", margin: 0 }}>No history yet.</p>;
   }
@@ -130,30 +134,40 @@ function ClientHistoricals({ block }: { block: ClientProgramBlock }) {
           marginBottom: "0.4rem",
         }}>Programs</div>
         {programs.length === 0 ? (
-          <p className="meta" style={{ fontSize: "0.72rem" }}>No past programs.</p>
+          <p className="meta" style={{ fontSize: "0.72rem" }}>No programs yet.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-            {programs.map((p) => (
-              <Link
-                key={p.id}
-                href={`/coach/programming/build/new-way?type=program&client=${block.clientId}&program=${p.id}`}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
-                  padding: "0.3rem 0.45rem", borderRadius: 3,
-                  background: "rgba(0,0,0,0.025)",
-                  border: "1px solid var(--line)",
-                  textDecoration: "none", color: "var(--ink)",
-                }}
-              >
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: "0.78rem" }}>{p.name}</div>
-                  <div className="meta" style={{ fontSize: "0.66rem" }}>
-                    {fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}
+            {programs.map((p) => {
+              // Published → read-only view; otherwise the (template) builder.
+              const href = p.is_published
+                ? `/coach/programming/view/${p.id}`
+                : `/coach/programming/build/new-way?type=program&client=${block.clientId}&program=${p.id}&view=template`;
+              return (
+                <Link
+                  key={p.id}
+                  href={href}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
+                    padding: "0.3rem 0.45rem", borderRadius: 3,
+                    background: p.is_current ? "rgba(90,107,74,0.08)" : "rgba(0,0,0,0.025)",
+                    border: p.is_current ? "1px solid var(--sage)" : "1px solid var(--line)",
+                    textDecoration: "none", color: "var(--ink)",
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                      {p.name}
+                      {p.is_current && <span className="badge" style={{ fontSize: "0.52rem", color: "var(--sage)", borderColor: "var(--sage)" }}>current</span>}
+                    </div>
+                    <div className="meta" style={{ fontSize: "0.66rem", display: "flex", gap: "0.4rem", alignItems: "baseline", flexWrap: "wrap" }}>
+                      <span>{fmtDate(p.starts_on)} → {fmtDate(p.ends_on)}</span>
+                      {p.is_current && p.ends_on && <DaysTilEnd endsOn={p.ends_on} />}
+                    </div>
                   </div>
-                </div>
-                <span style={{ color: "var(--rust)", fontSize: "0.74rem", flexShrink: 0 }}>→</span>
-              </Link>
-            ))}
+                  <span style={{ color: "var(--rust)", fontSize: "0.74rem", flexShrink: 0 }}>→</span>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
@@ -178,6 +192,31 @@ function statusColor(status: "Programmed" | "Drafted" | "Not Programmed" | "publ
   if (status === "Drafted" || status === "draft") return "var(--amber)";
   return "var(--muted)";
 }
+
+// Days until a program's end date (null when there's no end date).
+function daysUntilEnd(endsOn: string | null | undefined): number | null {
+  if (!endsOn) return null;
+  const end = new Date(`${endsOn}T00:00:00`).getTime();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.ceil((end - today.getTime()) / 86_400_000);
+}
+
+// Small "N days til end" text — turns red once a program is 3 or fewer days
+// from expiring (or already expired).
+function DaysTilEnd({ endsOn }: { endsOn: string | null | undefined }) {
+  const d = daysUntilEnd(endsOn);
+  if (d === null) return null;
+  const red = d <= 3;
+  const label = d > 1 ? `${d} days til end` : d === 1 ? "1 day til end" : d === 0 ? "ends today" : "expired";
+  return (
+    <span style={{ fontSize: "0.62rem", color: red ? "var(--red)" : "var(--muted)", fontWeight: red ? 700 : 400, whiteSpace: "nowrap" }}>
+      {label}
+    </span>
+  );
+}
+
+// View buttons read as a calmer, distinct color (sage) from the rust Build/Edit.
+const VIEW_BTN_STYLE: React.CSSProperties = { background: "var(--sage)", borderColor: "var(--sage)", color: "#fff" };
 
 function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions" | "programs" }) {
   const [open, setOpen] = useState(false);
@@ -314,6 +353,7 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
                         title={`${verb} program`}
                         style={{ color: statusColor(programStatusLabel), fontWeight: 600, textDecoration: "underline" }}
                       >{programStatusLabel}</Link>
+                      {active.program?.ends_on && <>{" · "}<DaysTilEnd endsOn={active.program.ends_on} /></>}
                     </span>
                   );
                 })()}
@@ -359,7 +399,7 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
                 href={href}
                 className="btn btn-primary"
                 title={verb === "View" ? "Open the program (read-only)" : `${verb} in New Way Build`}
-                style={{ fontSize: "0.7rem", padding: "0.2rem 0.65rem", whiteSpace: "nowrap" }}
+                style={{ fontSize: "0.7rem", padding: "0.2rem 0.65rem", whiteSpace: "nowrap", ...(verb === "View" ? VIEW_BTN_STYLE : {}) }}
               >{verb} →</Link>
             );
           })()}
@@ -455,10 +495,13 @@ function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
           ? `Next: ${fmtFullDateTime(block.nextSession.starts_at)}`
           : "No upcoming session"}
       </span>
-      <span className="meta" style={{ fontSize: "0.78rem" }}>
-        {activeProgramName
-          ? `Program: ${activeProgramName}`
-          : block.needsAtHomeProgramming ? "No active program" : "—"}
+      <span className="meta" style={{ fontSize: "0.78rem", display: "flex", flexDirection: "column", gap: "0.05rem", minWidth: 0 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {activeProgramName
+            ? `Program: ${activeProgramName}`
+            : block.needsAtHomeProgramming ? "No active program" : "—"}
+        </span>
+        {block.active.program?.ends_on && <DaysTilEnd endsOn={block.active.program.ends_on} />}
       </span>
       <span className="meta" style={{ fontSize: "0.74rem", whiteSpace: "nowrap" }}>
         {upcomingCount} upcoming · {block.scheduledThisMonth} this mo
@@ -467,7 +510,7 @@ function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
         href={buildHref}
         className="btn btn-primary"
         title={block.needsAtHomeProgramming ? `${rosterVerb} · Program mode` : `${rosterVerb} · Session mode`}
-        style={{ padding: "0.22rem 0.7rem", fontSize: "0.72rem", whiteSpace: "nowrap" }}
+        style={{ padding: "0.22rem 0.7rem", fontSize: "0.72rem", whiteSpace: "nowrap", ...(rosterVerb === "View" ? VIEW_BTN_STYLE : {}) }}
       >
         {rosterVerb} →
       </Link>

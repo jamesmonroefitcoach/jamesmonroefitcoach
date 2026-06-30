@@ -11,6 +11,10 @@ export type SheetDay = {
   sleep?: string;
   sets: number;
   rows: string[][];        // each row = [movement, reps/wt..., notes]
+  /** Per-row client notes, parallel to rows[] (kept out of the row array so the
+   *  positional [movement, reps/wt..., notes] schema is unchanged). */
+  clientNotes?: string[];
+  name?: string;           // optional day name
 };
 export type SheetData = {
   client?: string;

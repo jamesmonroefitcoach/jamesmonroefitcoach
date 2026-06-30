@@ -248,8 +248,26 @@
   body.client-locked .col-resizer,
   body.client-locked #add-day,
   body.client-locked #clear-btn { display: none !important; }
+  /* Frozen (read-only) fields read as plain text, not editable boxes: no fill,
+     no border, no focus highlight — so it's clear they can't be changed. */
   body.client-locked input[readonly],
-  body.client-locked textarea[readonly] { background: #f6f1e7; color: var(--ink); }
+  body.client-locked textarea[readonly] { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: var(--ink); cursor: default; }
+  body.client-locked input[readonly]:focus,
+  body.client-locked textarea[readonly]:focus { background: transparent !important; }
+
+  /* Per-row client note — a second line under James's (frozen) Load / Notes.
+     Hidden until the client view shows it, or it has content (for James). */
+  td.notes-cell .client-note {
+    display: none; width: 100%; box-sizing: border-box; resize: none;
+    margin-top: 2px; padding: 2px 4px 1px; min-height: 1.05rem;
+    font-family: Georgia, serif; font-size: 0.66rem; line-height: 1.3;
+    border: none; border-top: 1px dashed var(--line); background: transparent;
+    color: var(--clay);
+  }
+  td.notes-cell .client-note::placeholder { color: var(--clay); opacity: 0.55; font-style: italic; }
+  td.notes-cell .client-note:focus { outline: none; background: #fbf7ef; }
+  body.client-locked td.notes-cell .client-note,
+  td.notes-cell .client-note.filled { display: block; }
 
   /* View-only (coach opening a program to read it): everything is locked and
      every editing control is hidden. Save PDF stays so it can be printed. */
@@ -440,16 +458,27 @@
       return td;
     }
 
-    // Load / Notes column — textarea wraps and auto-grows
+    // Load / Notes column — James's note (coach-note) plus a second client-note
+    // line. The client note rides along in day.clientNotes (kept OUT of the row
+    // value array so the row schema [movement, reps, wt, …, notes] is unchanged).
     function notesCell() {
       var td = document.createElement("td");
       td.className = "notes-cell";
       var ta = document.createElement("textarea");
+      ta.className = "coach-note";
       ta.rows = 1;
       ta.autocomplete = "off";
       ta.spellcheck = false;
       ta.addEventListener("input", function () { autoGrow(ta); });
       td.appendChild(ta);
+      var ct = document.createElement("textarea");
+      ct.className = "client-note";
+      ct.rows = 1;
+      ct.autocomplete = "off";
+      ct.spellcheck = false;
+      ct.placeholder = "Your note";
+      ct.addEventListener("input", function () { autoGrow(ct); ct.classList.toggle("filled", !!ct.value.trim()); });
+      td.appendChild(ct);
       return td;
     }
 
@@ -686,12 +715,25 @@
       ["client_name", "goal", "start_date", "end_date", "nutrition"].forEach(function (n) {
         var el = document.querySelector('[name="' + n + '"]'); if (el) el.readOnly = true;
       });
-      daysEl.querySelectorAll(".move-cell textarea, .reps-in").forEach(function (el) { el.readOnly = true; });
+      // Freeze James's structure AND his Load/Notes (.coach-note). The client
+      // fills in weight (.wt-in) + their own note line (.client-note).
+      daysEl.querySelectorAll(".move-cell textarea, .reps-in, .coach-note").forEach(function (el) { el.readOnly = true; });
       daysEl.querySelectorAll(".day-block").forEach(function (block) {
         var bar = block.querySelectorAll(".day-bar .bar-field input"); // [name, date, weight, sleep]
         if (bar[0]) bar[0].readOnly = true; // day name (James's)
         if (bar[1]) bar[1].readOnly = true; // date (James's)
         // bar[2] bodyweight + bar[3] sleep stay editable for the client to log.
+      });
+      syncClientNotesMode();
+    }
+
+    // The client edits their per-row note; the coach (and view-only) sees it
+    // read-only and only once it has content.
+    function syncClientNotesMode() {
+      var isClient = USER && USER.role === "client";
+      daysEl.querySelectorAll(".client-note").forEach(function (cn) {
+        cn.readOnly = !isClient;
+        cn.classList.toggle("filled", !!cn.value.trim());
       });
     }
 
@@ -719,10 +761,15 @@
       daysEl.querySelectorAll(".day-block").forEach(function (b) {
         var bar = b.querySelectorAll(".day-bar .bar-field input");
         var rows = [];
+        var clientNotes = [];
         b.querySelectorAll("tbody tr").forEach(function (tr) {
           var vals = [];
-          tr.querySelectorAll("input, textarea").forEach(function (i) { vals.push(i.value); });
+          // Client notes are stored separately (clientNotes[]), so they stay out
+          // of the positional row array the bridge reads.
+          tr.querySelectorAll("input, textarea:not(.client-note)").forEach(function (i) { vals.push(i.value); });
           rows.push(vals);
+          var cn = tr.querySelector(".client-note");
+          clientNotes.push(cn ? cn.value : "");
         });
         days.push({
           name: bar[0].value,
@@ -731,6 +778,7 @@
           sleep: bar[3].value,
           sets: parseInt(b.dataset.sets, 10),
           rows: rows,
+          clientNotes: clientNotes,
         });
       });
       return { client: val("client_name"), goal: val("goal"), startDate: val("start_date"), endDate: val("end_date"), timeframe: timeframeStr(), nutrition: val("nutrition"), days: days };
@@ -747,12 +795,19 @@
       var trs = block.querySelectorAll("tbody tr");
       (d.rows || []).forEach(function (vals, ri) {
         if (!trs[ri]) return;
-        var ins = trs[ri].querySelectorAll("input, textarea");
+        var ins = trs[ri].querySelectorAll("input, textarea:not(.client-note)");
         vals.forEach(function (v, ci) {
           if (!ins[ci]) return;
           ins[ci].value = v;
           if (ins[ci].tagName === "TEXTAREA") autoGrow(ins[ci]);
         });
+        // Restore the client note (separate from the positional row array).
+        var cn = trs[ri].querySelector(".client-note");
+        if (cn) {
+          cn.value = (d.clientNotes && d.clientNotes[ri]) || "";
+          cn.classList.toggle("filled", !!cn.value.trim());
+          if (cn.value) autoGrow(cn);
+        }
       });
     }
 
@@ -1224,8 +1279,9 @@
         // the viewer is a client (lock) or coach view-only.
         applyClientLock();
         applyViewOnly();
-        setTimeout(function () { applyClientLock(); applyViewOnly(); }, 250);
-        setTimeout(function () { applyClientLock(); applyViewOnly(); }, 900);
+        syncClientNotesMode();
+        setTimeout(function () { applyClientLock(); applyViewOnly(); syncClientNotesMode(); }, 250);
+        setTimeout(function () { applyClientLock(); applyViewOnly(); syncClientNotesMode(); }, 900);
         tryAcquireLock();
         startPolling();
       });
