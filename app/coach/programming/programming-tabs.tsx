@@ -5,12 +5,10 @@ import { usePathname } from "next/navigation";
 export default function ProgrammingTabs() {
   const path = usePathname() ?? "";
   const isLibrary   = path.startsWith("/coach/programming/library");
-  // Build covers the new-way builder and every legacy /build/* path.
-  // The Template format now lives inside Build Program (pick it as the
-  // build format after choosing a client + Session/Program), so there's
-  // no separate Templates tab.
-  const isBuild     = path.startsWith("/coach/programming/build") || path.startsWith("/coach/programming/templates");
-  const isView      = !isBuild && !isLibrary;
+  // Programs is the single home now — the build workspace lives "under" it,
+  // reached via Build New + and per-program Edit, so /build/* keeps the
+  // Programs tab highlighted (there's no separate Build Program tab).
+  const isView      = !isLibrary;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -45,7 +43,6 @@ export default function ProgrammingTabs() {
         }}
       >
         <Link href="/coach/programming" style={tabStyle(isView)}>Programs</Link>
-        <Link href="/coach/programming/build/new-way" style={tabStyle(isBuild)}>Build Program</Link>
         <Link href="/coach/programming/library/exercise-library" style={tabStyle(isLibrary)}>Library</Link>
       </nav>
     </div>

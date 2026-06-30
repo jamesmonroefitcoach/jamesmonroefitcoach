@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientRow, MovementRow } from "@/lib/data";
-import type { ClientProgramItem } from "../page";
+import type { ClientProgramItem } from "../types";
 import type { ApptOption, ImportableProgram, InGymProgram } from "../actions";
 import {
   getClientAppointments,

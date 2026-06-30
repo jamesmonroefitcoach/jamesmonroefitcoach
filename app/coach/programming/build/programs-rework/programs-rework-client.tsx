@@ -16,7 +16,7 @@ import {
 import { saveDraftProgram, loadDraftProgram, saveProgram as publishProgram } from "../actions";
 import type { SaveProgramDay } from "../actions";
 import { fmtDate } from "@/lib/format";
-import type { ClientProgramItem } from "../page";
+import type { ClientProgramItem } from "../types";
 
 type Variation = "stretch" | "plyometric" | "isometric" | "single_sided" | "bilateral" | "dropset";
 

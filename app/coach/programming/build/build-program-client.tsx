@@ -29,7 +29,7 @@ import { addMovement } from "../library/exercise-library/actions";
 import { decodeSpecs, encodeSpecs } from "@/lib/equipment-specs";
 import { fmtDate } from "@/lib/format";
 import type { ProgramKind } from "@/lib/programs";
-import type { ClientProgramItem } from "./page";
+import type { ClientProgramItem } from "./types";
 import { isLearned, recordLearned, markPerformed } from "@/lib/exercises-learned";
 import { appendLog, lastEntry, historyFor, priorHeaviest, hasHistory, type ExerciseLogEntry } from "@/lib/exercise-logs";
 import ImportPickerModal, { type ImportScope, type ImportResult } from "./import-picker";

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { listClients, listMovements } from "@/lib/data";
 import { pastProgramsForClient } from "@/lib/programs";
-import type { ClientProgramItem } from "../page";
+import type { ClientProgramItem } from "../types";
 // page.tsx for /coach/programming/build defines ClientProgramItem.
 import ProgramsReworkClient from "./programs-rework-client";
 

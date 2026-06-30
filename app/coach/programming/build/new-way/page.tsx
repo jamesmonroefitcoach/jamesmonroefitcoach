@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { listClients, listAppointmentsForClient, listAppointmentsForWeek, listMovements } from "@/lib/data";
 import { pastProgramsForClient } from "@/lib/programs";
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
-import type { ClientProgramItem } from "../page";
+import type { ClientProgramItem } from "../types";
 import NewWayClient from "./new-way-client";
 
 // New Way — the unified Build sub-tab. Lobby (Step 1 client → Step 2 build
