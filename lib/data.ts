@@ -877,6 +877,9 @@ export type ClientProgramRow = {
   workout_sheet_id: string | null;
   /** "pdf" when the program was stub-created from a PDF upload. */
   workout_sheet_kind: "app" | "pdf" | null;
+  /** "template" → the sheet is canonical (content lives in sheet_data, not
+   *  builder_state). Only populated by getProgramForClient. */
+  build_format?: "in_app" | "template" | null;
 };
 
 export async function listProgramsForClient(clientId: string): Promise<ClientProgramRow[]> {
@@ -914,7 +917,7 @@ export async function getProgramForClient(
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("programs")
-    .select("id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, is_current, is_published, created_by_client, builder_state, created_at")
+    .select("id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, is_current, is_published, created_by_client, builder_state, created_at, workout_sheet_id, build_format")
     .eq("id", programId)
     .eq("client_id", clientId)
     .maybeSingle();

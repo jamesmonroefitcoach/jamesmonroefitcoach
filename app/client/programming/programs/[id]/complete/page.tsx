@@ -60,7 +60,11 @@ export default async function CompleteProgramPage({
           tag="Sheet"
           description="Open the workout sheet and type set-by-set as you go. Or, after the workout, upload a filled-in PDF and James will see it the same way."
           ctaLabel="Open Sheet →"
-          ctaHref={`/client/programming/build/sheets?program=${program.id}`}
+          ctaHref={
+            program.workout_sheet_id
+              ? `/client/programming/build/template?sheet=${program.workout_sheet_id}`
+              : `/client/programming/build/sheets?program=${program.id}`
+          }
         />
         <ChoiceCard
           title="Use In-App Inputs"

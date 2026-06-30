@@ -1217,6 +1217,15 @@
           if (autofill.clientName && !val("client_name")) setVal("client_name", autofill.clientName);
           if (autofill.timeframe && !val("timeframe")) setVal("timeframe", autofill.timeframe);
         }
+        // Re-apply read-only modes now that the rows are actually in the DOM.
+        // loadSheet can resolve a tick before rows finish painting and polling
+        // may re-render, so re-assert on a couple of short timers too — without
+        // this the client could edit James's exercise names/reps. No-ops unless
+        // the viewer is a client (lock) or coach view-only.
+        applyClientLock();
+        applyViewOnly();
+        setTimeout(function () { applyClientLock(); applyViewOnly(); }, 250);
+        setTimeout(function () { applyClientLock(); applyViewOnly(); }, 900);
         tryAcquireLock();
         startPolling();
       });
@@ -1225,6 +1234,10 @@
       if (ev.origin !== window.location.origin) return;
       var d = ev.data || {};
       if (d.type !== "mfc.workout-sheet.init") return;
+      // The ready-retry loop can make the parent answer more than once; process
+      // the first init only so we don't re-clear and re-render the sheet
+      // (which raced the client lock off).
+      if (INIT_HANDLED) return;
       INIT_HANDLED = true;
       USER = d.user || null;
       CLIENT_LIST = Array.isArray(d.clientList) ? d.clientList : [];
@@ -1275,8 +1288,19 @@
     });
 
     if (IS_IFRAME) {
+      // Keep announcing "ready" until the parent answers with an init payload.
+      // A single shot loses a race when the parent's listener attaches after we
+      // post (e.g. a sheet embedded directly in a light server page), which left
+      // the sheet blank + unlocked. Retry until INIT_HANDLED or we give up.
+      var readyTries = 0;
+      var readyTimer = setInterval(function () {
+        if (INIT_HANDLED || readyTries >= 20) { clearInterval(readyTimer); return; }
+        readyTries++;
+        window.parent.postMessage({ type: "mfc.workout-sheet.ready" }, "*");
+      }, 150);
       window.parent.postMessage({ type: "mfc.workout-sheet.ready" }, "*");
-      setTimeout(function () { if (!INIT_HANDLED) initFromLocal(); }, 800);
+      // Only fall back to a blank local sheet if no parent ever responds.
+      setTimeout(function () { if (!INIT_HANDLED) initFromLocal(); }, 3200);
     } else {
       initFromLocal();
     }

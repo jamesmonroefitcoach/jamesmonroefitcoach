@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
 // Embed the interactive workout sheet (public/workout-sheet.html, a copy of
@@ -63,26 +63,35 @@ export default function WorkoutSheetEmbed({
     }
   }
 
+  // Send the init handshake to the iframe. Posted both in reply to the iframe's
+  // "ready" message AND on iframe onLoad — the load-race (iframe posting "ready"
+  // before this listener is attached) would otherwise leave the sheet blank and
+  // unlocked. The iframe handler is idempotent, so a double-send is harmless.
+  const postInit = useCallback(() => {
+    if (!user) return;
+    ref.current?.contentWindow?.postMessage(
+      {
+        type: "mfc.workout-sheet.init",
+        user,
+        clientList: clients ?? [],
+        sessionList: sessions ?? [],
+        sheetId: sheetId ?? null,
+        autofill: autofill ?? null,
+        clearLocal: !sheetId && clearLocal ? true : undefined,
+        viewOnly: viewOnly ? true : undefined,
+        sessionMode: sessionMode ? true : undefined,
+      },
+      window.location.origin
+    );
+  }, [user, clients, sessions, sheetId, autofill, clearLocal, viewOnly, sessionMode]);
+
   useEffect(() => {
     function onMessage(ev: MessageEvent) {
       if (ev.origin !== window.location.origin) return;
       const data = ev.data as { type?: string } | null;
       if (!data || typeof data !== "object") return;
-      if (data.type === "mfc.workout-sheet.ready" && user) {
-        ref.current?.contentWindow?.postMessage(
-          {
-            type: "mfc.workout-sheet.init",
-            user,
-            clientList: clients ?? [],
-            sessionList: sessions ?? [],
-            sheetId: sheetId ?? null,
-            autofill: autofill ?? null,
-            clearLocal: !sheetId && clearLocal ? true : undefined,
-            viewOnly: viewOnly ? true : undefined,
-            sessionMode: sessionMode ? true : undefined,
-          },
-          window.location.origin
-        );
+      if (data.type === "mfc.workout-sheet.ready") {
+        postInit();
       }
       if (data.type === "mfc.workout-sheet.saved") {
         const saved = data as { type: string; sheet?: { id: string } };
@@ -103,10 +112,13 @@ export default function WorkoutSheetEmbed({
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [user, clients, sessions, sheetId, router, pathname, autofill, onSaved, viewOnly, sessionMode]);
+  }, [postInit, sheetId, router, pathname, onSaved]);
 
   function onLoad() {
     resize();
+    // Deterministically (re)send init now that the iframe is fully loaded and
+    // its message listener is guaranteed attached — covers the ready-race.
+    postInit();
     try {
       const doc = ref.current?.contentDocument;
       if (doc && "ResizeObserver" in window) {
