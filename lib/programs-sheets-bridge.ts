@@ -224,6 +224,12 @@ function parseTimeframeDates(tf: string | null | undefined, todayISO: string): {
   return { startsOn: dates[0], endsOn: dates[dates.length - 1] };
 }
 
+// The Save box stores the sheet name as "<name> - Template" to mark it. The
+// paired program should carry the clean name the coach typed.
+function stripTemplateSuffix(name: string | null | undefined): string {
+  return (name ?? "").replace(/\s*-\s*Template\s*$/i, "").trim();
+}
+
 // ─── pair lookup / creation ───────────────────────────────────────────
 
 export async function getOrCreatePairedSheet(programId: string): Promise<string | null> {
@@ -294,12 +300,14 @@ export async function getOrCreatePairedProgram(sheetId: string): Promise<string 
   const programInsert: Record<string, unknown> = {
     client_id: sheet.client_id,
     coach_id: sheet.coach_id,
-    name: sheet.name,
+    name: stripTemplateSuffix(sheet.name) || sheet.name,
     program_kind: "in_gym",
     starts_on: startsOn,
     ends_on: endsOn,
     duration_weeks: 1,
-    is_published: sheet.kind === "pdf",       // PDFs are inherently "submitted"
+    // A sheet saved against a client is a real program — show it as current and
+    // programmed (not a draft), so View Programs / schedule reflect it.
+    is_published: true,
     is_current: true,
     workout_sheet_id: sheet.id,
     build_format: "template",                 // sheet-origin → sheet is canonical
@@ -347,10 +355,11 @@ export async function syncSheetToProgram(sheetId: string): Promise<void> {
   const supabase = createSupabaseAdmin();
   const { data: sheet } = await supabase
     .from("workout_sheets")
-    .select("id, program_id, sheet_data, client_id, kind")
+    .select("id, name, program_id, sheet_data, client_id, kind")
     .eq("id", sheetId)
     .maybeSingle<{
       id: string;
+      name: string | null;
       program_id: string | null;
       sheet_data: SheetData | null;
       client_id: string | null;
@@ -368,13 +377,18 @@ export async function syncSheetToProgram(sheetId: string): Promise<void> {
 
   await syncSheetDataToProgram(programId, sheet.sheet_data);
 
+  // Mirror the sheet back onto the program so View Programs / schedule reflect
+  // the save: the coach named it (the sheet stores "<name> - Template", so strip
+  // that suffix), and a saved template is a real, current, programmed program.
+  const progUpdate: Record<string, unknown> = { is_current: true, is_published: true };
+  const cleanName = stripTemplateSuffix(sheet.name);
+  if (cleanName) progUpdate.name = cleanName;
   // Keep the program's window in sync with the sheet's date pickers so the
   // active / past / future status stays accurate when the coach edits dates.
   const sd = sheet.sheet_data?.startDate;
   if (sd) {
-    await createSupabaseAdmin()
-      .from("programs")
-      .update({ starts_on: sd, ends_on: sheet.sheet_data?.endDate || null })
-      .eq("id", programId);
+    progUpdate.starts_on = sd;
+    progUpdate.ends_on = sheet.sheet_data?.endDate || null;
   }
+  await supabase.from("programs").update(progUpdate).eq("id", programId);
 }
