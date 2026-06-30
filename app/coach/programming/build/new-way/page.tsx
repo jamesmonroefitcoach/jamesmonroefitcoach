@@ -21,6 +21,7 @@ export default async function NewWayPage({
     starts?: string;
     program?: string;
     view?: "inapp" | "template";
+    new?: string;
   }>;
 }) {
   const user = await getSessionUser();
@@ -190,6 +191,7 @@ export default async function NewWayPage({
       initialStartsAt={initialStartsAt}
       initialProgramId={sp.program ?? ""}
       initialView={sp.view === "template" ? "template" : "inapp"}
+      initialNew={sp.new === "1"}
       clientProgramSummary={clientProgramSummary}
       quickSessionsNeeding={quickSessionsNeeding}
       quickClientsNeeding={quickClientsNeeding}

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientRow, MovementRow } from "@/lib/data";
 import type { ClientProgramItem } from "../page";
@@ -45,6 +45,7 @@ export default function NewWayClient({
   initialStartsAt,
   initialProgramId,
   initialView,
+  initialNew = false,
   clientProgramSummary,
   quickSessionsNeeding,
   quickClientsNeeding,
@@ -61,6 +62,9 @@ export default function NewWayClient({
   initialStartsAt: string;
   initialProgramId: string;
   initialView: ViewMode;
+  /** Build New + from the Programs tab passes ?new=1 to jump straight into a
+   *  fresh build of the chosen (type, format). */
+  initialNew?: boolean;
   clientProgramSummary: ClientProgramItem[];
   quickSessionsNeeding: QuickSession[];
   quickClientsNeeding: QuickClient[];
@@ -201,6 +205,20 @@ export default function NewWayClient({
     })();
     return () => { cancelled = true; };
   }, [started, type, editProgramId]);
+
+  // Build New + (?new=1): jump straight into a fresh build of the chosen
+  // (type, format) instead of landing on the lobby's entity picker.
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!initialNew || autoStartedRef.current || !clientId || started) return;
+    autoStartedRef.current = true;
+    if (type === "session" && view === "template") startNewTemplate();
+    else if (type === "session") startNewSession();
+    else if (type === "program" && view === "template") startNewProgramTemplate();
+    else startNewProgram();
+    // start* are stable component closures; guarded to run once via the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNew, clientId, type, view, started]);
 
   function syncUrl(params: { client?: string; type?: string; appt?: string; starts?: string; program?: string; view?: string }) {
     const url = new URL(window.location.href);

@@ -1,8 +1,14 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { ClientProgramBlock } from "./page";
+import { useRouter } from "next/navigation";
+import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import type { ClientProgramBlock, RecentDraft } from "./page";
 import { fmtDate } from "@/lib/format";
+
+type ClientPick = { id: string; full_name: string; flagged: boolean };
+type BuildType = "session" | "program";
+type BuildFormat = "inapp" | "template";
 
 function fmtSessionTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
@@ -597,7 +603,9 @@ function WeekSessionRow({
   );
 }
 
-export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBlock[] }) {
+export default function ViewProgramsClient({ blocks, clients, recentDrafts }: { blocks: ClientProgramBlock[]; clients: ClientPick[]; recentDrafts: RecentDraft[] }) {
+  const router = useRouter();
+  const [showBuild, setShowBuild] = useState(false);
   const [query, setQuery] = useState("");
   // Everything starts collapsed so the tab opens to a clean, scannable list of
   // sections; James expands the one he wants.
@@ -675,6 +683,22 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
 
   return (
     <div>
+      {/* Build New + — opens the build lobby (client / type / format) in a
+          modal, then jumps into the chosen builder. The eventual home for
+          starting a program now that everything lives under Programs. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => setShowBuild(true)}
+          style={{ fontSize: "0.82rem", padding: "0.4rem 0.95rem", whiteSpace: "nowrap" }}
+        >
+          Build New +
+        </button>
+      </div>
+
+      <RecentDraftsGroup drafts={recentDrafts} />
+
       {/* Page-level filter — narrows Upcoming this week, Sessions, and
           Programs all at once. Lives above every collapsible section. */}
       <div
@@ -792,6 +816,160 @@ export default function ViewProgramsClient({ blocks }: { blocks: ClientProgramBl
           </div>
         )
       )}
+
+      {showBuild && (
+        <BuildNewModal clients={clients} router={router} onClose={() => setShowBuild(false)} />
+      )}
     </div>
+  );
+}
+
+// ─── Recently saved / drafted programs — collapsible at the top of Programs ──
+function RecentDraftsGroup({ drafts }: { drafts: RecentDraft[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: "1px solid var(--line)", borderRadius: 4, overflow: "hidden", marginBottom: "1.25rem" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: "0.55rem",
+          background: open ? "rgba(0,0,0,0.02)" : "transparent",
+          border: "none", padding: "0.6rem 0.85rem", cursor: "pointer",
+          fontFamily: "inherit", textAlign: "left",
+        }}
+      >
+        <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>{open ? "▾" : "▸"}</span>
+        <span style={{ fontWeight: 700, fontSize: "1.02rem" }}>Recently saved programs</span>
+        <span className="meta" style={{ fontSize: "0.72rem" }}>most recent first</span>
+        <span className="badge" style={{ marginLeft: "auto", fontSize: "0.62rem" }}>{drafts.length}</span>
+      </button>
+      {open && (
+        drafts.length === 0 ? (
+          <p className="meta" style={{ padding: "0.6rem 0.85rem", fontStyle: "italic", fontSize: "0.78rem", margin: 0 }}>
+            No saved programs yet. Hit <strong>Build New +</strong> to start one.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {drafts.map((d) => {
+              const isGym = d.program_kind === "in_gym";
+              const type = isGym ? "session" : "program";
+              const view = d.build_format === "template" ? "template" : "inapp";
+              const href = `/coach/programming/build/new-way?type=${type}&client=${d.client_id}&program=${d.id}&view=${view}`;
+              return (
+                <li key={d.id} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  gap: "0.6rem", padding: "0.5rem 0.85rem", borderTop: "1px solid var(--line)",
+                }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.86rem" }}>{d.name || "Untitled program"}</div>
+                    <div className="meta" style={{ fontSize: "0.7rem" }}>
+                      {d.client_name} · {d.program_kind === "at_home" ? "at-home" : "in-gym"} · {d.build_format === "template" ? "template" : "in app"}
+                    </div>
+                  </div>
+                  <Link href={href} className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.28rem 0.85rem", whiteSpace: "nowrap" }}>
+                    Edit →
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      )}
+    </div>
+  );
+}
+
+// ─── Build New modal — the build lobby's first steps (client / type / format),
+// then jump into the matching builder for a NEW build (?new=1 auto-starts it). ─
+function BuildNewModal({ clients, router, onClose }: {
+  clients: ClientPick[];
+  router: AppRouterInstance;
+  onClose: () => void;
+}) {
+  const [clientId, setClientId] = useState("");
+  const [type, setType] = useState<BuildType>("session");
+  const [format, setFormat] = useState<BuildFormat>("template");
+
+  function build() {
+    if (!clientId) return;
+    router.push(`/coach/programming/build/new-way?type=${type}&client=${clientId}&view=${format}&new=1`);
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 50,
+        background: "rgba(0,0,0,0.4)", display: "flex",
+        alignItems: "flex-start", justifyContent: "center", padding: "8vh 1rem 1rem",
+      }}
+    >
+      <div
+        className="card"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "min(440px, 100%)", padding: "1.1rem 1.2rem", display: "flex", flexDirection: "column", gap: "1rem" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <strong style={{ fontSize: "1.05rem" }}>Build a new program</strong>
+          <button type="button" onClick={onClose} className="btn btn-ghost" style={{ padding: "0.15rem 0.5rem", fontSize: "0.9rem" }}>✕</button>
+        </div>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+          <span style={{ fontFamily: "Oswald, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.72rem", fontWeight: 600 }}>Client</span>
+          <select
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            style={{ padding: "0.5rem 0.6rem", fontFamily: "inherit", fontSize: "0.9rem", border: "1px solid var(--line)", borderRadius: 4, background: "#fff" }}
+          >
+            <option value="">— select a client —</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>{c.full_name}{c.flagged ? " · flagged" : ""}</option>
+            ))}
+          </select>
+        </label>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+          <span style={{ fontFamily: "Oswald, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.72rem", fontWeight: 600 }}>Build type</span>
+          <div style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 999, padding: "0.15rem", background: "var(--paper)", alignSelf: "flex-start" }}>
+            <ModalPill active={type === "session"} label="Gym Session" onClick={() => setType("session")} />
+            <ModalPill active={type === "program"} label="At-home Program" onClick={() => setType("program")} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+          <span style={{ fontFamily: "Oswald, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.72rem", fontWeight: 600 }}>Build format</span>
+          <div style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 999, padding: "0.15rem", background: "var(--paper)", alignSelf: "flex-start" }}>
+            <ModalPill active={format === "template"} label="Template" onClick={() => setFormat("template")} />
+            <ModalPill active={format === "inapp"} label="In App" onClick={() => setFormat("inapp")} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", marginTop: "0.25rem" }}>
+          <button type="button" onClick={onClose} className="btn btn-ghost" style={{ fontSize: "0.84rem", padding: "0.4rem 0.9rem" }}>Cancel</button>
+          <button type="button" onClick={build} disabled={!clientId} className="btn btn-primary" style={{ fontSize: "0.84rem", padding: "0.4rem 1.1rem" }}>Build →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalPill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "0.32rem 0.9rem",
+        background: active ? "var(--rust)" : "transparent",
+        color: active ? "#fff" : "var(--ink)",
+        border: "none", borderRadius: 999, cursor: "pointer",
+        fontFamily: "inherit", fontSize: "0.84rem", fontWeight: active ? 600 : 400,
+      }}
+    >
+      {label}
+    </button>
   );
 }

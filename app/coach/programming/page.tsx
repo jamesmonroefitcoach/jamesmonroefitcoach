@@ -6,6 +6,16 @@ import { fmtDate } from "@/lib/format";
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import ViewProgramsClient from "./view-programs-client";
 
+export type RecentDraft = {
+  id: string;
+  name: string;
+  client_id: string;
+  client_name: string;
+  created_at: string;
+  program_kind: "in_gym" | "at_home";
+  build_format: "in_app" | "template";
+};
+
 export type ClientProgramBlock = {
   clientId: string;
   clientName: string;
@@ -153,15 +163,43 @@ export default async function ProgrammingLandingPage() {
     }
   }
 
+  // Recently saved / drafted programs — surfaced at the top of Programs so
+  // James can jump back into in-progress work (and as the home for the queue
+  // that used to live only in the Build lobby).
+  const clientNameById = new Map(clients.map((c) => [c.id, c.full_name]));
+  let recentDrafts: RecentDraft[] = [];
+  if (hasSupabaseEnv()) {
+    const { data } = await createSupabaseAdmin()
+      .from("programs")
+      .select("id, name, client_id, created_at, program_kind, build_format")
+      .eq("coach_id", user.id)
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(12);
+    recentDrafts = (data ?? []).map((p: { id: string; name: string; client_id: string; created_at: string; program_kind: "in_gym" | "at_home"; build_format: string | null }) => ({
+      id: p.id,
+      name: p.name,
+      client_id: p.client_id,
+      client_name: clientNameById.get(p.client_id) ?? "—",
+      created_at: p.created_at,
+      program_kind: p.program_kind,
+      build_format: p.build_format === "template" ? "template" : "in_app",
+    }));
+  }
+
+  const clientPicker = activeClients
+    .filter((c) => !!c.full_name)
+    .map((c) => ({ id: c.id, full_name: c.full_name, flagged: c.needs_at_home_programming }));
+
   return (
     <main className="shell" style={{ paddingTop: "0.75rem" }}>
       <header>
         <span className="badge">Coach</span>
-        <h1 style={{ marginTop: "0.5rem" }}>View Programs</h1>
+        <h1 style={{ marginTop: "0.5rem" }}>Programs</h1>
         <p className="meta">Active programs, upcoming sessions, and historicals — by client.</p>
       </header>
       <hr className="divider" />
-      <ViewProgramsClient blocks={blocks} />
+      <ViewProgramsClient blocks={blocks} clients={clientPicker} recentDrafts={recentDrafts} />
     </main>
   );
 }
