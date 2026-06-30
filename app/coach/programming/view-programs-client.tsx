@@ -8,7 +8,6 @@ import { fmtDate } from "@/lib/format";
 
 type ClientPick = { id: string; full_name: string; flagged: boolean };
 type BuildType = "session" | "program";
-type BuildFormat = "inapp" | "template";
 
 function fmtSessionTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
@@ -889,11 +888,11 @@ function BuildNewModal({ clients, router, onClose }: {
 }) {
   const [clientId, setClientId] = useState("");
   const [type, setType] = useState<BuildType>("session");
-  const [format, setFormat] = useState<BuildFormat>("template");
 
   function build() {
     if (!clientId) return;
-    router.push(`/coach/programming/build/new-way?type=${type}&client=${clientId}&view=${format}&new=1`);
+    // Sheet-only MVP: every build opens the workout sheet (view=template).
+    router.push(`/coach/programming/build/new-way?type=${type}&client=${clientId}&view=template&new=1`);
   }
 
   return (
@@ -937,14 +936,9 @@ function BuildNewModal({ clients, router, onClose }: {
             <ModalPill active={type === "session"} label="Gym Session" onClick={() => setType("session")} />
             <ModalPill active={type === "program"} label="At-home Program" onClick={() => setType("program")} />
           </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-          <span style={{ fontFamily: "Oswald, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: "0.72rem", fontWeight: 600 }}>Build format</span>
-          <div style={{ display: "inline-flex", border: "1px solid var(--line)", borderRadius: 999, padding: "0.15rem", background: "var(--paper)", alignSelf: "flex-start" }}>
-            <ModalPill active={format === "template"} label="Template" onClick={() => setFormat("template")} />
-            <ModalPill active={format === "inapp"} label="In App" onClick={() => setFormat("inapp")} />
-          </div>
+          <span className="meta" style={{ fontSize: "0.72rem", marginTop: "0.1rem" }}>
+            {type === "session" ? "A single in-person session sheet." : "A multi-day at-home program sheet."}
+          </span>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem", marginTop: "0.25rem" }}>

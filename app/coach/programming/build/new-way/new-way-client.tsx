@@ -22,6 +22,12 @@ import { archiveActiveWip, listWipBackups, restoreWipBackup, deleteWipBackup, ty
 
 type ViewMode = "inapp" | "template";
 
+// MVP: the build IS the workout sheet. The In App structured builder is kept in
+// the codebase (and synced to the sheet via the bridge) for "later", but the
+// format choice + toggle are hidden so there's one path: a sheet for a client.
+// Flip to false to bring back the In App | Template choice.
+const MVP_SHEET_ONLY = true;
+
 // New Way Build — 4-step lobby → workspace.
 //   1. Pick client
 //   2. Build type:   Gym Session (in_gym) | At-home Program (at_home)
@@ -192,6 +198,8 @@ export default function NewWayClient({
   //     hide the toggle and snap to its built format.
   // (Sessions always keep their toggle.)
   useEffect(() => {
+    // Sheet-only MVP: every program opens as its sheet, no toggle, no snap.
+    if (MVP_SHEET_ONLY) { if (started && type === "program") setView("template"); return; }
     if (!started || type !== "program") { setSheetOnly(false); return; }
     if (!editProgramId) { setSheetOnly(false); return; } // new → toggle stays
     setSheetOnly(true);
@@ -246,8 +254,12 @@ export default function NewWayClient({
     if (next === type) return;
     setType(next);
     setApptId(""); setStartsAt(""); setEditProgramId(""); setAutosaveDraftId("");
-    setStarted(false); setFormatChosen(false);
-    syncUrl({ client: clientId, type: next });
+    setStarted(false);
+    // Sheet-only MVP: there's no format step, so picking a type unlocks Step 4
+    // directly in Template view.
+    if (MVP_SHEET_ONLY) { setView("template"); setFormatChosen(true); }
+    else setFormatChosen(false);
+    syncUrl({ client: clientId, type: next, view: MVP_SHEET_ONLY ? "template" : undefined });
   }
   // Step 3 — choose the build format (In App vs Template). Sets the view the
   // workspace opens in and unlocks Step 4.
@@ -317,13 +329,14 @@ export default function NewWayClient({
   // ── Quick-actions ── jumps straight into the workspace bypassing the
   // 4-step lobby. Used by the four collapsibles above Step 1.
   function quickProgramSession(s: QuickSession) {
+    const v: ViewMode = MVP_SHEET_ONLY ? "template" : "inapp";
     setClientId(s.client_id);
-    setType("session"); setView("inapp"); setFormatChosen(true);
+    setType("session"); setView(v); setFormatChosen(true);
     setApptId(s.id);
     setStartsAt(s.starts_at);
     setEditProgramId("");
     setStarted(true);
-    syncUrl({ client: s.client_id, type: "session", appt: s.id, starts: s.starts_at, view: "inapp" });
+    syncUrl({ client: s.client_id, type: "session", appt: s.id, starts: s.starts_at, view: v });
   }
   function quickStartProgramForClient(c: QuickClient) {
     archiveActiveWip(c.id);
@@ -336,11 +349,11 @@ export default function NewWayClient({
     syncUrl({ client: c.id, type: "program", view: "template" });
   }
   function quickEditProgram(p: QuickDraftProgram) {
-    // in_gym recently-saved rows are gym sheets (Session + Template); at_home
-    // rows open in the structured builder (Program + In App).
+    // in_gym recently-saved rows are gym sheets (Session); at_home rows are
+    // programs. Sheet-only MVP opens both as the sheet.
     const isGym = p.program_kind === "in_gym";
     const t = isGym ? "session" : "program";
-    const v: ViewMode = isGym ? "template" : "inapp";
+    const v: ViewMode = MVP_SHEET_ONLY ? "template" : (isGym ? "template" : "inapp");
     setClientId(p.client_id);
     setType(t); setView(v); setFormatChosen(true);
     setApptId(""); setStartsAt(""); setEditProgramId(p.id);
@@ -381,19 +394,21 @@ export default function NewWayClient({
         })()
       : null;
 
-    // ── Template format — the workout sheet (either build type). ──
-    if (view === "template") {
+    // ── Template format — the workout sheet (either build type). In the
+    //    sheet-only MVP this is the ONLY workspace; the In App branch below is
+    //    kept for later (MVP_SHEET_ONLY === false). ──
+    if (view === "template" || MVP_SHEET_ONLY) {
       return (
         <div style={{ width: "min(1180px, 100% - 2rem)", margin: "0.6rem auto 0" }}>
           <BackBar
             clientName={selectedClient?.full_name ?? "—"}
-            typeLabel={`${kindLabel} · Template`}
+            typeLabel={MVP_SHEET_ONLY ? kindLabel : `${kindLabel} · Template`}
             subLabel={editProgramId ? "Editing" : "New"}
             view={view}
             onSwitchView={switchView}
             templateReady
             onBack={backToLobby}
-            hideToggle={sheetOnly}
+            hideToggle={MVP_SHEET_ONLY || sheetOnly}
           />
           <WorkoutSheetEmbed
             user={{ id: user.id, name: user.name, role: user.role }}
@@ -590,8 +605,8 @@ export default function NewWayClient({
         </section>
       )}
 
-      {/* Step 3 — build format (two options) */}
-      {clientId && (
+      {/* Step 3 — build format (two options). Hidden in the sheet-only MVP. */}
+      {!MVP_SHEET_ONLY && clientId && (
         <section className="card" style={{ padding: "1rem 1.15rem" }}>
           <StepLabel n={3} label="Build format" />
           <div

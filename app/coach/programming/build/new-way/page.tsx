@@ -190,7 +190,7 @@ export default async function NewWayPage({
       initialApptId={initialApptId}
       initialStartsAt={initialStartsAt}
       initialProgramId={sp.program ?? ""}
-      initialView={sp.view === "template" ? "template" : "inapp"}
+      initialView={sp.view === "inapp" ? "inapp" : "template"}
       initialNew={sp.new === "1"}
       clientProgramSummary={clientProgramSummary}
       quickSessionsNeeding={quickSessionsNeeding}
