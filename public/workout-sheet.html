@@ -271,6 +271,24 @@
   body.client-locked td.notes-cell .client-note,
   td.notes-cell .client-note.filled { display: block; }
 
+  /* View mode: a saved sheet opens read-only until "Edit" is pressed. Fields
+     read as plain text (no fill/border/highlight); content-editing controls
+     are hidden, but Edit / Save PDF / Send stay so you can act on it. */
+  body.view-mode input[readonly],
+  body.view-mode textarea[readonly] { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: var(--ink); cursor: default; }
+  body.view-mode input[readonly]:focus,
+  body.view-mode textarea[readonly]:focus { background: transparent !important; }
+  body.view-mode .row-del,
+  body.view-mode .row-dup,
+  body.view-mode .pair-del,
+  body.view-mode .row-add-set,
+  body.view-mode .remove-day,
+  body.view-mode .col-resizer,
+  body.view-mode #add-day,
+  body.view-mode #clear-btn,
+  body.view-mode .x-cell,
+  body.view-mode .intro-note { display: none !important; }
+
   /* View-only (coach opening a program to read it): everything is locked and
      every editing control is hidden. Save PDF stays so it can be printed. */
   body.view-only .row-del,
@@ -283,6 +301,7 @@
   body.view-only #clear-btn,
   body.view-only #save-modal-trigger,
   body.view-only #save-changes-btn,
+  body.view-only #edit-mode-btn,
   body.view-only #send-btn,
   body.view-only #cancel-btn,
   body.view-only .x-cell,
@@ -347,6 +366,7 @@
       <span class="saved-flag" id="saved-flag">Saved &check;</span>
       <button class="btn ghost" id="clear-btn" type="button">Clear</button>
       <button class="btn ghost" id="cancel-btn" type="button" style="display:none;" title="Discard edits — revert to the version you opened">Cancel</button>
+      <button class="btn" id="edit-mode-btn" type="button" style="display:none;" title="Edit this sheet">Edit</button>
       <button class="btn" id="save-changes-btn" type="button" style="display:none;" title="Save your edits to this sheet">Save changes</button>
       <button class="btn ghost" id="save-modal-trigger" type="button" style="display:none;">Save</button>
       <button class="btn ghost" id="send-btn" type="button">Send</button>
@@ -731,12 +751,14 @@
       syncClientNotesMode();
     }
 
-    // The client edits their per-row note; the coach (and view-only) sees it
-    // read-only and only once it has content.
+    // The client edits their per-row note while the sheet is in edit mode; the
+    // coach (and view-only / view mode) sees it read-only, and only once it has
+    // content.
     function syncClientNotesMode() {
       var isClient = USER && USER.role === "client";
+      var contentEditable = !VIEW_ONLY && (!SHEET_ID || EDIT_MODE);
       daysEl.querySelectorAll(".client-note").forEach(function (cn) {
-        cn.readOnly = !isClient;
+        cn.readOnly = !(isClient && contentEditable);
         cn.classList.toggle("filled", !!cn.value.trim());
       });
     }
@@ -844,7 +866,10 @@
     var saveTimer;
     function saveState() {
       if (restoring) return;
-      if (SHEET_ID) { saveToServer(); return; }
+      // Saved sheets persist only when the user hits "Save changes" (explicit
+      // edit → save flow). Unnamed sheets keep a local draft so first-save work
+      // isn't lost.
+      if (SHEET_ID) return;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
         try { localStorage.setItem(STORE_KEY, JSON.stringify(collectState())); flashSaved(); } catch (e) {}
@@ -1172,7 +1197,7 @@
             flashSaved();
             window.parent && window.parent.postMessage({ type: "mfc.workout-sheet.saved", sheet: rj.j.sheet }, "*");
             var cb = document.getElementById("cancel-btn"); if (cb) cb.style.display = "";
-            updateSaveButtons();
+            enterEditMode();  // just named it — stay in edit mode to keep building
             tryAcquireLock();
             startPolling();
           } else {
@@ -1182,28 +1207,63 @@
       }
     }
 
-    // Once a sheet is named, editing content and renaming are distinct actions:
-    // "Save changes" persists edits now; the modal trigger becomes "Edit details"
-    // (rename / reassign client + session). Before the first save there's just
-    // one "Save" button (which names it).
-    function updateSaveButtons() {
-      var trigger = document.getElementById("save-modal-trigger");
-      var changes = document.getElementById("save-changes-btn");
-      if (!trigger || !changes) return;
-      if (SHEET_ID) {
-        changes.style.display = "";
-        trigger.textContent = "Edit details";
-        trigger.title = "Rename or reassign this sheet";
+    // A saved sheet opens in VIEW mode (read-only). "Edit" makes it typeable;
+    // "Save changes" persists and returns to view; "Cancel" discards. Renaming
+    // is the separate "Edit details" modal. Before the first save there's just
+    // one "Save" button (which names it) and the sheet is directly editable.
+    var EDIT_MODE = false;
+
+    // Make the sheet's fields read-only (view) or editable (edit). The client's
+    // editable state still freezes James's structure via applyClientLock.
+    function applyContentReadonly() {
+      if (VIEW_ONLY) return;             // the read-only program view owns its locking
+      if (!SHEET_ID) return;             // an unnamed sheet is always editable
+      var fields = document.querySelectorAll("section.fields input, #days input, #days textarea");
+      if (EDIT_MODE) {
+        fields.forEach(function (el) { if (el.type !== "button" && el.type !== "submit") el.removeAttribute("readonly"); });
+        applyClientLock();               // re-freeze James's structure for clients (no-op for coach)
+        syncClientNotesMode();
       } else {
-        changes.style.display = "none";
-        trigger.textContent = "Save";
-        trigger.title = "Save and name this sheet";
+        fields.forEach(function (el) { if (el.type !== "button" && el.type !== "submit") el.setAttribute("readonly", ""); });
       }
     }
 
-    // Immediate save of the current edits (flushes the debounced autosave).
+    // Show the right controls for the current state (unsaved / view / edit).
+    function updateSaveButtons() {
+      var editBtn = document.getElementById("edit-mode-btn");
+      var changes = document.getElementById("save-changes-btn");
+      var trigger = document.getElementById("save-modal-trigger");
+      var cancel = document.getElementById("cancel-btn");
+      var clear = document.getElementById("clear-btn");
+      if (!editBtn || !changes || !trigger) return;
+      if (!SHEET_ID) {
+        // Unsaved: single "Save" (names it); sheet freely editable.
+        document.body.classList.remove("view-mode");
+        editBtn.style.display = "none"; changes.style.display = "none";
+        if (cancel) cancel.style.display = "none";
+        trigger.style.display = ""; trigger.textContent = "Save"; trigger.title = "Save and name this sheet";
+        return;
+      }
+      if (VIEW_ONLY) { editBtn.style.display = "none"; changes.style.display = "none"; return; }
+      if (EDIT_MODE) {
+        document.body.classList.remove("view-mode");
+        editBtn.style.display = "none"; changes.style.display = "";
+        if (cancel) cancel.style.display = ""; if (clear) clear.style.display = "";
+        trigger.style.display = ""; trigger.textContent = "Edit details"; trigger.title = "Rename or reassign this sheet";
+      } else {
+        document.body.classList.add("view-mode");
+        editBtn.style.display = ""; changes.style.display = "none";
+        if (cancel) cancel.style.display = "none"; if (clear) clear.style.display = "none";
+        trigger.style.display = "none";
+      }
+    }
+
+    function enterEditMode() { EDIT_MODE = true; applyContentReadonly(); updateSaveButtons(); }
+    function enterViewMode() { EDIT_MODE = false; applyContentReadonly(); updateSaveButtons(); }
+
+    // Persist the current edits, then drop back to view mode.
     function saveNow() {
-      if (!SHEET_ID || LOCKED_BY_OTHER) return;
+      if (!SHEET_ID) return;
       clearTimeout(serverSaveTimer);
       fetch("/api/workout-sheets/" + SHEET_ID, {
         method: "PUT", credentials: "include",
@@ -1213,8 +1273,10 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) { if (j && j.sheet) { LAST_REMOTE_AT = j.sheet.updated_at; INITIAL_SNAPSHOT = JSON.stringify(collectState()); flashSaved(); } })
         .catch(function () {});
+      enterViewMode();
     }
 
+    document.getElementById("edit-mode-btn").addEventListener("click", enterEditMode);
     document.getElementById("save-modal-trigger").addEventListener("click", openSaveModal);
     document.getElementById("save-changes-btn").addEventListener("click", saveNow);
     document.getElementById("save-cancel").addEventListener("click", closeSaveModal);
@@ -1244,7 +1306,7 @@
       if (LOCKED_BY_OTHER) return;
       if (!sheetHasContent()) { clearAllNow(); return; }
       if (SHEET_ID) {
-        if (!window.confirm("Reset the sheet content? The cleared version will auto-save.")) return;
+        if (!window.confirm("Reset the sheet content? Hit Save changes afterward to keep it.")) return;
       } else {
         if (!window.confirm("Clear this sheet? Unsaved work will be lost.")) return;
         if (!window.confirm("Really clear? This can't be undone.")) return;
@@ -1271,12 +1333,13 @@
       restoring = false;
     }
     document.getElementById("cancel-btn").addEventListener("click", function () {
-      if (LOCKED_BY_OTHER || !SHEET_ID || !INITIAL_SNAPSHOT) return;
+      if (!SHEET_ID || !INITIAL_SNAPSHOT) return;
       var current = JSON.stringify(collectState());
-      if (current === INITIAL_SNAPSHOT) return;
-      if (!window.confirm("Discard edits and revert to the version you opened? The reverted state will auto-save.")) return;
-      applySnapshot(INITIAL_SNAPSHOT);
-      saveState();
+      if (current !== INITIAL_SNAPSHOT) {
+        if (!window.confirm("Discard your edits and go back?")) return;
+        applySnapshot(INITIAL_SNAPSHOT);  // nothing was saved yet, so just restore the DOM
+      }
+      enterViewMode();
     });
 
     document.getElementById("save-modal").addEventListener("click", function (e) {
@@ -1288,7 +1351,13 @@
       if (e.key === "Escape" && document.getElementById("save-modal").classList.contains("show")) closeSaveModal();
     });
 
-    window.addEventListener("beforeunload", function () { releaseLock(true); });
+    window.addEventListener("beforeunload", function (e) {
+      releaseLock(true);
+      // Warn if leaving with unsaved edits (saved sheets persist only on "Save changes").
+      if (EDIT_MODE && SHEET_ID && INITIAL_SNAPSHOT && JSON.stringify(collectState()) !== INITIAL_SNAPSHOT) {
+        e.preventDefault(); e.returnValue = "";
+      }
+    });
 
     // ─── boot ───────────────────────────────────────────────────────
     function initFromLocal() {
@@ -1317,7 +1386,8 @@
         syncClientNotesMode();
         setTimeout(function () { applyClientLock(); applyViewOnly(); syncClientNotesMode(); }, 250);
         setTimeout(function () { applyClientLock(); applyViewOnly(); syncClientNotesMode(); }, 900);
-        updateSaveButtons();
+        enterViewMode();  // a saved sheet opens read-only until "Edit" is pressed
+        setTimeout(enterViewMode, 300);  // re-assert after the async row render settles
         tryAcquireLock();
         startPolling();
       });
