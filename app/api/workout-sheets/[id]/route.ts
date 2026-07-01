@@ -5,9 +5,8 @@ import {
   getWorkoutSheet,
   updateWorkoutSheet,
   deleteWorkoutSheet,
-  acquireLock,
 } from "@/lib/workout-sheets.server";
-import { isLockStale, type SheetData, type WorkoutSheetStatus } from "@/lib/workout-sheets";
+import { type SheetData, type WorkoutSheetStatus } from "@/lib/workout-sheets";
 import { syncSheetToProgram } from "@/lib/programs-sheets-bridge";
 
 function canSee(user: SessionUser, sheet: { coach_id: string; client_id: string | null }): boolean {
@@ -29,8 +28,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 // PUT /api/workout-sheets/[id]   { sheet_data?, name?, client_id?, session_id?, status? }
-// Soft-locked: if someone else holds a fresh lock, return 423.
-// Otherwise, auto-acquire (or refresh) the lock and apply the patch.
+// No edit lock: coach and client can both save (last-write-wins). A session
+// left open must never lock the other side out.
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,24 +37,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const sheet = await getWorkoutSheet(id);
   if (!sheet || !canSee(user, sheet)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const isMine = sheet.lock_holder_id === user.id;
-  const stale = isLockStale(sheet.lock_acquired_at);
-  if (sheet.lock_holder_id && !isMine && !stale) {
-    return NextResponse.json(
-      { error: "Locked by another user", lock_holder_id: sheet.lock_holder_id, lock_acquired_at: sheet.lock_acquired_at },
-      { status: 423 }
-    );
-  }
-  if (!isMine) {
-    const lock = await acquireLock(id, user.id);
-    if (!lock.ok) {
-      return NextResponse.json(
-        { error: "Could not acquire lock", lock_holder_id: lock.holder, lock_acquired_at: lock.acquiredAt },
-        { status: 423 }
-      );
-    }
   }
 
   let body: Record<string, unknown> = {};

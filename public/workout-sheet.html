@@ -969,19 +969,15 @@
       return Date.now() - new Date(ts).getTime() <= 10 * 60 * 1000;
     }
 
-    function setLockedByOther(locked, holderName) {
-      LOCKED_BY_OTHER = locked;
-      document.body.classList.toggle("locked-by-other", locked);
-      document.querySelectorAll("input, textarea").forEach(function (i) {
-        if (locked) i.setAttribute("readonly", "");
-        else i.removeAttribute("readonly");
-      });
+    function setLockedByOther() {
+      // Edit lock disabled — coach and client can both edit at any time
+      // (last-write-wins on save). We never flip the sheet to read-only, so a
+      // session left open can't lock the other side out. Field read-only is
+      // owned by applyClientLock / applyViewOnly; this must not touch it.
+      LOCKED_BY_OTHER = false;
+      document.body.classList.remove("locked-by-other");
       var banner = document.getElementById("lock-banner");
-      if (banner) {
-        banner.textContent = locked
-          ? "Read-only — " + (holderName || "another user") + " is editing this sheet."
-          : "";
-      }
+      if (banner) banner.textContent = "";
     }
 
     function loadSheet(id) {
