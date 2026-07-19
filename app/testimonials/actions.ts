@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import type { Testimonial, TestimonialStatus } from "./types";
 
@@ -126,6 +126,7 @@ export async function submitTestimonialWithFiles(formData: FormData): Promise<Re
 export async function listAllTestimonials(): Promise<Testimonial[]> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return [];
+  if (!hasSupabaseEnv()) return [];
   const sb = createSupabaseAdmin();
   const { data, error } = await sb
     .from("testimonials")
@@ -235,6 +236,7 @@ export async function deleteTestimonial(id: string): Promise<Result> {
 // is_published filter, not by an RLS policy, so this is safe for a
 // public Server Component to call.
 export async function listPublicTestimonials(): Promise<Testimonial[]> {
+  if (!hasSupabaseEnv()) return [];
   const sb = createSupabaseAdmin();
   const { data, error } = await sb
     .from("testimonials")

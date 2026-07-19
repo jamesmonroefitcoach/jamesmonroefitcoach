@@ -9,6 +9,11 @@ function extractInjuriesFromForm(formData: Record<string, string> | null): strin
   return val;
 }
 
+/** One step in a client's session-rate history. `effective` is the date the
+ *  rate took effect (ISO). Ordered chronologically; the final entry's rate
+ *  should match the client's current `session_rate`. */
+export type RateChange = { rate: number; effective: string };
+
 export type ClientRow = {
   id: string;
   full_name: string;
@@ -20,6 +25,10 @@ export type ClientRow = {
   session_rate: number | null;
   test_rate: number | null;
   monthly_revenue: number | null;
+  /** Chronological history of what this client has been charged per session.
+   *  Empty when no changes are on record. Used to surface the last pay increase
+   *  and the previous rate. */
+  rate_history: RateChange[];
   current_weight_lb: number | null;
   goal_weight_lb: number | null;
   starting_weight_lb: number | null;
@@ -57,7 +66,32 @@ export type ClientRow = {
   client_description: string | null;
 };
 
-const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0, needs_at_home_programming: false, client_description: null };
+const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0, needs_at_home_programming: false, client_description: null, rate_history: [] as RateChange[] };
+
+// Seeded rate-change history for the demo roster so the dashboard's pay-band
+// view can show "last increase / previous rate" without a live database. Each
+// list is chronological; the final rate matches the client's current session_rate.
+const DEMO_RATE_HISTORY: Record<string, RateChange[]> = {
+  // Acacia: $60 → $65 → $70 (most recent bump Feb 2026)
+  "demo-client-acacia": [
+    { rate: 60, effective: "2025-03-01" },
+    { rate: 65, effective: "2025-09-01" },
+    { rate: 70, effective: "2026-02-01" },
+  ],
+  // David: $60 → $65 (bumped Jun 2025)
+  "demo-client-david": [
+    { rate: 60, effective: "2024-10-01" },
+    { rate: 65, effective: "2025-06-01" },
+  ],
+  // Jen: onboarded at $65, never changed
+  "demo-client-jen": [
+    { rate: 65, effective: "2025-11-01" },
+  ],
+  // Abbey: onboarded at $100, never changed
+  "demo-client-abbey": [
+    { rate: 100, effective: "2026-04-10" },
+  ],
+};
 
 const DEMO_CLIENTS: ClientRow[] = [
   { ...DEMO_CLIENT_DEFAULTS, id: "demo-client-abbey",   full_name: "Abbey Archer",      email: null, age_category: "22",  goals: "Form & knowledge",               regular_frequency: "4", session_rate: 100, test_rate: 100, monthly_revenue: 200,  current_weight_lb: null, goal_weight_lb: null, tier: "tier_1", member_since: "2026-04-10", status: "current", balance_owed: 0,   last_session_at: new Date(Date.now() - 5 * 86400000).toISOString(), next_session_at: new Date(Date.now() + 4 * 86400000).toISOString(), total_sessions: 4,  injuries: null, lifecycle: "active", requires_confirmation: false, form_received_at: null, form_data: null },
@@ -69,7 +103,9 @@ const DEMO_CLIENTS: ClientRow[] = [
 ];
 
 export async function listClients(coachId?: string): Promise<ClientRow[]> {
-  if (!hasSupabaseEnv()) return DEMO_CLIENTS;
+  if (!hasSupabaseEnv()) {
+    return DEMO_CLIENTS.map((c) => ({ ...c, rate_history: DEMO_RATE_HISTORY[c.id] ?? [] }));
+  }
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
@@ -105,6 +141,7 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         session_rate: d?.session_rate ?? null,
         test_rate: d?.test_rate ?? null,
         monthly_revenue: d?.monthly_revenue ?? null,
+        rate_history: [],
         starting_weight_lb: d?.starting_weight_lb ?? null,
         current_weight_lb: d?.current_weight_lb ?? null,
         goal_weight_lb: d?.goal_weight_lb ?? null,
@@ -225,6 +262,32 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
       rows.forEach((r) => {
         r.sessions_this_month_completed = completedByClient[r.id] ?? 0;
         r.sessions_this_month_scheduled = scheduledByClient[r.id] ?? 0;
+      });
+    }
+
+    // Rate history — derived from per-session rate snapshots (appointments.rate
+    // is "the rate at session time"). Walk each client's sessions oldest → newest
+    // and record a step whenever the charged rate changes. Zero/null rates
+    // (comps) are skipped so they don't masquerade as a rate change.
+    const { data: rateRows } = await supabase
+      .from("appointments")
+      .select("client_id, starts_at, rate")
+      .in("client_id", ids)
+      .eq("session_type", "session")
+      .not("rate", "is", null)
+      .gt("rate", 0)
+      .order("starts_at", { ascending: true });
+    if (rateRows) {
+      const histByClient: Record<string, RateChange[]> = {};
+      rateRows.forEach((s: any) => {
+        const list = (histByClient[s.client_id] ??= []);
+        const last = list[list.length - 1];
+        if (!last || last.rate !== s.rate) {
+          list.push({ rate: s.rate, effective: s.starts_at });
+        }
+      });
+      rows.forEach((r) => {
+        r.rate_history = histByClient[r.id] ?? [];
       });
     }
   }
