@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { AppointmentRow, ClientRow } from "@/lib/data";
+import type { AppointmentRow, ClientRow, RateChange } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
 import { pastProgramsForClient } from "@/lib/programs";
 import { fetchWeekAppts, fetchMonthAppts, markApptPaid, setApptRate, setApptStatus } from "@/app/coach/schedule/actions";
@@ -449,6 +449,343 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
             chip: <span style={{ color: "var(--ink)", fontWeight: 600 }}>✓ completed</span> · <span style={{ color: "var(--sage)", fontWeight: 600 }}>$ paid</span> · <span style={{ color: "var(--red)", fontWeight: 600 }}>✗ cancelled</span>
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Income by pay band ─────────────────────────────────────────────────────────
+// Roster-wide financial snapshot: every paying client bucketed into a monthly-
+// revenue band. Shows each band's share of total monthly income and how many
+// clients sit in it. Hover a band to see who's in it and how long they've been
+// training with you.
+
+/** Human tenure from a member-since date, e.g. "2 yr 3 mo", "5 mo", "<1 mo". */
+function fmtTenure(since: string | null): string {
+  if (!since) return "unknown";
+  const start = parseDateLocal(since);
+  if (Number.isNaN(start.getTime())) return "unknown";
+  const now = new Date();
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) months -= 1; // haven't hit the monthly anniversary yet
+  if (months < 1) return "<1 mo";
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  if (y === 0) return `${m} mo`;
+  if (m === 0) return `${y} yr`;
+  return `${y} yr ${m} mo`;
+}
+
+// Ordered colour ramp for pay-rate bands, cool (lowest rate) → warm (highest
+// rate). Colours are spread across however many distinct rates exist, so the
+// top rate always reads as the primary rust accent regardless of band count.
+const BAND_COLORS = [
+  "var(--steel)", // #3e6079
+  "#4f7a6a",      // teal-sage bridge
+  "var(--sage)",  // #5a6b4a
+  "#8a7d3a",      // olive / gold
+  "var(--amber)", // #d97706
+  "var(--clay)",  // #c9613e
+  "var(--rust)",  // #a83d2b
+  "#7a2d20",      // deep rust
+];
+
+type BandClient = {
+  id: string;
+  name: string;
+  revenue: number;
+  since: string | null;
+  totalSessions: number;
+  rate: number | null;
+  history: RateChange[];
+};
+
+/** Parse a date string as *local* time. Date-only values (YYYY-MM-DD) otherwise
+ *  parse as UTC midnight, which shows the prior day in negative-offset zones. */
+function parseDateLocal(s: string): Date {
+  return new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + "T00:00:00" : s);
+}
+
+/** "Mar 2026" from an ISO date. */
+function fmtMonthYear(iso: string): string {
+  const d = parseDateLocal(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+/** Lifetime average sessions per week = completed sessions ÷ weeks since join. */
+function avgSessionsPerWeek(totalSessions: number, since: string | null): number | null {
+  if (!since || totalSessions <= 0) return null;
+  const start = parseDateLocal(since);
+  if (Number.isNaN(start.getTime())) return null;
+  const weeks = Math.max(1, (Date.now() - start.getTime()) / (7 * 86400000));
+  return totalSessions / weeks;
+}
+
+/** Most recent rate change from a client's history: the previous rate and the
+ *  date it changed. Returns null when there's no prior rate on record. */
+function lastRateChange(history: RateChange[]): { previousRate: number; changeDate: string; delta: number } | null {
+  if (!history || history.length < 2) return null;
+  const latest = history[history.length - 1];
+  const prev = history[history.length - 2];
+  return { previousRate: prev.rate, changeDate: latest.effective, delta: latest.rate - prev.rate };
+}
+
+function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+
+  const { bands, totalIncome, payingCount, excludedCount } = useMemo(() => {
+    // A "pay band" is a distinct current session rate — bands are derived from
+    // whatever rates are actually in use on the roster, not hard-coded brackets.
+    // Only clients with a positive monthly revenue contribute to income share;
+    // paused / comp'd / unset clients are counted separately so the percentages
+    // reflect real recurring income.
+    const paying = clients.filter((c) => (c.monthly_revenue ?? 0) > 0);
+    const excluded = clients.length - paying.length;
+    const total = paying.reduce((s, c) => s + (c.monthly_revenue ?? 0), 0);
+
+    // Distinct session rates present, ascending. Any paying client with no rate
+    // set is grouped into a trailing "No rate set" band so income sums to 100%.
+    const rates = Array.from(
+      new Set(paying.map((c) => c.session_rate).filter((r): r is number => r != null))
+    ).sort((a, b) => a - b);
+    const hasUnrated = paying.some((c) => c.session_rate == null);
+    const keys: (number | null)[] = hasUnrated ? [...rates, null] : [...rates];
+
+    const bands = keys.map((rate, i) => {
+      // Spread the colour ramp across the rated bands so the highest rate lands
+      // on the warmest stop even when only a few rates exist.
+      const colorIdx = rates.length <= 1
+        ? BAND_COLORS.length - 1
+        : Math.round((i / (rates.length - 1)) * (BAND_COLORS.length - 1));
+      const members: BandClient[] = paying
+        .filter((c) => (c.session_rate ?? null) === rate)
+        .map((c) => ({
+          id: c.id,
+          name: c.full_name,
+          revenue: c.monthly_revenue ?? 0,
+          since: c.member_since,
+          totalSessions: c.total_sessions,
+          rate: c.session_rate,
+          history: c.rate_history ?? [],
+        }))
+        .sort((m1, m2) => m2.revenue - m1.revenue);
+      const income = members.reduce((s, c) => s + c.revenue, 0);
+      return {
+        label: rate == null ? "No rate set" : fmtMoney(rate),
+        color: rate == null ? "var(--muted)" : BAND_COLORS[Math.min(colorIdx, BAND_COLORS.length - 1)],
+        members,
+        income,
+        count: members.length,
+        pct: total > 0 ? (income / total) * 100 : 0,
+      };
+    });
+
+    return { bands, totalIncome: total, payingCount: paying.length, excludedCount: excluded };
+  }, [clients]);
+
+  if (payingCount === 0) {
+    return (
+      <p className="meta" style={{ fontStyle: "italic" }}>
+        No clients with monthly revenue on record yet.
+      </p>
+    );
+  }
+
+  const active = hover != null ? bands[hover] : null;
+
+  return (
+    <div>
+      {/* Headline stats */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+          gap: "0.75rem",
+          marginBottom: "0.9rem",
+        }}
+      >
+        <div>
+          <div className="stat-label">Monthly income</div>
+          <div style={{ fontSize: "1.55rem", fontWeight: 700, color: "var(--rust)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+            {fmtMoney(totalIncome)}
+          </div>
+          <div className="meta" style={{ fontSize: "0.68rem" }}>recurring, all paying clients</div>
+        </div>
+        <div>
+          <div className="stat-label">Paying clients</div>
+          <div style={{ fontSize: "1.55rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+            {payingCount}
+          </div>
+          <div className="meta" style={{ fontSize: "0.68rem" }}>
+            {excludedCount > 0 ? `${excludedCount} paused / comp excluded` : "all clients active"}
+          </div>
+        </div>
+        <div>
+          <div className="stat-label">Avg / client</div>
+          <div style={{ fontSize: "1.55rem", fontWeight: 700, color: "var(--ink)", lineHeight: 1.1, fontFamily: "Oswald, sans-serif" }}>
+            {fmtMoney(payingCount > 0 ? Math.round(totalIncome / payingCount) : 0)}
+          </div>
+          <div className="meta" style={{ fontSize: "0.68rem" }}>per month</div>
+        </div>
+      </div>
+
+      {/* Caption — clarifies that bands are per-session rates and the bar shows
+          each rate's share of monthly income. */}
+      <div className="stat-label" style={{ marginBottom: "0.4rem" }}>
+        Share of income by session rate
+      </div>
+
+      {/* 100%-stacked share bar — each segment is a band, width = % of income */}
+      <div
+        style={{
+          display: "flex",
+          height: 30,
+          borderRadius: 4,
+          overflow: "hidden",
+          border: "1px solid var(--line)",
+          marginBottom: "0.9rem",
+        }}
+      >
+        {bands.map((b, idx) => {
+          if (b.pct <= 0) return null;
+          const isHover = hover === idx;
+          return (
+            <div
+              key={b.label}
+              onMouseEnter={() => setHover(idx)}
+              onMouseLeave={() => setHover(null)}
+              title={`${b.label}/session · ${Math.round(b.pct)}% of income · ${b.count} client${b.count === 1 ? "" : "s"}`}
+              style={{
+                width: `${b.pct}%`,
+                background: b.color,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: "0.66rem",
+                fontWeight: 700,
+                cursor: "default",
+                filter: hover != null && !isHover ? "saturate(0.55) opacity(0.7)" : "none",
+                transition: "filter 0.12s ease",
+                minWidth: 0,
+              }}
+            >
+              {b.pct >= 9 ? `${Math.round(b.pct)}%` : ""}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Per-band legend rows — swatch, band label, share, client count. Hover
+          a row (or a bar segment) to populate the detail panel below. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+        {bands.map((b, idx) => {
+          const isHover = hover === idx;
+          const empty = b.count === 0;
+          return (
+            <div
+              key={b.label}
+              onMouseEnter={() => !empty && setHover(idx)}
+              onMouseLeave={() => setHover(null)}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.1rem 5.2rem 1fr auto",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.28rem 0.4rem",
+                borderRadius: 4,
+                background: isHover ? "rgba(0,0,0,0.04)" : "transparent",
+                cursor: empty ? "default" : "default",
+                opacity: empty ? 0.5 : 1,
+              }}
+            >
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: b.color, display: "inline-block" }} />
+              <span style={{ fontSize: "0.8rem", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{b.label}</span>
+              {/* Mini share bar */}
+              <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                <span style={{ flex: 1, height: 6, background: "var(--line)", borderRadius: 99, overflow: "hidden", minWidth: 20 }}>
+                  <span style={{ display: "block", height: "100%", width: `${b.pct}%`, background: b.color, borderRadius: 99 }} />
+                </span>
+                <span className="meta" style={{ fontSize: "0.72rem", width: "2.4rem", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                  {Math.round(b.pct)}%
+                </span>
+              </span>
+              <span style={{ fontSize: "0.74rem", color: "var(--muted)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                {b.count} client{b.count === 1 ? "" : "s"} · {fmtMoney(b.income)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Detail panel — shows the hovered band's clients and how long each has
+          been training with you. Fixed min-height so the layout doesn't jump
+          as you move between bands. */}
+      <div
+        style={{
+          marginTop: "0.7rem",
+          borderTop: "1px solid var(--line)",
+          paddingTop: "0.7rem",
+          minHeight: 92,
+        }}
+      >
+        {active == null ? (
+          <p className="meta" style={{ fontSize: "0.74rem", fontStyle: "italic", margin: 0 }}>
+            Hover a band to see which clients are in it and how long they&apos;ve been with you.
+          </p>
+        ) : active.count === 0 ? (
+          <p className="meta" style={{ fontSize: "0.74rem", fontStyle: "italic", margin: 0 }}>
+            No clients in the {active.label} band.
+          </p>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginBottom: "0.4rem", flexWrap: "wrap" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontWeight: 700, fontSize: "0.82rem" }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: active.color, display: "inline-block" }} />
+                {active.label}{active.label === "No rate set" ? "" : "/session"}
+              </span>
+              <span className="meta" style={{ fontSize: "0.72rem" }}>
+                {active.count} client{active.count === 1 ? "" : "s"} · {fmtMoney(active.income)}/mo · {Math.round(active.pct)}% of income
+              </span>
+            </div>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "0.5rem 1.25rem" }}>
+              {active.members.map((c) => {
+                const spw = avgSessionsPerWeek(c.totalSessions, c.since);
+                const change = lastRateChange(c.history);
+                return (
+                  <li key={c.id} style={{ fontSize: "0.78rem" }}>
+                    {/* Line 1: name + monthly revenue */}
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", alignItems: "baseline" }}>
+                      <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                      <span className="meta" style={{ fontSize: "0.72rem", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                        {fmtMoney(c.revenue)}/mo
+                      </span>
+                    </div>
+                    {/* Line 2: tenure · avg sessions/wk */}
+                    <div className="meta" style={{ fontSize: "0.68rem", lineHeight: 1.35 }}>
+                      with you {fmtTenure(c.since)}
+                      {spw != null && <> · {spw.toFixed(1)}×/wk</>}
+                    </div>
+                    {/* Line 3: last pay increase + previous rate (only if changed) */}
+                    {change ? (
+                      <div style={{ fontSize: "0.68rem", lineHeight: 1.35, color: change.delta >= 0 ? "var(--sage)" : "var(--red)", fontWeight: 600 }}>
+                        {change.delta >= 0 ? "▲" : "▼"} {fmtMoney(c.rate)} since {fmtMonthYear(change.changeDate)}
+                        <span className="meta" style={{ fontWeight: 400, marginLeft: "0.3rem" }}>
+                          (was {fmtMoney(change.previousRate)})
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="meta" style={{ fontSize: "0.66rem", lineHeight: 1.35, fontStyle: "italic" }}>
+                        rate unchanged since joining
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
       </div>
     </div>
   );
@@ -980,6 +1317,21 @@ export default function DashboardClient({
               <div className="stat-label" style={{ marginBottom: "0" }}>Week by week</div>
               <WoWChart monthAppts={displayMonthAppts} monthStart={monthStart} />
             </div>
+          </GroupShell>
+
+          {/* Income by pay band — roster-wide view of where recurring
+              monthly income comes from. Open by default so the financial
+              mix is visible at a glance. */}
+          <GroupShell
+            title="Income by pay band"
+            badge={
+              <span style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600 }}>
+                {clients.filter((c) => (c.monthly_revenue ?? 0) > 0).length} paying
+              </span>
+            }
+            defaultOpen={true}
+          >
+            <IncomeByBandChart clients={clients} />
           </GroupShell>
 
           {/* All-time session history — sits under the Month group on

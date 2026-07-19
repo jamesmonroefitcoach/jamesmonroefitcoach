@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/types";
+import { buildSessionCookieValue } from "@/lib/session";
 import { createSupabaseServerForResponse, hasSupabaseEnv } from "@/lib/supabase/server";
 
 // POST /api/sign-in-password   { email, password }
@@ -9,7 +10,17 @@ import { createSupabaseServerForResponse, hasSupabaseEnv } from "@/lib/supabase/
 //   Auth on the next request.
 export async function POST(req: NextRequest) {
   if (!hasSupabaseEnv()) {
-    return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    // Local/offline demo mode: there's no Supabase to authenticate against, so
+    // sign in as the demo coach and let the app run end-to-end against the
+    // built-in sample roster. Any email/password is accepted. This branch is
+    // impossible once NEXT_PUBLIC_SUPABASE_URL/ANON_KEY are set (production).
+    const response = NextResponse.json({ ok: true, demo: true });
+    response.cookies.set(
+      SESSION_COOKIE,
+      buildSessionCookieValue({ id: "demo-coach", name: "James Monroe", role: "coach" }),
+      { path: "/", httpOnly: true, sameSite: "lax" },
+    );
+    return response;
   }
   const body = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
   const email = (body.email ?? "").trim().toLowerCase();

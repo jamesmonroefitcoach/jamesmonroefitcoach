@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseAdmin } from "@/lib/supabase/server";
+import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
 import {
   OFFERING_KEYS, EXPERIENCE_LEVELS, ACTIVITY_LEVELS,
@@ -111,6 +111,7 @@ export async function submitConsultationRequest(input: {
 export async function listConsultationRequests(): Promise<ConsultationRequest[]> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return [];
+  if (!hasSupabaseEnv()) return [];
 
   const sb = createSupabaseAdmin();
   const { data, error } = await sb
