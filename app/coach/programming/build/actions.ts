@@ -5,6 +5,7 @@ import { getSessionUser } from "@/lib/session";
 import { listAppointmentsForClient } from "@/lib/data";
 import type { Category, ProgramKind } from "@/lib/programs";
 import { syncProgramToSheet, getOrCreatePairedSheet } from "@/lib/programs-sheets-bridge";
+import { getWorkoutSheet } from "@/lib/workout-sheets.server";
 
 export type SaveProgramItem = {
   movement_id?: string;     // existing movement
@@ -680,6 +681,21 @@ export async function getOrCreatePairedSheetAction(programId: string): Promise<{
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+// Resolve the open-access client link for a sheet — the /s/<token> path James
+// texts to a client so they can fill the at-home program like a PDF. Returns a
+// relative path; the caller prefixes the origin.
+export async function getPublicSheetLink(
+  sheetId: string
+): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || (me.role !== "coach" && !me.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  const sheet = await getWorkoutSheet(sheetId);
+  if (!sheet) return { ok: false, error: "Sheet not found." };
+  if (!sheet.public_token) return { ok: false, error: "Sheet has no share link yet — save it first." };
+  return { ok: true, path: `/s/${sheet.public_token}` };
 }
 
 // ─── Delete helpers ───────────────────────────────────────────────────────────

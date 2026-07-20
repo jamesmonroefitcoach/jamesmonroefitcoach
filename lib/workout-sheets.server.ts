@@ -13,7 +13,7 @@ import {
 const COLS =
   "id, name, kind, coach_id, client_id, session_id, status, sheet_data, " +
   "pdf_storage_path, pdf_original_filename, lock_holder_id, lock_acquired_at, " +
-  "last_edited_by, last_edited_at, created_at, updated_at";
+  "last_edited_by, last_edited_at, created_at, updated_at, public_token";
 
 function rowToSheet(r: unknown): WorkoutSheet {
   return r as WorkoutSheet;
@@ -25,6 +25,19 @@ export async function getWorkoutSheet(id: string): Promise<WorkoutSheet | null> 
     .from("workout_sheets")
     .select(COLS)
     .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToSheet(data);
+}
+
+// Resolve a sheet by its open-access token (backs the public /s/<token> link).
+export async function getWorkoutSheetByPublicToken(token: string): Promise<WorkoutSheet | null> {
+  if (!hasSupabaseEnv()) return null;
+  if (!token) return null;
+  const { data, error } = await createSupabaseAdmin()
+    .from("workout_sheets")
+    .select(COLS)
+    .eq("public_token", token)
     .maybeSingle();
   if (error || !data) return null;
   return rowToSheet(data);

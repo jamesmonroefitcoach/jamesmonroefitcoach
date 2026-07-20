@@ -32,6 +32,7 @@ export default function WorkoutSheetEmbed({
   onSaved,
   viewOnly,
   sessionMode,
+  publicToken,
 }: {
   sheetId?: string | null;
   user?: UserLite | null;
@@ -43,6 +44,9 @@ export default function WorkoutSheetEmbed({
   viewOnly?: boolean;
   /** Single in-person session sheet: one day, no date range / Add Day. */
   sessionMode?: boolean;
+  /** Open-access mode: the iframe reads/writes via /api/public/workout-sheets/
+   *  <token> instead of the authed endpoints (no session, no lock). */
+  publicToken?: string | null;
   /** When provided, the parent owns post-save handling: we call this with the
    *  saved sheet id and skip the internal router.push/refresh. Lets an embed
    *  that lives inside a larger workspace stay mounted after the first save. */
@@ -80,10 +84,11 @@ export default function WorkoutSheetEmbed({
         clearLocal: !sheetId && clearLocal ? true : undefined,
         viewOnly: viewOnly ? true : undefined,
         sessionMode: sessionMode ? true : undefined,
+        publicToken: publicToken ?? undefined,
       },
       window.location.origin
     );
-  }, [user, clients, sessions, sheetId, autofill, clearLocal, viewOnly, sessionMode]);
+  }, [user, clients, sessions, sheetId, autofill, clearLocal, viewOnly, sessionMode, publicToken]);
 
   useEffect(() => {
     function onMessage(ev: MessageEvent) {

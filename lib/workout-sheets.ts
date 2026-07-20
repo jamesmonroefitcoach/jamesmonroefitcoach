@@ -45,6 +45,8 @@ export type WorkoutSheet = {
   last_edited_at: string;
   created_at: string;
   updated_at: string;
+  /** Unguessable token backing the open-access /s/<token> client link. */
+  public_token: string;
 };
 
 // ─── lock timing ─────────────────────────────────────────────────────

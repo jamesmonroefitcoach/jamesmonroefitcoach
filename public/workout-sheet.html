@@ -308,6 +308,12 @@
   body.view-only .intro-note { display: none !important; }
   body.view-only input, body.view-only textarea { background: transparent; }
 
+  /* Public (open-access /s/<token>) link: the client fills the sheet like a PDF.
+     Hide the coach-only rename ("Edit details") and re-share (Send) controls;
+     Edit / Save changes / Save PDF stay so the client can fill and keep it. */
+  body.public-mode #save-modal-trigger,
+  body.public-mode #send-btn { display: none !important; }
+
   /* Session mode: a single in-person session sheet — one day, no date range,
      no Add Day, no remove-day. It's one day with James, not a multi-week plan. */
   body.session-mode #date-range-field,
@@ -970,6 +976,15 @@
     var pollTimer = null, heartbeatTimer = null, serverSaveTimer = null;
     var IS_IFRAME = window.parent && window.parent !== window;
     var INIT_HANDLED = false;
+    // Open-access mode: when set, this sheet is being edited via the public
+    // /s/<token> link, so reads/writes go through /api/public/workout-sheets/
+    // <token> (no session, no lock) instead of the authed id endpoints.
+    var PUBLIC_TOKEN = null;
+    function sheetApiUrl() {
+      return PUBLIC_TOKEN
+        ? "/api/public/workout-sheets/" + PUBLIC_TOKEN
+        : "/api/workout-sheets/" + SHEET_ID;
+    }
 
     function populateClientDatalist() {
       var dl = document.getElementById("clients-datalist");
@@ -1006,7 +1021,7 @@
     }
 
     function loadSheet(id) {
-      return fetch("/api/workout-sheets/" + id, { credentials: "include" })
+      return fetch(sheetApiUrl(), { credentials: "include" })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (json) {
           if (!json || !json.sheet) return null;
@@ -1031,7 +1046,7 @@
     }
 
     function tryAcquireLock() {
-      if (!SHEET_ID) return Promise.resolve();
+      if (!SHEET_ID || PUBLIC_TOKEN) return Promise.resolve();  // no locking on the open link
       return fetch("/api/workout-sheets/" + SHEET_ID + "/lock", { method: "POST", credentials: "include" })
         .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
         .then(function (rj) {
@@ -1046,7 +1061,7 @@
     }
 
     function releaseLock(useBeacon) {
-      if (!SHEET_ID || LOCKED_BY_OTHER) return;
+      if (!SHEET_ID || LOCKED_BY_OTHER || PUBLIC_TOKEN) return;
       try {
         fetch("/api/workout-sheets/" + SHEET_ID + "/lock", {
           method: "DELETE",
@@ -1060,7 +1075,7 @@
       if (pollTimer) return;
       pollTimer = setInterval(function () {
         if (!SHEET_ID) return;
-        fetch("/api/workout-sheets/" + SHEET_ID, { credentials: "include" })
+        fetch(sheetApiUrl(), { credentials: "include" })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (json) {
             if (!json || !json.sheet) return;
@@ -1097,7 +1112,7 @@
       if (!SHEET_ID || LOCKED_BY_OTHER) return;
       clearTimeout(serverSaveTimer);
       serverSaveTimer = setTimeout(function () {
-        fetch("/api/workout-sheets/" + SHEET_ID, {
+        fetch(sheetApiUrl(), {
           method: "PUT",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -1265,7 +1280,7 @@
     function saveNow() {
       if (!SHEET_ID) return;
       clearTimeout(serverSaveTimer);
-      fetch("/api/workout-sheets/" + SHEET_ID, {
+      fetch(sheetApiUrl(), {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sheet_data: collectState() }),
@@ -1401,6 +1416,9 @@
       // (which raced the client lock off).
       if (INIT_HANDLED) return;
       INIT_HANDLED = true;
+      // Open-access link: route all sheet I/O through the public token endpoint
+      // and hide coach-only controls (rename / re-share). Set before any load.
+      if (d.publicToken) { PUBLIC_TOKEN = d.publicToken; document.body.classList.add("public-mode"); }
       USER = d.user || null;
       CLIENT_LIST = Array.isArray(d.clientList) ? d.clientList : [];
       SESSION_LIST = Array.isArray(d.sessionList) ? d.sessionList : [];

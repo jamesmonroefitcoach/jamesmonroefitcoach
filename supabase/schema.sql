@@ -36,9 +36,9 @@ do $$ begin
   create type payment_status as enum ('paid', 'owed', 'overdue', 'comp');
 exception when duplicate_object then null; end $$;
 
-do $$ begin
-  create type cancel_reason as enum ('client_sick', 'client_travel', 'client_other', 'coach_sick', 'coach_other', 'no_show');
-exception when duplicate_object then null; end $$;
+-- cancel_reason is a free-text code, not an enum: the reason picker
+-- (lib/cancel-reasons.ts) evolves independently and historical codes must keep
+-- rendering. See migration 0033 for the enum→text conversion.
 
 -- ─── core tables ───────────────────────────────────────────────────────
 
@@ -182,7 +182,7 @@ create table if not exists appointments (
   starts_at     timestamptz not null,
   ends_at       timestamptz not null,
   status        appt_status not null default 'scheduled',
-  cancel_reason cancel_reason,
+  cancel_reason text,
   change_count  int not null default 0,           -- # of reschedules
   rate          numeric(8,2),                     -- snapshot of rate at session time
   paid          boolean not null default false,

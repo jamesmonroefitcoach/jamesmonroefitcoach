@@ -14,6 +14,7 @@ import {
   saveDraftProgram,
   deleteDraftProgram,
   deleteDraftSession,
+  getPublicSheetLink,
 } from "../actions";
 import ReworkClient from "../rework/rework-client";
 import ProgramsReworkClient from "../programs-rework/programs-rework-client";
@@ -410,6 +411,9 @@ export default function NewWayClient({
             onBack={backToLobby}
             hideToggle={MVP_SHEET_ONLY || sheetOnly}
           />
+          {pairedSheetId && (
+            <SendPanel sheetId={pairedSheetId} />
+          )}
           <WorkoutSheetEmbed
             user={{ id: user.id, name: user.name, role: user.role }}
             clients={clientLite}
@@ -1130,6 +1134,112 @@ function StatusInline({ status }: { status: "programmed" | "draft" | "needs_prog
     <span className="meta" style={{ marginLeft: "0.55rem", fontSize: "0.7rem", color }}>
       {label}
     </span>
+  );
+}
+
+// ── Send panel — open-access client link for a sheet (session or program) ──
+// James builds the sheet, then Send generates the /s/<token> URL he texts the
+// client. The client opens it with no login and fills it in like a PDF; their
+// inputs save straight back to this session/program.
+function SendPanel({ sheetId }: { sheetId: string }) {
+  const [link, setLink] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  const [loading, startLoad] = useTransition();
+
+  function generate() {
+    setError("");
+    startLoad(async () => {
+      const res = await getPublicSheetLink(sheetId);
+      if (!res.ok) { setError(res.error); return; }
+      const url = `${window.location.origin}${res.path}`;
+      setLink(url);
+      // Copy immediately so James can paste it into a text right away.
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch { /* clipboard blocked — the field below is selectable */ }
+    });
+  }
+
+  async function copy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+  }
+
+  async function share() {
+    if (!link || typeof navigator.share !== "function") return;
+    try { await navigator.share({ title: "Your workout sheet", url: link }); } catch { /* cancelled */ }
+  }
+
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  return (
+    <div
+      className="no-print"
+      style={{
+        display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap",
+        padding: "0.55rem 0.85rem", marginBottom: "0.65rem",
+        background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 4,
+      }}
+    >
+      {!link ? (
+        <>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ padding: "0.34rem 1rem", fontSize: "0.84rem" }}
+            onClick={generate}
+            disabled={loading}
+          >
+            {loading ? "Generating…" : "Send to client →"}
+          </button>
+          <span className="meta" style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
+            Creates an open link the client fills in — no login needed.
+          </span>
+          {error && <span style={{ fontSize: "0.72rem", color: "var(--rust)" }}>{error}</span>}
+        </>
+      ) : (
+        <>
+          <span className="meta" style={{ fontSize: "0.72rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+            Client link:
+          </span>
+          <input
+            readOnly
+            value={link}
+            onFocus={(e) => e.currentTarget.select()}
+            style={{
+              flex: 1, minWidth: 200, padding: "0.34rem 0.5rem",
+              fontFamily: "inherit", fontSize: "0.8rem",
+              border: "1px solid var(--line)", borderRadius: 4, background: "var(--bg)",
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ padding: "0.34rem 0.9rem", fontSize: "0.8rem" }}
+            onClick={copy}
+          >
+            {copied ? "Copied ✓" : "Copy"}
+          </button>
+          {canShare && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ padding: "0.34rem 0.9rem", fontSize: "0.8rem" }}
+              onClick={share}
+            >
+              Share…
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

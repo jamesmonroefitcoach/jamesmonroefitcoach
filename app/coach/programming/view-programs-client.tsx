@@ -337,7 +337,7 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
                   // whichever format it was built). Drafted / none → drop into
                   // the builder in Template (sheet) view.
                   const programParam = active.program ? `&program=${active.program.id}` : "";
-                  const buildHref = `/coach/programming/build/new-way?type=program&client=${block.clientId}${programParam}&view=template`;
+                  const buildHref = `/coach/programming/build/new-way?type=program&client=${block.clientId}${programParam}&view=template&new=1`;
                   const href = programStatusLabel === "Programmed" && active.program
                     ? `/coach/programming/view/${active.program.id}`
                     : buildHref;
@@ -393,7 +393,11 @@ function ClientRow({ block, view }: { block: ClientProgramBlock; view: "sessions
               if (verb === "View" && active.program) viewRoute = `/coach/programming/view/${active.program.id}`;
               else params.push("view=template"); // Build/Edit a program → Template sheet
             }
-            const href = viewRoute || `/coach/programming/build/new-way?${params.join("&")}${viewParam}`;
+            // new=1 auto-starts the workspace for the row's type. Harmless when
+            // an appt/program is present (that already opens the workspace); it
+            // rescues the fresh-build case, which would otherwise land on the
+            // lobby picker instead of the prefilled sheet.
+            const href = viewRoute || `/coach/programming/build/new-way?${params.join("&")}${viewParam}&new=1`;
             return (
               <Link
                 href={href}
@@ -462,7 +466,9 @@ function ClientRosterRow({ block }: { block: ClientProgramBlock }) {
         if (block.nextSession.status === "Programmed") viewParam = "&view=plan";
       }
     }
-    return `/coach/programming/build/new-way?${params.join("&")}${viewParam}`;
+    // new=1 auto-starts the correct builder when there's no appt/program to
+    // prefill (otherwise the link lands on the lobby picker); no-op otherwise.
+    return `/coach/programming/build/new-way?${params.join("&")}${viewParam}&new=1`;
   })();
   return (
     <div
