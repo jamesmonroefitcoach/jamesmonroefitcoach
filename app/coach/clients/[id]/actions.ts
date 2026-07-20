@@ -138,7 +138,12 @@ export async function updateCoachProfile(
   if (input.dire_need_ranking  !== undefined) payload.dire_need_ranking    = input.dire_need_ranking?.trim() || null;
 
   if (Object.keys(payload).length) {
-    const { error } = await supabase.from("client_details").update(payload).eq("profile_id", clientId);
+    // Upsert (not update): a client with no client_details row would otherwise
+    // silently no-op (zero rows matched), so the rate never saves or shows.
+    // Keying on the profile_id PK creates the row on first edit.
+    const { error } = await supabase
+      .from("client_details")
+      .upsert({ ...payload, profile_id: clientId }, { onConflict: "profile_id" });
     if (error) return { ok: false, error: error.message };
   }
 

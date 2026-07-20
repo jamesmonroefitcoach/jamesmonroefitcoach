@@ -119,7 +119,13 @@ export async function quickUpdateClient(
 
   if (!Object.keys(payload).length) return { ok: true };
 
-  const { error } = await supabase.from("client_details").update(payload).eq("profile_id", clientId);
+  // Upsert (not update): clients created without a client_details row would
+  // otherwise silently no-op here — the update matches zero rows, so the rate /
+  // tier / cadence never saves and the client shows as an unrated "active"
+  // default. Keying on the profile_id PK creates the row on first edit.
+  const { error } = await supabase
+    .from("client_details")
+    .upsert({ ...payload, profile_id: clientId }, { onConflict: "profile_id" });
   if (error) return { ok: false, error: error.message };
 
   // Rate propagation — when the client's session_rate changes, pull

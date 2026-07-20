@@ -459,6 +459,22 @@ function WoWChart({ monthAppts, monthStart }: { monthAppts: AppointmentRow[]; mo
 // revenue band. Shows each band's share of total monthly income and how many
 // clients sit in it. Hover a band to see who's in it and how long they've been
 // training with you.
+//
+// Income is computed straight from the client table: per-session rate ×
+// sessions/month (regular_frequency). We don't read the stored monthly_revenue
+// column — it's hand-maintained and drifts out of date.
+
+/** Monthly income for a client, from the client table: session_rate ×
+ *  regular_frequency (which holds sessions/month). Returns 0 for anyone who
+ *  isn't an active/online client or is missing a rate or a cadence, so they
+ *  fall out of the "paying" roster and the income total. */
+function clientMonthlyIncome(c: ClientRow): number {
+  if (c.lifecycle !== "active" && c.lifecycle !== "online") return 0;
+  const rate = c.session_rate;
+  const freq = c.regular_frequency ? parseFloat(c.regular_frequency) : null;
+  if (rate == null || rate <= 0 || freq == null || Number.isNaN(freq) || freq <= 0) return 0;
+  return rate * freq;
+}
 
 /** Human tenure from a member-since date, e.g. "2 yr 3 mo", "5 mo", "<1 mo". */
 function fmtTenure(since: string | null): string {
@@ -537,20 +553,20 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
   const { bands, totalIncome, payingCount, excludedCount } = useMemo(() => {
     // A "pay band" is a distinct current session rate — bands are derived from
     // whatever rates are actually in use on the roster, not hard-coded brackets.
-    // Only clients with a positive monthly revenue contribute to income share;
-    // paused / comp'd / unset clients are counted separately so the percentages
-    // reflect real recurring income.
-    const paying = clients.filter((c) => (c.monthly_revenue ?? 0) > 0);
-    const excluded = clients.length - paying.length;
-    const total = paying.reduce((s, c) => s + (c.monthly_revenue ?? 0), 0);
+    // Income per client is session_rate × sessions/month (from the client
+    // table), so the total is real recurring income. Active/online clients with
+    // a rate + cadence are "paying"; everyone else is counted as excluded.
+    const roster = clients.filter((c) => c.lifecycle === "active" || c.lifecycle === "online");
+    const paying = roster.filter((c) => clientMonthlyIncome(c) > 0);
+    const excluded = roster.length - paying.length;
+    const total = paying.reduce((s, c) => s + clientMonthlyIncome(c), 0);
 
-    // Distinct session rates present, ascending. Any paying client with no rate
-    // set is grouped into a trailing "No rate set" band so income sums to 100%.
+    // Distinct session rates present, ascending. Every paying client has a rate
+    // (income needs one), so no "No rate set" band is required.
     const rates = Array.from(
       new Set(paying.map((c) => c.session_rate).filter((r): r is number => r != null))
     ).sort((a, b) => a - b);
-    const hasUnrated = paying.some((c) => c.session_rate == null);
-    const keys: (number | null)[] = hasUnrated ? [...rates, null] : [...rates];
+    const keys: (number | null)[] = [...rates];
 
     const bands = keys.map((rate, i) => {
       // Spread the colour ramp across the rated bands so the highest rate lands
@@ -563,7 +579,7 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
         .map((c) => ({
           id: c.id,
           name: c.full_name,
-          revenue: c.monthly_revenue ?? 0,
+          revenue: clientMonthlyIncome(c),
           since: c.member_since,
           totalSessions: c.total_sessions,
           rate: c.session_rate,
@@ -587,7 +603,7 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
   if (payingCount === 0) {
     return (
       <p className="meta" style={{ fontStyle: "italic" }}>
-        No clients with monthly revenue on record yet.
+        No active clients with a session rate and cadence set yet.
       </p>
     );
   }
@@ -618,7 +634,7 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
             {payingCount}
           </div>
           <div className="meta" style={{ fontSize: "0.68rem" }}>
-            {excludedCount > 0 ? `${excludedCount} paused / comp excluded` : "all clients active"}
+            {excludedCount > 0 ? `${excludedCount} active · no rate/cadence set` : "all active clients billed"}
           </div>
         </div>
         <div>
@@ -1326,7 +1342,7 @@ export default function DashboardClient({
             title="Income by pay band"
             badge={
               <span style={{ fontSize: "0.65rem", color: "var(--muted)", fontWeight: 600 }}>
-                {clients.filter((c) => (c.monthly_revenue ?? 0) > 0).length} paying
+                {clients.filter((c) => clientMonthlyIncome(c) > 0).length} paying
               </span>
             }
             defaultOpen={true}
