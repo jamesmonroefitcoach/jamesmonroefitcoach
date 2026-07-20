@@ -18,18 +18,10 @@ export default function PublicSheetClient({
 }) {
   return (
     <div style={{ width: "min(1180px, 100% - 2rem)", margin: "0.6rem auto 2rem" }}>
-      <div
-        style={{
-          display: "flex", alignItems: "baseline", gap: "0.6rem", flexWrap: "wrap",
-          padding: "0.6rem 0.2rem 0.8rem",
-        }}
-      >
+      <div style={{ padding: "0.6rem 0.2rem 0.8rem" }}>
         <strong style={{ fontFamily: "Oswald, sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>
           Monroe Fit Coach
         </strong>
-        <span className="meta" style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
-          Your workout sheet — tap <strong>Edit</strong>, fill in your weights &amp; notes, then <strong>Save changes</strong>.
-        </span>
       </div>
       <WorkoutSheetEmbed
         user={{ id: clientId ?? "public-client", name: clientName, role: "client" }}

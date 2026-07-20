@@ -309,10 +309,25 @@
   body.view-only input, body.view-only textarea { background: transparent; }
 
   /* Public (open-access /s/<token>) link: the client fills the sheet like a PDF.
-     Hide the coach-only rename ("Edit details") and re-share (Send) controls;
-     Edit / Save changes / Save PDF stay so the client can fill and keep it. */
+     It opens directly editable and autosaves every keystroke, so there's no
+     edit / save / cancel workflow and no structural editing — just the form
+     (client fills their own cells; the coach's prescription stays frozen via
+     applyClientLock). Save PDF stays so the client can keep a copy. */
+  body.public-mode .row-del,
+  body.public-mode .row-dup,
+  body.public-mode .pair-del,
+  body.public-mode .row-add-set,
+  body.public-mode .remove-day,
+  body.public-mode .col-resizer,
+  body.public-mode #add-day,
+  body.public-mode #clear-btn,
   body.public-mode #save-modal-trigger,
-  body.public-mode #send-btn { display: none !important; }
+  body.public-mode #save-changes-btn,
+  body.public-mode #edit-mode-btn,
+  body.public-mode #send-btn,
+  body.public-mode #cancel-btn,
+  body.public-mode .x-cell,
+  body.public-mode .intro-note { display: none !important; }
 
   /* Session mode: a single in-person session sheet — one day, no date range,
      no Add Day, no remove-day. It's one day with James, not a multi-week plan. */
@@ -899,7 +914,7 @@
     document.addEventListener("input", function (e) {
       if (!e.target) return;
       var t = e.target.tagName;
-      if (t === "INPUT" || t === "TEXTAREA") saveState();
+      if (t === "INPUT" || t === "TEXTAREA") { saveState(); if (PUBLIC_TOKEN) saveToServer(); }
       if (e.target.name === "start_date" || e.target.name === "end_date") computeDateSpan();
     });
 
@@ -1368,8 +1383,9 @@
 
     window.addEventListener("beforeunload", function (e) {
       releaseLock(true);
-      // Warn if leaving with unsaved edits (saved sheets persist only on "Save changes").
-      if (EDIT_MODE && SHEET_ID && INITIAL_SNAPSHOT && JSON.stringify(collectState()) !== INITIAL_SNAPSHOT) {
+      // Warn if leaving with unsaved edits (saved sheets persist only on "Save
+      // changes"). The public link autosaves every keystroke, so never warn there.
+      if (!PUBLIC_TOKEN && EDIT_MODE && SHEET_ID && INITIAL_SNAPSHOT && JSON.stringify(collectState()) !== INITIAL_SNAPSHOT) {
         e.preventDefault(); e.returnValue = "";
       }
     });
@@ -1401,8 +1417,15 @@
         syncClientNotesMode();
         setTimeout(function () { applyClientLock(); applyViewOnly(); syncClientNotesMode(); }, 250);
         setTimeout(function () { applyClientLock(); applyViewOnly(); syncClientNotesMode(); }, 900);
-        enterViewMode();  // a saved sheet opens read-only until "Edit" is pressed
-        setTimeout(enterViewMode, 300);  // re-assert after the async row render settles
+        // Public link opens directly editable and autosaves; the authed app
+        // opens read-only until "Edit" is pressed.
+        if (PUBLIC_TOKEN) {
+          enterEditMode();
+          setTimeout(enterEditMode, 300);  // re-assert after the async row render settles
+        } else {
+          enterViewMode();
+          setTimeout(enterViewMode, 300);
+        }
         tryAcquireLock();
         startPolling();
       });
