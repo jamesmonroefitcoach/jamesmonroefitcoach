@@ -145,6 +145,10 @@ export default function WorkoutSheetEmbed({
       src={src}
       title="Workout Sheet"
       onLoad={onLoad}
+      // Web Share API is gated by Permissions Policy in nested frames; without
+      // this the Send button's native share sheet (which includes Messages on
+      // Mac/iOS) is blocked inside the embed and only the sms: fallback runs.
+      allow="web-share"
       style={{
         width: "100%",
         minHeight: 600,

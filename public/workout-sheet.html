@@ -250,12 +250,11 @@
   body.client-locked #add-day,
   body.client-locked #clear-btn,
   body.client-locked #save-modal-trigger { display: none !important; }
-  /* Frozen (read-only) fields read as plain text, not editable boxes: no fill,
-     no border, no focus highlight — so it's clear they can't be changed. */
+  /* Frozen (read-only) fields keep the exact look of the edit view — same
+     borders, underlines and fills — so every view reads like edit. They are
+     simply not typeable (readonly), not restyled. */
   body.client-locked input[readonly],
-  body.client-locked textarea[readonly] { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: var(--ink); cursor: default; }
-  body.client-locked input[readonly]:focus,
-  body.client-locked textarea[readonly]:focus { background: transparent !important; }
+  body.client-locked textarea[readonly] { cursor: default; }
 
   /* Per-row client note — a second line under James's (frozen) Load / Notes.
      Hidden until the client view shows it, or it has content (for James). */
@@ -271,13 +270,13 @@
   body.client-locked td.notes-cell .client-note,
   td.notes-cell .client-note.filled { display: block; }
 
-  /* View mode: a saved sheet opens read-only until "Edit" is pressed. Fields
-     read as plain text (no fill/border/highlight); content-editing controls
-     are hidden, but Edit / Save PDF / Send stay so you can act on it. */
+  /* View mode: a saved sheet opens read-only until "Edit" is pressed, but it
+     looks exactly like the edit view — same borders, underlines and fills.
+     Only the content-editing controls are hidden. The delete/duplicate buttons
+     inside the × column are hidden individually (below) rather than hiding the
+     whole .x-cell, so the column stays and Movement/Sets/Notes don't shift. */
   body.view-mode input[readonly],
-  body.view-mode textarea[readonly] { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: var(--ink); cursor: default; }
-  body.view-mode input[readonly]:focus,
-  body.view-mode textarea[readonly]:focus { background: transparent !important; }
+  body.view-mode textarea[readonly] { cursor: default; }
   body.view-mode .row-del,
   body.view-mode .row-dup,
   body.view-mode .pair-del,
@@ -286,11 +285,13 @@
   body.view-mode .col-resizer,
   body.view-mode #add-day,
   body.view-mode #clear-btn,
-  body.view-mode .x-cell,
   body.view-mode .intro-note { display: none !important; }
 
   /* View-only (coach opening a program to read it): everything is locked and
-     every editing control is hidden. Save PDF stays so it can be printed. */
+     every editing control is hidden, but it still looks like the edit view —
+     same borders, underlines and fills. The delete/duplicate buttons in the ×
+     column are hidden individually so the column stays and the table columns
+     don't shift. Save PDF stays so it can be printed. */
   body.view-only .row-del,
   body.view-only .row-dup,
   body.view-only .pair-del,
@@ -304,15 +305,16 @@
   body.view-only #edit-mode-btn,
   body.view-only #send-btn,
   body.view-only #cancel-btn,
-  body.view-only .x-cell,
   body.view-only .intro-note { display: none !important; }
-  body.view-only input, body.view-only textarea { background: transparent; }
 
   /* Public (open-access /s/<token>) link: the client fills the sheet like a PDF.
      It opens directly editable and autosaves every keystroke, so there's no
      edit / save / cancel workflow and no structural editing — just the form
      (client fills their own cells; the coach's prescription stays frozen via
-     applyClientLock). Save PDF stays so the client can keep a copy. */
+     applyClientLock). Save PDF stays so the client can keep a copy. The
+     delete/duplicate buttons in the × column are hidden individually rather
+     than hiding the whole .x-cell, so the column stays and the Movement/Sets/
+     Notes columns don't shift. */
   body.public-mode .row-del,
   body.public-mode .row-dup,
   body.public-mode .pair-del,
@@ -326,7 +328,6 @@
   body.public-mode #edit-mode-btn,
   body.public-mode #send-btn,
   body.public-mode #cancel-btn,
-  body.public-mode .x-cell,
   body.public-mode .intro-note { display: none !important; }
 
   /* Session mode: a single in-person session sheet — one day, no date range,
@@ -974,8 +975,14 @@
       var client = val("client_name").trim();
       var subject = "Workout Sheet" + (client ? " — " + client : "");
       var text = sheetSummary();
+      // Native share (phones + the macOS Safari share sheet, which includes
+      // Messages) is the best path where it exists. When it's not available —
+      // e.g. a MacBook on desktop Chrome — open the Messages app directly via
+      // the sms: scheme so the coach can still text the client instead of being
+      // dropped into email. "sms:?&body=" prefills the body on Apple (iOS +
+      // macOS) and Android alike.
       if (navigator.share) { navigator.share({ title: subject, text: text }).catch(function () {}); }
-      else { window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(text); }
+      else { window.location.href = "sms:?&body=" + encodeURIComponent(text); }
     });
 
     // ────────────────────────────────────────────────────────────────
