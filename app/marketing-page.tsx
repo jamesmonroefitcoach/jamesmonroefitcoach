@@ -196,8 +196,11 @@ export default async function MarketingPage({
       after:  allAfterUrls(t)[0],
     }))
     .filter((r) => r.before && r.after);
-  const renderedTestimonials = approvedTestimonials.length > 0
-    ? approvedTestimonials.map((t) => ({
+  // Photo-only coach entries carry an empty body — keep them out of the
+  // quotes strip (they still qualify for the results grid above).
+  const quoteRows = approvedTestimonials.filter((t) => t.body.trim());
+  const renderedTestimonials = quoteRows.length > 0
+    ? quoteRows.map((t) => ({
         quote: t.body,
         name: t.display_name || t.submitted_name,
         meta: t.meta_line ?? "",

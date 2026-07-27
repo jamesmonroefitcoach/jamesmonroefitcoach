@@ -139,6 +139,48 @@ export async function coachUploadTestimonialPhoto(formData: FormData): Promise<R
   return { ok: true, data: { url: urls[0] } };
 }
 
+// Coach-created entry (no client submission behind it): lands approved +
+// published so it shows on the site immediately. Quote is optional —
+// photo-only entries appear in the results grid but not the quotes list.
+export async function coachCreateTestimonial(input: {
+  display_name: string;
+  meta_line?: string | null;
+  body?: string | null;
+  before_image_url?: string | null;
+  after_image_url?: string | null;
+}): Promise<Result<{ id: string }>> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+
+  const name = (input.display_name ?? "").trim();
+  if (!name) return { ok: false, error: "Give the entry a client name." };
+
+  const sb = createSupabaseAdmin();
+  const { data, error } = await sb
+    .from("testimonials")
+    .insert({
+      client_id: null,
+      submitted_name: name,
+      display_name: name,
+      meta_line: (input.meta_line ?? "").trim().slice(0, 200) || null,
+      body: (input.body ?? "").trim(),
+      before_image_url: (input.before_image_url ?? "").trim() || null,
+      after_image_url: (input.after_image_url ?? "").trim() || null,
+      status: "approved",
+      is_published: true,
+      approved_at: new Date().toISOString(),
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: me.id,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/coach/testimonials");
+  revalidatePath("/");
+  return { ok: true, data: { id: data.id } };
+}
+
 // ── coach moderation ──────────────────────────────────────────────
 
 export async function listAllTestimonials(): Promise<Testimonial[]> {

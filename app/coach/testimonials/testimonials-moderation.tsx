@@ -7,6 +7,7 @@ import {
   updateTestimonial,
   deleteTestimonial,
   coachUploadTestimonialPhoto,
+  coachCreateTestimonial,
 } from "@/app/testimonials/actions";
 import {
   type Testimonial,
@@ -34,6 +35,7 @@ export default function TestimonialsModeration({ initial }: { initial: Testimoni
   const [filter, setFilter] = useState<TestimonialStatus | "all">("new");
   const [err, setErr] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const counts = useMemo(() => {
     const c: Record<TestimonialStatus, number> = { new: 0, approved: 0, declined: 0, hidden: 0 };
@@ -67,6 +69,25 @@ export default function TestimonialsModeration({ initial }: { initial: Testimoni
           fontSize: "0.84rem",
         }}>{err}</div>
       )}
+
+      {/* Coach-created entry: for clients who never submitted a testimonial */}
+      <div style={{ marginBottom: "0.9rem" }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ padding: "0.3rem 0.8rem", fontSize: "0.8rem" }}
+          onClick={() => setAdding((v) => !v)}
+        >
+          {adding ? "Close" : "Add entry +"}
+        </button>
+        {adding ? (
+          <AddEntryForm
+            pending={pending}
+            run={run}
+            onDone={() => setAdding(false)}
+          />
+        ) : null}
+      </div>
 
       {/* Filter chips */}
       <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginBottom: "0.9rem" }}>
@@ -419,6 +440,64 @@ function EditForm({
             onClose();
           }}
         >Save</button>
+      </div>
+    </div>
+  );
+}
+
+// Coach-authored entry: name + optional subtitle/quote + photos. Lands
+// approved & published, so it's on the site as soon as it's saved.
+function AddEntryForm({
+  pending, run, onDone,
+}: {
+  pending: boolean;
+  run: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => void;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [meta, setMeta] = useState("");
+  const [body, setBody] = useState("");
+  const [before, setBefore] = useState("");
+  const [after, setAfter] = useState("");
+
+  return (
+    <div style={{ marginTop: "0.6rem", padding: "0.7rem", border: "1px solid var(--line)", borderRadius: 4, display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+      <div className="test-mod-edit-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
+        <label style={col}>
+          <span style={lbl}>Client name (shown on site)</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rexton L." style={inp} />
+        </label>
+        <label style={col}>
+          <span style={lbl}>Subtitle (optional)</span>
+          <input value={meta} onChange={(e) => setMeta(e.target.value)} placeholder='e.g. "Down 22 lb · DL 405"' style={inp} />
+        </label>
+      </div>
+      <label style={col}>
+        <span style={lbl}>Quote (optional — leave blank for photos only)</span>
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} style={inp} />
+      </label>
+      <div className="test-mod-image-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
+        <PhotoField kind="before" label="Before photo" value={before} onChange={setBefore} />
+        <PhotoField kind="after" label="After photo" value={after} onChange={setAfter} />
+      </div>
+      <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+        <button type="button" className="btn btn-ghost" style={{ padding: "0.25rem 0.7rem", fontSize: "0.78rem" }} onClick={onDone}>Cancel</button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ padding: "0.25rem 0.7rem", fontSize: "0.78rem" }}
+          disabled={pending || !name.trim()}
+          onClick={() => {
+            run(coachCreateTestimonial({
+              display_name: name,
+              meta_line: meta || null,
+              body: body || null,
+              before_image_url: before || null,
+              after_image_url: after || null,
+            }));
+            onDone();
+          }}
+        >Add to site</button>
       </div>
     </div>
   );
