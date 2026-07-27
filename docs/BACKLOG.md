@@ -15,11 +15,12 @@ Status legend: `OPEN` not built · `VERIFY` probably built, confirm in app · `D
   Big item; needs design (see "Exercise tracking" ideas below before starting).
 - **OPEN — Client day-by-day sheet splitting (Batch 2, Jun 28).** Idea: split the
   template into per-day editable pages (weeks → days), each submittable, with James
-  notified and able to view on the profile. Doc says "confirm this makes sense and
-  suggest how" — still a design conversation, not a spec.
-- **VERIFY — Schedule "edit series" more options (Batch 1, Jun 28).** Wants: change
-  time for all vs. just one session. Extending a series shipped (2c6e3e6, d04dd6f);
-  the per-occurrence vs. whole-series time change may not have.
+  notified and able to view on the profile. Never shipped; in practice partly
+  superseded by the public sheet link (Jul 20). Confirm with James it's still
+  wanted before designing.
+- **VERIFY — Schedule "edit series" more options (Batch 1, Jun 28).** Session
+  history says this-session-vs-whole-series scope options were added Jun 28
+  alongside extend (2c6e3e6, d04dd6f) — confirm in app before touching.
 - **VERIFY — View Programs: all sections collapsed on open except Programs (Jun 22).**
 - **VERIFY — Template/sheet formatting (Jun 22):** small date/weight/sleep inputs +
   wider name field; text wrap on all columns; per-row set counts (3 sets on one row,

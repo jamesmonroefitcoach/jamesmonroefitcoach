@@ -9,6 +9,28 @@ smallest edit that fixes the reported item; don't refactor adjacent code, rename
 things, or "improve" UI James didn't ask about. See docs/WORKFLOW.md for how updates
 flow from James's tracker to commits, and docs/ARCHITECTURE.md for the full map.
 
+## Working agreements with Ryan (hard rules, learned over the project)
+
+- **Ask before acting** on app design/functionality decisions and before any
+  significant suggestion. Present the plan of attack before writing feature code.
+- **Don't commit or push until told.** Work on localhost; describe what changed and
+  wait for the word. (A May commit once wiped schedule features — this rule exists
+  for a reason.)
+- **All SQL goes through Ryan.** Produce one combined, paste-ready query; Ryan runs
+  it in the Supabase SQL editor. Never apply DDL or data changes to prod directly.
+- **Review the phone view intentionally on every UI change** — not as an
+  afterthought. Everything must fit without zooming or horizontal overflow;
+  collapse/auto-collapse sections on small screens.
+- **One database, both ways.** Coach and client views must reflect the same data and
+  update each other — no view-local state that the other side can't see.
+- **Naming:** in-gym appointment = "Session"; at-home = "Program". Never "at home".
+- Only clients flagged with "+" need programming; needs-programming lists reflect
+  only those.
+- No em-dashes in site copy (reads as an AI giveaway). Print-outs are always blank
+  templates.
+- When Ryan says "make it like it was before", ask *which* before — restore-to-
+  earlier-version requests recur and the target version is often ambiguous.
+
 ## Stack
 
 Next.js 14 App Router + TypeScript, Supabase (Postgres/Auth/Storage), Tailwind,
@@ -67,11 +89,29 @@ with `npx tsc --noEmit` and by exercising the app (`npm run dev`).
 - **`scripts/reset-all-passwords.ts`** — resets every auth user's password; guarded
   by `RESET_ALL_PASSWORDS=yes-i-am-sure`. Leave the guard alone.
 
-## Settled decisions (don't re-litigate)
+## Settled decisions (don't re-litigate; each was fought over)
 
-- Programming flow: Build → Template (+ toggle), View → as-built; single-day session
-  template; "clear programming" clears programs+sheets only, never the schedule.
-- Saved sheets open editable with autosave on the public link; no Edit/Save buttons
-  on the public page.
+- Programming flow: Build → Template (+ toggle), View → as-built (never fall back to
+  the In-App plan); single-day session template (no date range, no Add Day); "clear
+  programming" clears programs+sheets only, never the schedule. `MVP_SHEET_ONLY =
+  true`: the build IS the sheet; the In-App builder is dormant, not deleted.
+- Sheet editing: **no edit locks, ever** — last-write-wins; the read-only "someone
+  is editing" banner was built and rejected same-day (Jul 1). `lock_holder_id`
+  columns and the `/lock` endpoint exist but are intentionally unenforced.
+- In-app saved sheets: boot read-only View → Edit → Save changes / Cancel; "Edit
+  details" is a separate modal; no autosave. **Public link (`/s/<token>`) is the
+  exception:** header-only, editable on open, autosaves every keystroke, no
+  Edit/Save buttons (Save PDF stays). Coach prescription frozen via
+  `applyClientLock`; frozen fields must not *look* editable.
+- Public link is deliberately open access (token = full edit); Ryan accepted the
+  risk. Don't add auth to it without asking.
+- Cancel reasons: James's canonical set (Accident, No reason given, Personal,
+  Client schedule, Injury/illness, Other w/ specify), required on cancel/no-show.
+  `cancel_reason` is **text**, not an enum (migration 0033) — the enum caused every
+  cancellation to fail; don't reintroduce it.
+- Schedule display: James is colorblind — luminance-contrast palette, glyphs ✕/⊘/↻
+  only, cancelled = grey (never orange), per-category emoji on personal blocks only,
+  "PAID ✓ / PROG: Y" as plain text at block bottom.
+- Superset ✕ = ungroup (keep the exercises), never delete.
 - Verification note: the in-app preview browser reports `visibilityState=hidden`,
   so visibility-gated client code won't run there — verify via DB-level checks.
