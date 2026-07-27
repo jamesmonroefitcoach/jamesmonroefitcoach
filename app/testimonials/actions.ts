@@ -121,6 +121,24 @@ export async function submitTestimonialWithFiles(formData: FormData): Promise<Re
   return { ok: true };
 }
 
+// Coach-side upload from the moderation edit form: takes one image file,
+// returns its public URL for the before/after field. The row itself is
+// still written by updateTestimonial when James hits Save.
+export async function coachUploadTestimonialPhoto(formData: FormData): Promise<Result<{ url: string }>> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "No file received." };
+  if (file.size > MAX_FILE_BYTES) return { ok: false, error: "Image is over 8 MB — please pick a smaller one." };
+  if (!ALLOWED_TYPES.test(file.type)) return { ok: false, error: "Please choose an image file." };
+
+  const kind = formData.get("kind") === "after" ? "after" : "before";
+  const urls = await uploadFiles([file], `coach/${kind}`);
+  if (urls.length === 0) return { ok: false, error: "Upload failed — please try again." };
+  return { ok: true, data: { url: urls[0] } };
+}
+
 // ── coach moderation ──────────────────────────────────────────────
 
 export async function listAllTestimonials(): Promise<Testimonial[]> {

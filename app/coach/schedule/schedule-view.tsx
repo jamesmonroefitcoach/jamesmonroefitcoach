@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AppointmentRow, ClientRow } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
-import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, editSeries, extendSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
+import { saveAppointment, deleteAppointment, approveChangeRequest, denyChangeRequest, cancelSeries, convertToSeries, editSeries, extendSeries, fetchWeekAppts, fetchMonthAppts } from "./actions";
 import { CANCEL_REASONS, CANCEL_REASON_LABELS, cancelReasonLabel } from "@/lib/cancel-reasons";
 
 // 44 px per hour. 13-hour stretch (7am→8pm) = 572 px which fits inside
@@ -754,6 +754,23 @@ export default function ScheduleView({
         }
         setSaveError(res.error);
         return;
+      }
+      // Editing a standalone appointment with "Repeat" ticked: convert it
+      // into a series going forward (series row + future occurrences).
+      if (apptIdForSave && !draft.series_id && draft.repeat_enabled) {
+        const conv = await convertToSeries({
+          appt_id: apptIdForSave,
+          cadence_weeks: draft.repeat_cadence,
+          occurrences: Math.max(2, draft.repeat_count),
+        });
+        if (!conv.ok && !conv.error.startsWith("Supabase not configured")) {
+          setSaveError(`Saved, but couldn't set up the repeat: ${conv.error}`);
+          return;
+        }
+        // Refetch the visible week so the appointment now carries its
+        // series_id (future occurrences land on later weeks).
+        const data = await fetchWeekAppts(ws.toISOString());
+        setAppts(data);
       }
       // res.data.id is the canonical UUID for new inserts; for edits it's
       // the same id we already had. Pass it down so optimistic state holds
@@ -2457,7 +2474,7 @@ export default function ScheduleView({
               </div>
             </div>
 
-            {!draft.appt_id ? (
+            {!draft.series_id ? (
               <div style={{ background: "rgba(0,0,0,0.025)", padding: "0.6rem 0.7rem", borderRadius: 3, border: "1px solid var(--line)" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.85rem" }}>
                   <input type="checkbox" checked={draft.repeat_enabled} onChange={(e) => setDraft({ ...draft, repeat_enabled: e.target.checked })} />
@@ -2477,7 +2494,10 @@ export default function ScheduleView({
                       <input className="input" type="number" min={2} max={52} value={draft.repeat_count} onChange={(e) => setDraft({ ...draft, repeat_count: Number(e.target.value) || 0 })} style={{ marginTop: "0.25rem" }} />
                     </div>
                     <p className="meta" style={{ fontSize: "0.72rem", gridColumn: "1 / span 2", margin: 0 }}>
-                      Creates {Math.max(1, draft.repeat_count)} {draft.session_type === "personal" ? "blocks" : "sessions"} starting {new Date(draft.starts_at).toLocaleDateString()}, every {draft.repeat_cadence === 1 ? "week" : "other week"}. Cancel any one without affecting the rest, or use &quot;Cancel series&quot; later to drop the lot.
+                      {draft.appt_id
+                        ? `Repeats this ${draft.session_type === "personal" ? "block" : "session"} going forward — ${Math.max(2, draft.repeat_count)} total starting ${new Date(draft.starts_at).toLocaleDateString()}, every ${draft.repeat_cadence === 1 ? "week" : "other week"}.`
+                        : `Creates ${Math.max(1, draft.repeat_count)} ${draft.session_type === "personal" ? "blocks" : "sessions"} starting ${new Date(draft.starts_at).toLocaleDateString()}, every ${draft.repeat_cadence === 1 ? "week" : "other week"}.`}{" "}
+                      Cancel any one without affecting the rest, or use &quot;Cancel series&quot; later to drop the lot.
                     </p>
                   </div>
                 ) : null}

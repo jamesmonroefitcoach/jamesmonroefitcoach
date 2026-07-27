@@ -209,6 +209,17 @@
     tbody td.notes-cell { min-width: 180px; }
   }
 
+  /* Touch devices. The column resizers claim every touch gesture
+     (touch-action: none), so a swipe starting on one dead-zones page
+     scrolling — keep pan-y with the browser. Inputs under 16px make iOS
+     Safari auto-zoom on focus, leaving clients pinch-zooming back out
+     after every field — 16px is the no-zoom threshold. */
+  @media (pointer: coarse) {
+    .col-resizer { touch-action: pan-y; }
+    input, textarea, select { font-size: 16px !important; }
+    .set-pair input { width: 44px; }
+  }
+
   /* lock banner */
   .lock-banner {
     display: none;

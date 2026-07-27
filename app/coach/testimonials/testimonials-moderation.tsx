@@ -6,6 +6,7 @@ import {
   setTestimonialStatus,
   updateTestimonial,
   deleteTestimonial,
+  coachUploadTestimonialPhoto,
 } from "@/app/testimonials/actions";
 import {
   type Testimonial,
@@ -390,26 +391,8 @@ function EditForm({
       </label>
 
       <div className="test-mod-image-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
-        <label style={col}>
-          <span style={lbl}>Before image URL</span>
-          <input
-            type="url"
-            value={before}
-            onChange={(e) => setBefore(e.target.value)}
-            placeholder="https://…"
-            style={inp}
-          />
-        </label>
-        <label style={col}>
-          <span style={lbl}>After image URL</span>
-          <input
-            type="url"
-            value={after}
-            onChange={(e) => setAfter(e.target.value)}
-            placeholder="https://…"
-            style={inp}
-          />
-        </label>
+        <PhotoField kind="before" label="Before photo" value={before} onChange={setBefore} />
+        <PhotoField kind="after" label="After photo" value={after} onChange={setAfter} />
       </div>
 
       <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
@@ -438,6 +421,70 @@ function EditForm({
         >Save</button>
       </div>
     </div>
+  );
+}
+
+// URL field + phone-friendly upload button. Picking a file uploads it to the
+// testimonial-photos bucket right away and drops the public URL into the
+// field; James still hits Save to persist it on the row.
+function PhotoField({
+  kind, label, value, onChange,
+}: {
+  kind: "before" | "after";
+  label: string;
+  value: string;
+  onChange: (url: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setErr(null);
+    setBusy(true);
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("kind", kind);
+    const res = await coachUploadTestimonialPhoto(fd);
+    setBusy(false);
+    if (res.ok && res.data?.url) onChange(res.data.url);
+    else setErr(res.ok ? "Upload failed — please try again." : res.error);
+  }
+
+  return (
+    <label style={col}>
+      <span style={lbl}>{label}</span>
+      <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+        <input
+          type="url"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://… or upload →"
+          style={{ ...inp, flex: "1 1 0", minWidth: 0 }}
+        />
+        <label
+          className="btn btn-ghost"
+          style={{ padding: "0.25rem 0.55rem", fontSize: "0.74rem", cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap" }}
+        >
+          {busy ? "Uploading…" : "📷 Upload"}
+          <input
+            type="file"
+            accept="image/*"
+            disabled={busy}
+            onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }}
+            style={{ display: "none" }}
+          />
+        </label>
+      </div>
+      {value ? (
+        <img
+          src={value}
+          alt={`${label} preview`}
+          style={{ marginTop: "0.25rem", maxWidth: 96, maxHeight: 96, objectFit: "cover", borderRadius: 3, border: "1px solid var(--line)" }}
+        />
+      ) : null}
+      {err ? <span style={{ fontSize: "0.72rem", color: "var(--rust)" }}>{err}</span> : null}
+    </label>
   );
 }
 

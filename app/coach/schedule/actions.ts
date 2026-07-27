@@ -254,6 +254,90 @@ export async function editSeries(input: EditSeriesInput): Promise<Result<{ count
   return { ok: true, data: { count: 0 } };
 }
 
+// Turn an existing standalone appointment into a recurring series going
+// forward: create the series row, stamp this appointment as occurrence #1,
+// and materialize the remaining future occurrences. Mirrors the repeat
+// path in saveAppointment so a converted series behaves identically to
+// one created recurring from the start.
+export async function convertToSeries(input: {
+  appt_id: string;
+  cadence_weeks: 1 | 2;
+  occurrences: number; // total, including this appointment
+}): Promise<Result<{ count: number }>> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured" };
+  if (input.occurrences < 2) return { ok: false, error: "Pick at least 2 occurrences." };
+
+  const supabase = createSupabaseAdmin();
+  const { data: appt, error: apptErr } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("id", input.appt_id)
+    .eq("coach_id", me.id)
+    .maybeSingle();
+  if (apptErr || !appt) return { ok: false, error: apptErr?.message ?? "appointment not found" };
+  if (appt.series_id) return { ok: false, error: "Already part of a recurring series." };
+
+  const startBase = new Date(appt.starts_at);
+  const endBase = new Date(appt.ends_at);
+  const durationMin = Math.max(1, Math.round((endBase.getTime() - startBase.getTime()) / 60000));
+
+  const { data: series, error: serErr } = await supabase
+    .from("appointment_series")
+    .insert({
+      coach_id: me.id,
+      client_id: appt.client_id ?? null,
+      starts_at: startBase.toISOString(),
+      duration_min: durationMin,
+      weekday: startBase.getDay(),
+      cadence_weeks: input.cadence_weeks,
+      occurrences: input.occurrences,
+      rate: appt.rate ?? null,
+      notes: appt.notes ?? null
+    })
+    .select("id")
+    .single();
+  if (serErr || !series) return { ok: false, error: serErr?.message ?? "series insert failed" };
+
+  const { error: stampErr } = await supabase
+    .from("appointments")
+    .update({ series_id: series.id })
+    .eq("id", appt.id);
+  if (stampErr) return { ok: false, error: stampErr.message };
+
+  const rows: any[] = [];
+  for (let i = 1; i < input.occurrences; i++) {
+    const s = new Date(startBase);
+    s.setDate(s.getDate() + i * 7 * input.cadence_weeks);
+    const e = new Date(s.getTime() + durationMin * 60000);
+    rows.push({
+      coach_id: appt.coach_id,
+      client_id: appt.client_id ?? null,
+      session_type: appt.session_type,
+      personal_label: appt.personal_label ?? null,
+      goal_id: appt.goal_id ?? null,
+      is_blocking: appt.is_blocking ?? false,
+      rate: appt.rate ?? null,
+      paid: false,
+      status: "scheduled",
+      notes: appt.notes ?? null,
+      session_program_id: null,
+      starts_at: s.toISOString(),
+      ends_at: e.toISOString(),
+      change_count: 0,
+      series_id: series.id,
+      updated_at: new Date().toISOString()
+    });
+  }
+  const { data: inserted, error: insErr } = await supabase.from("appointments").insert(rows).select("id");
+  if (insErr) return { ok: false, error: insErr.message };
+
+  revalidatePath("/coach/schedule");
+  revalidatePath("/coach");
+  return { ok: true, data: { count: (inserted?.length ?? 0) + 1 } };
+}
+
 export async function cancelSeries(seriesId: string, opts: { fromDate?: string } = {}): Promise<Result<{ count: number }>> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
