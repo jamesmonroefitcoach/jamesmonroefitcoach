@@ -46,6 +46,7 @@ All scripts are idempotent — safe to re-run if something goes wrong.
 | 7 | `supabase/migrations/0007_intake_form.sql` | `form_received_at` + `form_data` columns on `client_details` |
 | 8 | `supabase/import-clients.sql` | Loads all ~35 clients + prospects from the sheet |
 | 9 | `supabase/migrations/0008_seed_historical_sessions.sql` | Historical completed+paid sessions + blank "Historical Sessions" programs |
+| 10 | `supabase/migrations/0009…0034` — **every remaining file, in filename order** | Goals + growth plan, testimonials, consultations, workout sheets + public tokens, program day logs, auth linking, the programs↔sheets bridge, cancel-reason text conversion, and more. A fresh install is incomplete without all of them. |
 
 **After step 8** you should see something like:
 ```

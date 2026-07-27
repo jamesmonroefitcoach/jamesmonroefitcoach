@@ -38,6 +38,14 @@ const fileEnv = loadEnvLocal();
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? fileEnv.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? fileEnv.SUPABASE_SERVICE_ROLE_KEY;
 
+if (process.env.RESET_ALL_PASSWORDS !== "yes-i-am-sure") {
+  console.error(
+    "Refusing to run: this resets EVERY auth user's password.\n" +
+    "Re-run with RESET_ALL_PASSWORDS=yes-i-am-sure if you really mean it.",
+  );
+  process.exit(1);
+}
+
 if (!url || !key) {
   console.error(
     "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.\n" +

@@ -1,7 +1,15 @@
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/session";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  // Diagnostic dump — coach/admin only. Returns 404 (not 401) to avoid
+  // advertising the endpoint.
+  const user = await getSessionUser();
+  if (!user || (user.role !== "coach" && user.role !== "admin")) {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "(not set)";
   const keySet = Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const hasEnv = hasSupabaseEnv();

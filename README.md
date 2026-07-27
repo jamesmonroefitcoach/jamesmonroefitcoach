@@ -32,21 +32,26 @@ npm run dev
 
 Stored in `profiles.role` — one of `coach`, `client`, `admin`.
 
-For now there is **no real auth** — login is a name-picker that sets a cookie. Wire Supabase Auth in once we're ready to ship to clients.
+Auth is Supabase Auth (password) — see `lib/session.ts`. Profiles link to auth users
+via `auth_user_id`, back-filled by email match on first sign-in. A legacy
+`mfc_session` picker cookie still works as a fallback when no Auth session exists.
 
 ## Routes
 
-- `/login` — pick a profile (no password)
-- `/coach` — dashboard (week at a glance, $, open requests)
-- `/coach/clients` + `/coach/clients/[id]` — client list and detail
-- `/coach/build-program` — program builder
-- `/coach/schedule` — drag-drop schedule with change tracking
-- `/coach/messages` — DMs + announcements
-- `/client` — schedule + today's program
-- `/client/profile` — profile edit
-- `/client/check-ins` — submit check-in (weight, photos, notes)
-- `/client/messages` — DM with coach
+- `/` — marketing site (logged-out) or redirect to portal (logged-in)
+- `/login`, `/signup`, `/consult` — sign-in, account requests, consultation requests
+- `/s/[token]` — public workout-sheet link (open access, autosaves)
+- `/coach` — dashboard (week at a glance, $, income by pay band, open requests)
+- `/coach/clients` + `/coach/clients/[id]` — client list and deep client detail
+- `/coach/programming` — programs, builder (sheet-first), exercise library, materials
+- `/coach/schedule` — drag-drop schedule with recurring series + change tracking
+- `/coach/appointments`, `/coach/availability`, `/coach/goals`, `/coach/messages`,
+  `/coach/testimonials`
+- `/client` — schedule + programming, check-ins, goals, profile, messages
 - `/admin` — approve account requests, assign coaches
+
+Fuller map: `docs/ARCHITECTURE.md`. Working agreements + history: `CLAUDE.md`,
+`docs/BACKLOG.md`, `docs/WORKFLOW.md`.
 
 ## Reference
 

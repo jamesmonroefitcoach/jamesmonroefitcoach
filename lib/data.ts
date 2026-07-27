@@ -123,8 +123,6 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
     .eq("role", "client");
   if (error) { console.error("[listClients] query error:", error); return DEMO_CLIENTS; }
   if (!data) { console.error("[listClients] no data returned"); return DEMO_CLIENTS; }
-  console.log("[listClients] raw row count:", data.length, "| coachId:", coachId);
-  if (data.length > 0) console.log("[listClients] sample row:", JSON.stringify(data[0]).slice(0, 300));
 
   const baseRows: (ClientRow | null)[] = data
     .map((p: any) => {
