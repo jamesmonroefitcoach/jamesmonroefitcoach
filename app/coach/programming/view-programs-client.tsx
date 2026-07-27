@@ -655,10 +655,10 @@ export default function ViewProgramsClient({ blocks, clients, recentDrafts }: { 
   const router = useRouter();
   const [showBuild, setShowBuild] = useState(false);
   const [query, setQuery] = useState("");
-  // Everything starts collapsed so the tab opens to a clean, scannable list of
-  // sections; James expands the one he wants.
+  // Everything starts collapsed except Programs — James lands on the list
+  // he uses most and expands the rest as needed.
   const [sessionsOpen, setSessionsOpen] = useState(false);
-  const [programsOpen, setProgramsOpen] = useState(false);
+  const [programsOpen, setProgramsOpen] = useState(true);
   const [upcomingOpen, setUpcomingOpen] = useState(false);
   const [clientListOpen, setClientListOpen] = useState(false);
 
