@@ -178,6 +178,16 @@ function ProgramCell({ client, atHomeProg, daysLeft }: {
   );
 }
 
+/** "Wed 7/29 3:00 PM" for the next-sessions list under the Scheduled cell. */
+function fmtUpcoming(iso: string): string {
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }) +
+    " " +
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  );
+}
+
 function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionStatus: NextSessionStatus }) {
   const atHomeProg = pastProgramsForClient(c.id).find(
     (p) => p.is_current && p.program_kind === "at_home"
@@ -368,6 +378,24 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
         <span style={{ fontWeight: c.sessions_this_month_scheduled > 0 ? 600 : 400, color: c.sessions_this_month_scheduled === 0 ? "var(--muted)" : undefined }}>
           {c.sessions_this_month_scheduled}
         </span>
+        {/* Attendance: % of past booked sessions completed + cancellations.
+            Past non-cancelled counts as completed (settled policy). Glyphs
+            match the schedule: ✕ cancelled, ⊘ no-show. */}
+        {c.past_sessions_booked > 0 && (
+          <div className="meta" style={{ fontSize: "0.62rem", lineHeight: 1.45, whiteSpace: "nowrap", marginTop: "0.2rem" }}>
+            {Math.round(((c.past_sessions_booked - c.cancellations - c.no_shows) / c.past_sessions_booked) * 100)}% completed
+            <br />
+            ✕{c.cancellations} cancelled{c.no_shows > 0 ? <> · ⊘{c.no_shows}</> : null}
+          </div>
+        )}
+        {/* Next two upcoming sessions */}
+        {c.upcoming_sessions.length > 0 && (
+          <div className="meta" style={{ fontSize: "0.62rem", lineHeight: 1.45, whiteSpace: "nowrap", marginTop: "0.2rem" }}>
+            {c.upcoming_sessions.map((iso) => (
+              <div key={iso}>{fmtUpcoming(iso)}</div>
+            ))}
+          </div>
+        )}
       </td>
       {/* Last Session */}
       <td><LastSessionCell iso={c.last_session_at} /></td>

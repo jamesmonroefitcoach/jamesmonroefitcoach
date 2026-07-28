@@ -610,8 +610,13 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
 
   const active = hover != null ? bands[hover] : null;
 
+  // Hover is cleared only when the pointer leaves the whole chart (root div
+  // below), never on leaving an individual segment/row. Per-item mouseleave
+  // caused a null flash between adjacent rows, and the detail panel resizing
+  // triggered scroll anchoring — the chart moved under the cursor, re-toggling
+  // hover in a rapid glitch loop (James's bug report, Jul 2026).
   return (
-    <div>
+    <div onMouseLeave={() => setHover(null)}>
       {/* Headline stats */}
       <div
         style={{
@@ -670,7 +675,6 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
             <div
               key={b.label}
               onMouseEnter={() => setHover(idx)}
-              onMouseLeave={() => setHover(null)}
               title={`${b.label}/session · ${Math.round(b.pct)}% of income · ${b.count} client${b.count === 1 ? "" : "s"}`}
               style={{
                 width: `${b.pct}%`,
@@ -703,10 +707,11 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
             <div
               key={b.label}
               onMouseEnter={() => !empty && setHover(idx)}
-              onMouseLeave={() => setHover(null)}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.1rem 5.2rem 1fr auto",
+                // auto label + minmax'd share column so narrow widths squeeze
+                // the bar instead of letting the % overlap the client count
+                gridTemplateColumns: "1.1rem auto minmax(58px, 1fr) auto",
                 alignItems: "center",
                 gap: "0.5rem",
                 padding: "0.28rem 0.4rem",
@@ -727,7 +732,7 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
                   {Math.round(b.pct)}%
                 </span>
               </span>
-              <span style={{ fontSize: "0.74rem", color: "var(--muted)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+              <span style={{ fontSize: "0.74rem", color: "var(--muted)", fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
                 {b.count} client{b.count === 1 ? "" : "s"} · {fmtMoney(b.income)}
               </span>
             </div>
@@ -736,14 +741,16 @@ function IncomeByBandChart({ clients }: { clients: ClientRow[] }) {
       </div>
 
       {/* Detail panel — shows the hovered band's clients and how long each has
-          been training with you. Fixed min-height so the layout doesn't jump
-          as you move between bands. */}
+          been training with you. Fixed height (scrolls internally) so hovering
+          never changes page layout — a growing panel shifted the chart under
+          the cursor and caused a hover/resize oscillation. */}
       <div
         style={{
           marginTop: "0.7rem",
           borderTop: "1px solid var(--line)",
           paddingTop: "0.7rem",
-          minHeight: 92,
+          height: 150,
+          overflowY: "auto",
         }}
       >
         {active == null ? (
@@ -821,21 +828,33 @@ function GroupShell({
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
+      {/* Header is a div with the toggle as an inner <button>; `right` renders
+          as a sibling. Nesting the right-side buttons inside the toggle button
+          was invalid HTML (button-in-button) and threw a hydration error on
+          every dashboard load. */}
+      <div
         style={{
           width: "100%", display: "flex", alignItems: "center", gap: "0.55rem",
           background: open ? "rgba(0,0,0,0.02)" : "transparent",
-          border: "none", borderBottom: open ? "1px solid var(--line)" : "none",
-          padding: "0.7rem 1.1rem", cursor: "pointer", fontFamily: "inherit",
+          borderBottom: open ? "1px solid var(--line)" : "none",
+          padding: "0.7rem 1.1rem",
         }}
       >
-        <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{open ? "▾" : "▸"}</span>
-        <span style={{ fontWeight: 700, fontSize: "1rem", flex: 1, textAlign: "left" }}>{title}</span>
-        {badge}
-        {right && <span onClick={(e) => e.stopPropagation()}>{right}</span>}
-      </button>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          style={{
+            display: "flex", alignItems: "center", gap: "0.55rem", flex: 1,
+            background: "transparent", border: "none", padding: 0,
+            cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{open ? "▾" : "▸"}</span>
+          <span style={{ fontWeight: 700, fontSize: "1rem", flex: 1, textAlign: "left" }}>{title}</span>
+          {badge}
+        </button>
+        {right}
+      </div>
       {open && <div style={{ padding: "1rem 1.1rem" }}>{children}</div>}
     </div>
   );
@@ -1518,6 +1537,11 @@ function AllTimeSessionsBlock({
     firstWeek: string | null;
   };
 }) {
+  // Hovered bar index — populates the fixed-height detail strip under the
+  // chart with that week's count plus its month's totals. Cleared only when
+  // the pointer leaves the chart area (container-level mouseleave), same
+  // anti-flicker pattern as IncomeByBandChart.
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   if (stats.weeks.length === 0) {
     return (
       <p className="meta" style={{ fontStyle: "italic" }}>
@@ -1546,6 +1570,16 @@ function AllTimeSessionsBlock({
   const BAR_W = 14;
   const BAR_GAP = 3;
   const BAR_H = 110;
+  // Month detail for the hovered week — all weeks whose start date falls in
+  // the same calendar month, so the strip can show that month's total.
+  const hovered = hoverIdx != null ? stats.weeks[hoverIdx] ?? null : null;
+  const monthWeeks = hovered
+    ? stats.weeks.filter((w) => w.weekStart.slice(0, 7) === hovered.weekStart.slice(0, 7))
+    : [];
+  const monthCount = monthWeeks.reduce((s, w) => s + w.count, 0);
+  const monthLabel = hovered
+    ? parseDateLocal(hovered.weekStart).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : "";
   return (
     <div>
       <div className="meta" style={{ fontSize: "0.74rem", marginBottom: "0.7rem" }}>
@@ -1592,6 +1626,7 @@ function AllTimeSessionsBlock({
           a data label directly above the bar. Scrolls horizontally
           inside the GroupShell when history is long. */}
       <div
+        onMouseLeave={() => setHoverIdx(null)}
         style={{
           overflowX: "auto",
           paddingBottom: "0.35rem",
@@ -1609,14 +1644,14 @@ function AllTimeSessionsBlock({
             position: "relative",
           }}
         >
-          {stats.weeks.map((w) => {
+          {stats.weeks.map((w, i) => {
             const pct = (w.count / maxCount) * 100;
             const barH = Math.max(2, Math.round((pct / 100) * BAR_H));
             const isAboveAvg = w.count >= avg;
             return (
               <div
                 key={w.weekStart}
-                title={`Week of ${new Date(w.weekStart + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} — ${w.count} session${w.count === 1 ? "" : "s"}`}
+                onMouseEnter={() => setHoverIdx(i)}
                 style={{
                   width: BAR_W,
                   flex: "0 0 auto",
@@ -1642,6 +1677,10 @@ function AllTimeSessionsBlock({
                   height: barH,
                   background: isAboveAvg ? "var(--rust)" : "rgba(168,61,43,0.35)",
                   borderRadius: "2px 2px 0 0",
+                  // Shape-based highlight (outline, not a colour swap) so the
+                  // hovered bar reads for James regardless of palette.
+                  outline: hoverIdx === i ? "1.5px solid var(--ink)" : "none",
+                  outlineOffset: 1,
                 }} />
               </div>
             );
@@ -1656,6 +1695,27 @@ function AllTimeSessionsBlock({
           </span>
           <span>{lastLabel}</span>
         </div>
+      </div>
+
+      {/* Hover detail strip — fixed height so hovering never shifts layout
+          (see the pay-band chart's oscillation bug). Shows the hovered week
+          plus its calendar month's totals. */}
+      <div style={{ height: "1.15rem", marginTop: "0.3rem", fontSize: "0.72rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {hovered ? (
+          <>
+            <strong>
+              Week of {parseDateLocal(hovered.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </strong>
+            {" — "}{hovered.count} session{hovered.count === 1 ? "" : "s"}
+            <span className="meta" style={{ fontSize: "0.72rem" }}>
+              {" · "}{monthLabel}: {monthCount} session{monthCount === 1 ? "" : "s"} over {monthWeeks.length} wk{monthWeeks.length === 1 ? "" : "s"}
+            </span>
+          </>
+        ) : (
+          <span className="meta" style={{ fontStyle: "italic", fontSize: "0.72rem" }}>
+            Hover a bar for week and month detail.
+          </span>
+        )}
       </div>
 
       {/* Distribution histogram — actual % of weeks at light / target /

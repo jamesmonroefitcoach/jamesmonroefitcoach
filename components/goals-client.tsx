@@ -114,13 +114,14 @@ export default function GoalsClient({
             pending={pending}
           />
 
-          {/* ── Weekly ─────────────────────────────────────────── */}
+          {/* ── Weekly — grouped by category subsections (one view) ── */}
           <FlatGoalsCard
             title="Weekly"
             empty="No weekly goals yet."
             items={flat.weekly}
             onAction={run}
             pending={pending}
+            groupByCategory
           />
 
           {/* Weekly-hours rollup — what % of the 168-hour week the
@@ -228,14 +229,28 @@ function Cell({ label, value, sub, accent }: { label: string; value: string; sub
 // ── Flat list card (Annual / Weekly) ────────────────────────────────
 
 function FlatGoalsCard({
-  title, empty, items, onAction, pending,
+  title, empty, items, onAction, pending, groupByCategory = false,
 }: {
   title: string;
   empty: string;
   items: { goal: GoalRow; cat: GoalCategoryWithGoals; subs: GoalRow[] }[];
   onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
   pending: boolean;
+  /** Group rows under per-category subheaders (text, not colour-only —
+   *  the stripe alone isn't distinguishable for James) instead of one
+   *  flat mixed list. */
+  groupByCategory?: boolean;
 }) {
+  // Category order preserved as first-seen in items.
+  const groups: { cat: GoalCategoryWithGoals; rows: typeof items }[] = [];
+  if (groupByCategory) {
+    const byId = new Map<string, { cat: GoalCategoryWithGoals; rows: typeof items }>();
+    for (const it of items) {
+      let g = byId.get(it.cat.id);
+      if (!g) { g = { cat: it.cat, rows: [] }; byId.set(it.cat.id, g); groups.push(g); }
+      g.rows.push(it);
+    }
+  }
   return (
     <section style={{
       border: "1px solid var(--line)",
@@ -262,6 +277,41 @@ function FlatGoalsCard({
       </div>
       {items.length === 0 ? (
         <p className="meta" style={{ padding: "0.5rem 0.7rem", fontStyle: "italic", margin: 0, fontSize: "0.78rem" }}>{empty}</p>
+      ) : groupByCategory ? (
+        groups.map(({ cat, rows }) => (
+          <div key={cat.id}>
+            <div style={{
+              padding: "0.3rem 0.7rem",
+              borderTop: "1px solid var(--line)",
+              borderLeft: `3px solid ${cat.color}`,
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: "var(--muted)",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem",
+            }}>
+              {cat.name}
+              <span style={{ fontWeight: 400, opacity: 0.7 }}>{rows.length}</span>
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {rows.map(({ goal, cat: rowCat, subs }) => (
+                <div key={goal.id} style={{ borderLeft: `3px solid ${rowCat.color}` }}>
+                  <GoalListItem
+                    goal={goal}
+                    subs={subs}
+                    categoryColor={rowCat.color}
+                    categoryId={rowCat.id}
+                    onAction={onAction}
+                    pending={pending}
+                  />
+                </div>
+              ))}
+            </ul>
+          </div>
+        ))
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {items.map(({ goal, cat, subs }) => (

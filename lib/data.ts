@@ -41,6 +41,13 @@ export type ClientRow = {
   total_sessions: number;
   sessions_this_month_completed: number;
   sessions_this_month_scheduled: number;
+  // Attendance stats for the Clients table (under the Scheduled column):
+  // past booked sessions (any status), how many were cancelled / no-showed,
+  // and the next two upcoming session start times.
+  past_sessions_booked: number;
+  cancellations: number;
+  no_shows: number;
+  upcoming_sessions: string[];
   phone: string | null;
   birthday: string | null;
   injuries: string | null;
@@ -66,7 +73,7 @@ export type ClientRow = {
   client_description: string | null;
 };
 
-const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0, needs_at_home_programming: false, client_description: null, rate_history: [] as RateChange[] };
+const DEMO_CLIENT_DEFAULTS = { gender: null, phone: null, birthday: null, starting_weight_lb: null, trained_since_note: null, accountability: null, education: null, commitment: null, dire_need_ranking: null, time_window_note: null, sessions_this_month_completed: 0, sessions_this_month_scheduled: 0, past_sessions_booked: 0, cancellations: 0, no_shows: 0, upcoming_sessions: [] as string[], needs_at_home_programming: false, client_description: null, rate_history: [] as RateChange[] };
 
 // Seeded rate-change history for the demo roster so the dashboard's pay-band
 // view can show "last increase / previous rate" without a live database. Each
@@ -152,6 +159,10 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
         total_sessions: 0,
         sessions_this_month_completed: 0,
         sessions_this_month_scheduled: 0,
+        past_sessions_booked: 0,
+        cancellations: 0,
+        no_shows: 0,
+        upcoming_sessions: [],
         phone: p.phone ?? null,
         birthday: d?.birthday ?? null,
         injuries: extractInjuriesFromForm(d?.form_data ?? null),
@@ -175,25 +186,35 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
     const ids = rows.map((r) => r.id);
     const now = new Date().toISOString();
 
-    // Completed sessions → total_sessions + last_session_at
+    // Past sessions (any status) → total_sessions + last_session_at (still
+    // completed-only, same semantics as before) plus booked / cancelled /
+    // no-show counts for the attendance line in the Clients table.
     const { data: stats } = await supabase
       .from("appointments")
       .select("client_id, starts_at, status")
       .in("client_id", ids)
       .eq("session_type", "session")
-      .eq("status", "completed");
+      .lte("starts_at", now);
     if (stats) {
-      const byClient: Record<string, { total: number; last: string | null }> = {};
+      const byClient: Record<string, { total: number; last: string | null; booked: number; cancelled: number; noShow: number }> = {};
       stats.forEach((s: any) => {
-        const cur = (byClient[s.client_id] ??= { total: 0, last: null });
-        cur.total += 1;
-        if (!cur.last || s.starts_at > cur.last) cur.last = s.starts_at;
+        const cur = (byClient[s.client_id] ??= { total: 0, last: null, booked: 0, cancelled: 0, noShow: 0 });
+        cur.booked += 1;
+        if (s.status === "cancelled") cur.cancelled += 1;
+        else if (s.status === "no_show") cur.noShow += 1;
+        if (s.status === "completed") {
+          cur.total += 1;
+          if (!cur.last || s.starts_at > cur.last) cur.last = s.starts_at;
+        }
       });
       rows.forEach((r) => {
         const s = byClient[r.id];
         if (s) {
           r.total_sessions = s.total;
           r.last_session_at = s.last;
+          r.past_sessions_booked = s.booked;
+          r.cancellations = s.cancelled;
+          r.no_shows = s.noShow;
         }
       });
     }
@@ -208,12 +229,16 @@ export async function listClients(coachId?: string): Promise<ClientRow[]> {
       .gte("starts_at", now)
       .order("starts_at", { ascending: true });
     if (upcoming) {
-      const nextByClient: Record<string, string> = {};
+      const nextByClient: Record<string, string[]> = {};
       upcoming.forEach((s: any) => {
-        if (!nextByClient[s.client_id]) nextByClient[s.client_id] = s.starts_at;
+        (nextByClient[s.client_id] ??= []).push(s.starts_at);
       });
       rows.forEach((r) => {
-        if (nextByClient[r.id]) r.next_session_at = nextByClient[r.id];
+        const list = nextByClient[r.id];
+        if (list && list.length) {
+          r.next_session_at = list[0];
+          r.upcoming_sessions = list.slice(0, 2);
+        }
       });
     }
 
