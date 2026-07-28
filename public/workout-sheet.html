@@ -263,6 +263,7 @@
      can only fill in weight, notes, and their bodyweight/sleep. Structure
      controls (add/remove row, set, day, clear) are hidden. */
   body.client-locked .row-tools,
+  body.client-locked .day-controls,
   body.client-locked .pair-del,
   body.client-locked .row-add-set,
   body.client-locked .remove-day,
@@ -297,6 +298,7 @@
   body.view-mode input[readonly],
   body.view-mode textarea[readonly] { cursor: default; }
   body.view-mode .row-tools,
+  body.view-mode .day-controls,
   body.view-mode .pair-del,
   body.view-mode .row-add-set,
   body.view-mode .remove-day,
@@ -309,6 +311,7 @@
      every editing control is hidden, but it still looks like the edit view —
      same borders, underlines and fills. Save PDF stays so it can be printed. */
   body.view-only .row-tools,
+  body.view-only .day-controls,
   body.view-only .pair-del,
   body.view-only .row-add-set,
   body.view-only .remove-day,
@@ -328,6 +331,7 @@
      (client fills their own cells; the coach's prescription stays frozen via
      applyClientLock). Save PDF stays so the client can keep a copy. */
   body.public-mode .row-tools,
+  body.public-mode .day-controls,
   body.public-mode .pair-del,
   body.public-mode .row-add-set,
   body.public-mode .remove-day,
