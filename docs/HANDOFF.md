@@ -23,8 +23,13 @@ are much faster than a Node script.
 
 **You still do not run SQL against prod yourself.** Schema and data changes go
 to Ryan as paste-ready queries. See
-[`docs/sql-for-ryan-2026-07-27.md`](sql-for-ryan-2026-07-27.md) — written this
-session, **not yet applied**.
+[`docs/sql-for-ryan-2026-07-27.md`](sql-for-ryan-2026-07-27.md), written this
+session. Ryan **applied blocks 1 and 2** during the session and they are
+verified: threads went 54 → 40, DM threads down to 2, message count unchanged
+at 81 so no history was lost, `message_threads_dm_unique` is in place, and the
+test rows are archived. **Block 3 (the orphaned public link sweep) was not run**
+and still needs the select-first judgement call. Block 4 is an undo template,
+not a cleanup step.
 
 ## 1. What shipped this session (committed to `main`, NOT pushed)
 
@@ -172,11 +177,12 @@ Postponed by James in the sheet: the pay-band dropdown persistence, template
 formatting/per-row set counts, and the phone notes-column item (comment says
 check whether it is even a real issue on phone first).
 
-## 7. Test rows left in prod
+## 7. Test rows left in prod — cleared
 
 Verifying the delete and deferred-creation flows required creating real rows.
-§2 of the SQL doc lists them by id. Two are attached to Samantha Saenz, so they
-would show in her portal until cleared.
+All five are now archived (block 2 of the SQL doc was applied), so nothing test
+related is visible to a client. The ids are still listed in that doc for the
+record.
 
 ## 8. How to verify in-browser
 
@@ -197,10 +203,21 @@ of a thread, which is how the messages bug was confirmed end to end.
 Gotcha that still bites: the in-app preview browser reports
 `visibilityState=hidden` and `requestAnimationFrame` never fires there.
 
-## 9. Still owed
+## 9. Tracker sheet state
 
-Logging this session's items in James' Tracker under "Claude" was in progress at
-the end of the session. Edit access to the sheet was being arranged; check
-whether the rows for the inbox fix, the session-history chart, the Week Of
-dropdown, the template column, and the Recently Saved delete were marked
-resolved before assuming they still need doing.
+Logged under "Claude" in James' Tracker this session:
+
+- **Row 7** (inbox errors), **row 11** (template first column), **row 14**
+  (Recently Saved delete + View) — marked Resolved, dated 2026-07-27, each with
+  a plain-English comment for James and a "deploy pending" note.
+- **Row 28** added: the coach inbox `.limit(50)` cap that can hide clients.
+- Rows 29 and 30 were being added when the session wrapped: the announcement
+  thread problem, and the product call on reopening a deleted program via an
+  old builder link. **Check whether those two rows exist before re-adding them.**
+- **Rows 8 and 9** (session-history x-axis, Week Of / Active Program dropdown)
+  were deliberately left Open. That work was still running at the end of the
+  session, so nothing was claimed as fixed. Verify the actual state of those two
+  before touching either the code or the sheet.
+
+James reads this sheet directly, so comments there are written in plain language
+with no jargon, matching the existing "Claude 2026-07-26" entries.
