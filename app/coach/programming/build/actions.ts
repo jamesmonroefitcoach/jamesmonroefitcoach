@@ -683,6 +683,59 @@ export async function getOrCreatePairedSheetAction(programId: string): Promise<{
   }
 }
 
+// ─── At-home intent for sheet-first programs ──────────────────────────────
+// "+ New program" (At-home Program) opens a blank sheet and writes NOTHING to
+// the database until the coach actually saves something. That means the paired
+// programs row is born inside the sheet save path, where the bridge kinds every
+// sheet-origin program `in_gym`. This carries the at-home intent through to
+// that first real save: stamp the row the save just created as `at_home`.
+//
+// Safe by construction:
+//   • no-ops when the sheet has no paired program yet (no client assigned) —
+//     the next save, once a client is picked, creates it and stamps it then;
+//   • never touches a sheet tied to an appointment, or a program an
+//     appointment points at, so gym Session sheets can't be re-kinded;
+//   • idempotent, and the caller re-runs it on every save, so a failed first
+//     attempt heals on the next save.
+export async function markSheetProgramAtHome(
+  sheetId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || (me.role !== "coach" && !me.is_admin)) return { ok: false, error: "unauthorized" };
+  if (!hasSupabaseEnv()) return { ok: true };
+  const supabase = createSupabaseAdmin();
+
+  const { data: sheet } = await supabase
+    .from("workout_sheets")
+    .select("id, coach_id, program_id, session_id")
+    .eq("id", sheetId)
+    .maybeSingle<{ id: string; coach_id: string; program_id: string | null; session_id: string | null }>();
+  if (!sheet) return { ok: false, error: "Sheet not found." };
+  if (sheet.coach_id !== me.id && !me.is_admin) return { ok: false, error: "Not allowed." };
+  // A sheet saved against an appointment is a gym session — leave it in_gym.
+  if (sheet.session_id) return { ok: true };
+  // Nothing paired yet (sheet saved without a client): nothing to stamp.
+  if (!sheet.program_id) return { ok: true };
+
+  // Belt and braces: never re-kind a program a session points at.
+  const { data: appt } = await supabase
+    .from("appointments")
+    .select("id")
+    .eq("session_program_id", sheet.program_id)
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  if (appt) return { ok: true };
+
+  const kind: ProgramKind = "at_home";
+  const { error } = await supabase
+    .from("programs")
+    .update({ program_kind: kind })
+    .eq("id", sheet.program_id)
+    .eq("coach_id", me.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 // Resolve the open-access client link for a sheet — the /s/<token> path James
 // texts to a client so they can fill the at-home program like a PDF. Returns a
 // relative path; the caller prefixes the origin.
