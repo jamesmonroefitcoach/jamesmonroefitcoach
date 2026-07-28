@@ -7,6 +7,17 @@ judgement calls rather than obvious cleanups.
 
 Project: `knixmjpvdfmqpjwhkrgd` (Monroe Fit Coach).
 
+## Status as of 2026-07-28 03:57 UTC
+
+- §1 duplicate DM thread consolidation — **applied.** Threads 54 → 40, DM
+  threads down to 2, message count unchanged at 81 (no history lost), zero
+  remaining duplicated pairs, and `message_threads_dm_unique` is in place.
+- §2 test row cleanup — **applied.** All five test programs and their sheets
+  archived.
+- §3 orphaned public link sweep — **not run.** Still needs the select-first
+  judgement call described below.
+- §4 — nothing to do. It is an undo template, not a cleanup step.
+
 ---
 
 ## 1. Consolidate duplicate DM threads (recommended, run first)
@@ -148,9 +159,16 @@ update workout_sheets set status = 'archived' where id = '<sheet id>';
 
 ## 4. Restore, if a program is ever archived by mistake
 
+> **Do not run this block as-is.** It is a template, and it is an *undo*, not a
+> cleanup. Running it reverses a deletion. `<program id>` is a placeholder — a
+> literal copy-paste fails with `invalid input syntax for type uuid`. Only use
+> this when James reports losing a program he meant to keep, and substitute that
+> program's real id.
+
 Program deletion in the app is a soft delete, so a mis-click is recoverable:
 
 ```sql
+-- Replace <program id> with the real uuid before running.
 update programs set archived_at = null where id = '<program id>';
 update workout_sheets set status = 'active' where program_id = '<program id>';
 ```
