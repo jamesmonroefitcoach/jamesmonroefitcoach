@@ -1,191 +1,188 @@
-# Handoff — 2026-07-27 session
+# Handoff — 2026-07-27 (second session)
 
-Written by Claude (this session) for whichever Claude picks this up next.
-Read this fully before touching code — several items below reference prior
-decisions/rules you won't rediscover just by reading the codebase.
+Written by Claude for whichever Claude picks this up next. Read this fully
+before touching code.
 
-**Read [`CLAUDE.md`](../CLAUDE.md) first if you haven't** — hard rules on
-this repo: ask before design decisions, don't commit/push without being
-told (I was told this session — see below), all SQL goes through Ryan, and
-phone-view (375px) checks are mandatory on every UI change.
+**Read [`CLAUDE.md`](../CLAUDE.md) first if you haven't** — hard rules on this
+repo: ask before design decisions, don't commit/push without being told, all
+SQL goes through Ryan, and phone-view (375px) checks are mandatory on every UI
+change.
 
-## 0. Set up the Supabase CLI before doing anything DB-related
+This session was driven off James' Tracker Google Sheet
+(`1L-C4U7J7vKzPQoijQ7B8QLbsH8TLIKuEK20HK-JvT5o`), working the "quick win" rows
+first, then by priority. Work was split across parallel subagents on disjoint
+file sets.
 
-The Supabase MCP tools were connected this session but errored on every
-call:
+## 0. Supabase access — the previous handoff is out of date
 
-> Your account does not have the necessary privileges to access this
-> endpoint... your access token may be scoped to a different organization
+The last handoff said the `mcp__supabase__*` tools hit an org/privilege wall and
+told you to set up the CLI. **That is no longer true.** The Supabase MCP tools
+work fine this session against project `knixmjpvdfmqpjwhkrgd` (Monroe Fit
+Coach). Read-only SELECTs through them were the primary verification tool and
+are much faster than a Node script.
 
-The CLI is installed locally (`supabase 2.98.2` at `/opt/homebrew/bin/supabase`,
-an update to 2.110.0 is available — update if convenient) but **not logged
-in and not linked** to this project. Run:
+**You still do not run SQL against prod yourself.** Schema and data changes go
+to Ryan as paste-ready queries. See
+[`docs/sql-for-ryan-2026-07-27.md`](sql-for-ryan-2026-07-27.md) — written this
+session, **not yet applied**.
 
-```bash
-supabase login
-```
+## 1. What shipped this session (committed to `main`, NOT pushed)
 
-```bash
-supabase link --project-ref knixmjpvdfmqpjwhkrgd
-```
+Six commits. **Nothing has been pushed to `origin/main`**, so none of this is
+live on monroefitcoach.com yet. Pushing is Ryan's call.
 
-(Project ref is the subdomain in `NEXT_PUBLIC_SUPABASE_URL` in
-`.env.local`: `https://knixmjpvdfmqpjwhkrgd.supabase.co`.)
+- `8c5d8e6` **Programs: delete a saved program, and close its public link.**
+  Soft delete via the existing `programs.archived_at` "delete bin". The
+  substantive part is that `/s/<token>` resolves purely by
+  `workout_sheets.public_token`, so archiving the program alone left the sheet
+  live; delete now also flips the sheet to `status='archived'`, which the token
+  lookup filters. "Edit" renamed to "View".
+- `13debf1` **Template: remove the empty leading column from published sheets.**
+  The `×` column's buttons were hidden per-mode but the `td`/`th`/`col` were
+  never removed, leaving a narrow empty column in every published view. Those
+  cells are gone from the markup entirely. In edit mode the delete/duplicate
+  controls moved to the right edge of the Movement cell (deliberately *not* into
+  the Sets cell, where they'd sit beside the per-set `×` and invite a
+  destructive mis-click). Saved data shape untouched.
+- `3a84fb6` **Messages: stop spawning duplicate DM threads, pin stamps to
+  Austin.** See §2 — this was the serious one.
+- `1483913` **Sheet: hide the `+ Row` control in every read-only mode.** A client
+  on the open public link could append rows to James's prescription.
+  `.day-controls` was missing from all four read-only hide lists.
+- `e9ee433` **Build: stop creating a program row on "+ New program" click.**
+  See §3.
+- `df4eff4` **docs: SQL handoff for Ryan.**
 
-Until this is done, don't rely on the `mcp__supabase__*` tools either — they
-hit the same org/privilege wall. For read-only verification in the
-meantime, a plain Node script against `.env.local`'s
-`SUPABASE_SERVICE_ROLE_KEY` works fine — load `@supabase/supabase-js` via
-`createRequire` if you write it as `.mjs` (this repo has no
-`"type": "module"` in `package.json`, so a bare `import` will fail).
-**Per CLAUDE.md, you still don't run SQL against prod yourself** —
-schema/data changes go to Ryan as one paste-ready query for the Supabase
-SQL editor; CLI/read-only access is for verification and local dev only.
+Type-check (`npx tsc --noEmit`) is clean at every commit; baseline was also
+clean, so there are no pre-existing errors to excuse anything.
 
-## 1. What shipped this session (already committed + pushed to main)
+## 2. The messages bug was data loss, not a display problem
 
-Commit `a6eb735`, pushed to `origin/main` — Ryan explicitly said "publish"
-after reviewing, so this is live on `monroefitcoach.com` already, not
-pending review:
+Worth understanding, because the tracker row understates it ("inbox display has
+multiple errors").
 
-- **Pay-band chart hover glitch** (James's bug report) — fixed. Root cause
-  was two compounding bugs in `app/coach/dashboard-client.tsx`'s
-  `IncomeByBandChart`: per-segment `onMouseLeave` handlers caused a
-  null-hover flash between adjacent elements, and the detail panel below
-  the chart auto-grew to fit content, which shifted the chart under the
-  cursor mid-hover and re-triggered the flash — a layout-shift feedback
-  loop. Fixed by moving to a single container-level `onMouseLeave` and a
-  fixed-height (150px, internally scrolling) detail panel.
-- **Bonus bug found + fixed**: `GroupShell` (same file) nested the
-  right-side action buttons inside the section's collapse-toggle
-  `<button>` — invalid HTML, threw a React hydration error on every single
-  dashboard load in dev. Unrelated to what James reported, but I was in
-  the file and it's a real defect, so I fixed it (restructured to a `<div>`
-  header with the toggle as one inner button and the actions as a sibling).
-- **All-time session history**: hovering a week's bar now shows a
-  fixed-height detail strip with that week's count + its calendar month's
-  running total.
-- **Pay-band legend width bug**: the client-count/income text could overlap
-  the % text at narrow widths — swapped a fixed-width grid column for
-  `minmax()`.
-- **Clients table** (`app/coach/clients/clients-client.tsx`,
-  `lib/data.ts`): under the Scheduled column, added % of past sessions
-  completed, cancellation count, and the next 2 upcoming session
-  date/times. Explicitly **excluded reschedule rate** per Ryan — "could
-  just be James moving things around," not a meaningful signal.
-- **Goals page** (`components/goals-client.tsx`): weekly goals now render
-  grouped under category subheaders in one view instead of one flat mixed
-  list (annual goals unchanged, still flat).
+`message_threads` has a unique index on `(coach_id, client_id, topic)`. Postgres
+treats nulls as distinct, so that index **cannot** constrain DM threads, which
+use `topic = null`. `startThreadWithClient` upserted with `onConflict` on that
+index, so the conflict never matched and **every "+ New message" click inserted
+a new empty thread**. `loadOrCreateClientThread` then called `.maybeSingle()` on
+a lookup that now returned several rows; PostgREST returns an error, the code
+read only `data`, got `null`, and fell through to its create branch — inserting
+*another* empty thread and rendering an empty inbox.
 
-All four changed files type-check clean (`npx tsc --noEmit`) and were
-verified in-browser (impersonated James via the legacy `mfc_session`
-cookie — see §4 — since email/password sign-in isn't scriptable) at both
-desktop and 375px mobile width, with console/network checked for errors.
-The pay-band and all-time-session numbers were cross-checked against a
-direct read-only DB query and matched exactly.
+Measured live: loading `/client/messages` as one client showed "No messages yet"
+despite 7 real messages, and took his topic-null thread count from 11 to 12 on
+that single page view.
 
-## 2. Open work — nothing built yet, in priority order Ryan hasn't set
+Timestamps: both views used `toLocaleTimeString` with no `timeZone`. These are
+server components and Vercel's Node runtime is UTC, so **production shipped
+every stamp 5 hours off**. Now pinned to `America/Chicago` with a date prefix
+once a message is not from today.
 
-### 2a. Resources tab — corrective exercise procedures (both portals)
+**The duplicate threads already in prod are still there.** §1 of the SQL doc
+consolidates them and adds a partial unique index that actually covers
+topic-null threads.
 
-Ryan asked for: a deep-research pass on corrective exercise procedures for
-common injuries, turned into a page that lives on **both** the coach and
-client portal, in a tab literally named **"Resources"**, **coach-editable,
-client read-only**.
+## 3. Deferred program creation, and why the pre-create existed
 
-**Research is done** — see
-[`docs/research/corrective-exercise-research.md`](research/corrective-exercise-research.md)
-for the full write-up (8 verified findings, 3 refuted claims to avoid, 5
-unverified claims that need a re-run, and real coverage gaps). Read the
-"Coverage gaps" and "Unverified" sections before writing client copy —
-**do not publish anything about rotator cuff/shoulder from this research
-pass**, the verification run hit a session-limit wall on every rotator cuff
-claim (0 valid votes, not because they were false — genuinely untested).
-Tennis/golfer's elbow, hip tightness/APT, standalone ankle mobility, and
-neck pain beyond upper-crossed posture also have **zero verified findings**
-— the original ask named all of these, so either run a follow-up
-deep-research pass on just the gaps, or scope the first version of the page
-down to what's actually verified (patellofemoral pain, plantar fasciitis,
-Achilles tendinopathy, low back pain activity guidance, upper crossed
-syndrome) and say so.
+"+ New program" used to write a `programs` row and an "Untitled program" sheet
+immediately on click, littering prod with empties attached to real clients.
 
-**I have not designed or built anything for this yet** — no schema, no
-route, no component. Before writing code, bring Ryan a plan (per CLAUDE.md's
-"ask before acting" rule). Things to decide in that plan:
+It did that **on purpose**: `getOrCreatePairedProgram` in
+`lib/programs-sheets-bridge.ts` hardcodes `program_kind: "in_gym"` for any
+sheet-origin program, and the sheet's POST body cannot carry a kind, so
+pre-creating was how at-home programs got kinded correctly.
 
-- Data model: the existing Materials feature
-  (`lib/materials-seed.ts`, `app/coach/programming/library/materials/`,
-  `app/client/programming/library/materials/`) is the closest precedent —
-  same shape (coach edits, client reads), but it's **localStorage-only
-  today**, not backed by Supabase (see the comment at the top of
-  `lib/materials-seed.ts`: "Until edits move to Supabase, James's edits
-  remain coach-local in localStorage and clients see these defaults" —
-  meaning right now James's Materials edits on his laptop don't even show
-  up for clients, let alone sync across his devices). If Resources needs
-  real coach→client sync (implied by "coach can edit, clients see it"),
-  it needs an actual table, not the same localStorage pattern. That's a
-  schema change — SQL goes to Ryan per the hard rule.
-- Where "Resources" sits in nav on each portal, and whether it replaces or
-  sits alongside the existing Materials tab (there's real content overlap:
-  Materials already has an "Injury Prevention" category with entries like
-  "Common Joint Injuries" and "Postural Imbalances" — decide whether
-  Resources subsumes that or is a separate, more clinical-feeling section).
+The fix carries the `at_home` intent to the first save instead, stamping it via
+`markSheetProgramAtHome` from the workspace's existing `onSaved` callback.
+`syncSheetToProgram` never rewrites `program_kind`, so the stamp holds. **The
+bridge and the positional row shape were not touched.**
 
-### 2b. Exercise library backfill draft
+Accepted residual risk: a sub-second window where the row exists as `in_gym`
+before the stamp lands. If the stamp fails it surfaces a visible message and
+heals on the next save.
 
-Ryan asked to combine (a) the app's existing exercise library
-(`app/coach/programming/library/exercise-library/`,
-`app/client/programming/library/exercise-library/page.tsx`, plus
-`ExercisePreset` types referenced from
-`app/coach/programming/build/build-program-client.tsx` — see the "Danger
-zones" section of CLAUDE.md before touching that file, its default export
-is dead code but other files import types/components from it), (b) the
-"Excercise Backfill" tab of James's Google Sheet, and (c) more deep
-research, into a finalized library James can edit later. **Draft for
-approval first, don't integrate directly.**
+## 4. Pre-existing bugs found in passing — three of them
 
-I pulled and extracted the Backfill tab — see
-[`docs/research/exercise-backfill-source.md`](research/exercise-backfill-source.md)
-and the raw JSON next to it. Key finding: **the sheet has names/taxonomy
-only — zero rows have cues, muscles, or demo links filled in.** It's a
-naming/category skeleton, not usable content on its own. You'll need a
-deep-research pass (similar to §2a's, scoped to "cues + muscle groups +
-form notes for common gym exercises") to actually fill it in, then diff
-against what's already in the app's exercise library to avoid duplicating
-entries.
+None of these were on the tracker. Two are fixed, one is not.
 
-No draft has been started. James's own dashboard To Do list already has
-"Generate backfill document for exercises (RM to assist)" — so this is
-expected, not a surprise to him.
+1. **Fixed.** The old `deleteDraftProgram` hard-deleted the program but only
+   nulled the sheet's `program_id`, leaving it `status='active'` with a live
+   `public_token`. **Every program James deleted through the Build lobby before
+   this session left a working, client-editable public link behind.** The code
+   path is fixed; the orphaned sheets are still out there. §3 of the SQL doc has
+   a select-first sweep — do not blanket-archive, since a sheet with no
+   `program_id` may be a legitimate standalone sheet.
+2. **Fixed.** "Clients needing programming → Create" (`quickStartProgramForClient`)
+   never pre-created a program, so at-home programs started that way were being
+   **born `in_gym` on save**. The new `onSaved` hook corrects that path too.
+3. **Not fixed — needs a decision.** `lib/data.ts` `listCoachThreads` caps at
+   `.limit(50)` against 54 threads, ordered by *thread* `created_at`. Three real
+   clients (Acacia Chan, Jen Loving, David Syndicongo) are **currently missing
+   entirely from James's inbox**. Consolidating threads will mask this by
+   dropping the row count; the limit should still be raised or the ordering
+   changed to last-message-time.
 
-### 2c. Goals page — weekly self-survey (1-5 stars)
+## 5. Open decisions for Ryan
 
-Ryan wants a **weekly** survey on the Goals page where James scores himself
-1-5 stars on unspecified items, or otherwise marks items he "knows." This
-needs a design decision from Ryan before any code: what the survey items
-actually are, and whether it's a star rating or a binary "I know this"
-checkbox style (her phrasing used both "scores himself 1-5 star" and "hits
-up for things he knows" — those aren't obviously the same UI). Ask before
-building. No code exists for this yet.
+- **Announcement threads win the per-client inbox collapse.** After a broadcast,
+  every client's inbox row targets their announcement thread, but
+  `/client/messages` only reads topic-null threads, so anything James types into
+  one of those rows is **invisible to the client**. That is a direct "one
+  database, both ways" break. Related: clients cannot see announcements at all
+  today, though the Announce modal promises they land in each client's inbox.
+- **Deep links to an archived program still open the coach's builder**
+  (`?program=<id>`). The client-facing link is dead, which is what was asked.
+  Whether James should be blocked from reopening his own deleted program is a
+  product call.
+- **Hard delete.** Program delete is currently soft. If "delete" should mean
+  gone forever, that needs saying.
+- **Touch target sizing** on the sheet's relocated delete/duplicate buttons was
+  reasoned, not verified: the preview browser does not emulate a coarse pointer.
+  Worth James tapping once on his phone.
+- `samples/client-materials/workout-sheet.html` is a stale design sample that
+  has diverged further from the live `public/workout-sheet.html`. Left alone
+  deliberately. Decide whether it should be deleted or resynced.
 
-## 3. Task list state (if your session shares TaskList with mine)
+## 6. Still open from the tracker
 
-If you have access to the same task-tracking as this session, tasks #1, #2,
-#7, #9 are the shipped work above (mark completed if not already). #4, #5,
-#8 are the three open items in §2. #6 ("log session work in James' Tracker
-under Claude") is **still outstanding** — I never got to it this session,
-see §5.
+In the sheet's own priority order, not started this session:
 
-If your session does NOT share task state with mine (likely, if this is a
-fresh conversation), just use this doc as the source of truth instead.
+- **Pause / deactivate clients** (priority 1, "quick win"): pause button where
+  "no planned session" shows, unpause with how long they've been paused, and
+  split past clients into paused vs deactivated dropdowns with an activate
+  button. **Groundwork is already there**: `client_details.lifecycle` already
+  carries `active` / `paused` / `inactive` in prod (24 active, 5 inactive, 5
+  paused), and `clients-client.tsx` already renders a lifecycle dropdown and
+  splits active vs past at lines 795-796. The "how long have they been paused"
+  part needs a `paused_at` column — that is a schema change, so it goes to Ryan.
+- **XLS backfill items for client profiles** (priority 2). Sheet comment
+  suggests a per-person dropdown form that submits, kept as a separate artifact
+  to load Supabase history later.
+- **Exercise library upload** (priority 3) and **corrective exercise procedures**
+  (priority 4). Deep research already ran — see `docs/research/`. Read the
+  previous handoff's §2a/§2b: **do not publish anything about rotator
+  cuff/shoulder**, that verification run hit a session limit and has zero valid
+  votes. Tennis/golfer's elbow, hip tightness/APT, standalone ankle mobility and
+  neck pain also have zero verified findings.
+- **Mapping review behind the scenes** (priority 6), **change request / slot
+  offer check with dashed-line boxes for offered slots** (lower priority).
 
-## 4. How to verify changes in-browser without real credentials
+Postponed by James in the sheet: the pay-band dropdown persistence, template
+formatting/per-row set counts, and the phone notes-column item (comment says
+check whether it is even a real issue on phone first).
 
-The app now requires Supabase Auth email/password sign-in at `/login`,
-which isn't scriptable from a headless session. There's a legacy fallback
-(`lib/session.ts`, `mfc_session` cookie, consulted only when there's no
-Supabase Auth session) — I used it to impersonate James for browser
-verification:
+## 7. Test rows left in prod
+
+Verifying the delete and deferred-creation flows required creating real rows.
+§2 of the SQL doc lists them by id. Two are attached to Samantha Saenz, so they
+would show in her portal until cleared.
+
+## 8. How to verify in-browser
+
+Unchanged from the previous handoff and still accurate. Supabase Auth sign-in
+isn't scriptable, so impersonate James via the legacy fallback cookie
+(`lib/session.ts`), then reload:
 
 ```js
 document.cookie = "mfc_session=" + encodeURIComponent(JSON.stringify({
@@ -194,24 +191,16 @@ document.cookie = "mfc_session=" + encodeURIComponent(JSON.stringify({
 })) + "; path=/";
 ```
 
-Then navigate/reload. This is a **dev-only convenience**, not a real
-session — don't treat it as auth-bypass-worthy of concern, it's the same
-fallback path that's existed in the codebase already.
+Same trick with a client's profile id and `role:"client"` checks the other side
+of a thread, which is how the messages bug was confirmed end to end.
 
-One more gotcha: the in-app preview browser reports
-`visibilityState=hidden`, so anything gated on page visibility (and
-`requestAnimationFrame`, which never fires) won't run there — I hit this
-testing chart hover timing and had to swap `requestAnimationFrame` for a
-plain `setTimeout`. See memory `reference_preview_tab_hidden` if you have
-access to it, otherwise just know this going in.
+Gotcha that still bites: the in-app preview browser reports
+`visibilityState=hidden` and `requestAnimationFrame` never fires there.
 
-## 5. Still owed: log this session's work in James' Tracker
+## 9. Still owed
 
-Per the standing working agreement, coach-facing bug fixes should get
-logged in James' Tracker Google Sheet
-(`1L-C4U7J7vKzPQoijQ7B8QLbsH8TLIKuEK20HK-JvT5o`) under the name "Claude." I
-did not do this before running out of turn budget this session — the
-pay-band hover glitch fix and the all-time-history hover addition are the
-two items James would recognize from his own bug report / feature ask.
-Please add those entries if you have Sheets access and haven't already seen
-them logged.
+Logging this session's items in James' Tracker under "Claude" was in progress at
+the end of the session. Edit access to the sheet was being arranged; check
+whether the rows for the inbox fix, the session-history chart, the Week Of
+dropdown, the template column, and the Recently Saved delete were marked
+resolved before assuming they still need doing.
