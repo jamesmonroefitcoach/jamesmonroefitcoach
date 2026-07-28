@@ -30,11 +30,12 @@ const DEMO_MSGS: Record<string, ThreadMessage[]> = {
 export async function loadThreadMessages(threadId: string): Promise<ThreadMessage[]> {
   if (!hasSupabaseEnv()) return DEMO_MSGS[threadId] ?? [];
   const supabase = createSupabaseAdmin();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("messages")
     .select("id, thread_id, sender_id, body, created_at, read_at, is_system, link_url, link_label, profiles:sender_id ( full_name )")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
+  if (error) console.error("loadThreadMessages failed", threadId, error);
   if (!data) return [];
   return data.map((m: any) => ({
     id: m.id,
@@ -77,21 +78,48 @@ export async function postSystemMessage(input: {
   return { id: data.id };
 }
 
+/**
+ * Resolve the one DM thread a coach/client pair share, creating it only when
+ * none exists.
+ *
+ * The `(coach_id, client_id, topic)` unique index does NOT constrain rows where
+ * topic is null — Postgres treats nulls as distinct — so some pairs already
+ * have several topic-null threads. The old `.maybeSingle()` *errored* on those
+ * pairs (multiple rows), the error was discarded, and the "no thread yet" path
+ * inserted a brand new empty one on every single page load. That is why a
+ * client's conversation looked empty and their messages didn't survive a
+ * reload. Pick the thread with the most recent message instead (oldest thread
+ * wins if none have messages) so both sides land on the same conversation.
+ */
 export async function loadOrCreateClientThread(clientId: string, coachId: string): Promise<{ id: string } | null> {
   if (!hasSupabaseEnv()) return { id: `demo-thread-${clientId}` };
   const supabase = createSupabaseAdmin();
-  const { data: existing } = await supabase
+  const { data: existing, error } = await supabase
     .from("message_threads")
-    .select("id")
+    .select("id, created_at, messages ( created_at )")
     .eq("coach_id", coachId)
     .eq("client_id", clientId)
-    .is("topic", null)
-    .maybeSingle();
-  if (existing) return existing;
-  const { data: created } = await supabase
+    .is("topic", null);
+  if (error) {
+    console.error("loadOrCreateClientThread: thread lookup failed", error);
+    return null;
+  }
+  if (existing && existing.length > 0) {
+    const ranked = [...existing].sort((a: any, b: any) => {
+      const lastA = ((a.messages ?? []) as { created_at: string }[])
+        .reduce((max, m) => (m.created_at > max ? m.created_at : max), "");
+      const lastB = ((b.messages ?? []) as { created_at: string }[])
+        .reduce((max, m) => (m.created_at > max ? m.created_at : max), "");
+      if (lastA !== lastB) return lastB.localeCompare(lastA); // newest activity first
+      return String(a.created_at).localeCompare(String(b.created_at)); // then oldest thread
+    });
+    return { id: (ranked[0] as any).id as string };
+  }
+  const { data: created, error: createError } = await supabase
     .from("message_threads")
     .insert({ coach_id: coachId, client_id: clientId })
     .select("id")
     .single();
+  if (createError) console.error("loadOrCreateClientThread: thread create failed", createError);
   return created ?? null;
 }

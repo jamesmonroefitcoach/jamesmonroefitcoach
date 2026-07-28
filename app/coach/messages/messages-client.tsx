@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ThreadPreview } from "@/lib/data";
 import type { ThreadMessage } from "@/lib/messages";
+import { fmtMessageStamp, fmtMessageStampShort } from "@/lib/format";
 import { sendMessage, announceToAllClients, startThreadWithClient, loadThread, pollThread } from "./actions";
 
 // Fold the latest server messages over local state, preserving any optimistic
@@ -115,6 +116,11 @@ export default function MessagesClient({
         setShowNewMessage(false);
         setNewClientId("");
         setNewClientSearch("");
+        // Point the chat pane at the thread we just opened. Without this the
+        // pane kept showing whatever conversation was open before, because
+        // `active` is local state and never followed the URL.
+        setActive(res.thread_id);
+        setMessages([]);
         router.push(`/coach/messages?thread=${res.thread_id}`);
         router.refresh();
       } else {
@@ -126,6 +132,9 @@ export default function MessagesClient({
   function pickThread(id: string) {
     setActive(id);
     setMessages([]);
+    // Keep the URL on the open conversation so a reload comes back to it
+    // instead of silently dropping to whichever thread is newest.
+    router.replace(`/coach/messages?thread=${id}`, { scroll: false });
     start(async () => {
       const res = await loadThread(id);
       if (res.ok) setMessages(res.messages);
@@ -165,11 +174,18 @@ export default function MessagesClient({
       read_at: null
     };
     setMessages((m) => [...m, optimistic]);
+    const threadId = active;
     start(async () => {
-      const res = await sendMessage(active, text);
-      if (!res.ok && !res.error.startsWith("Supabase not configured")) {
-        setInfo(res.error);
+      const res = await sendMessage(threadId, text);
+      if (!res.ok) {
+        if (!res.error.startsWith("Supabase not configured")) setInfo(res.error);
+        return;
       }
+      // Swap the optimistic bubble for the persisted row straight away so the
+      // message shows its real id and the server's timestamp, rather than
+      // sitting on a browser-clock guess until the next 6s poll.
+      const fresh = await pollThread(threadId);
+      if (fresh.ok) setMessages((cur) => mergeServerMessages(fresh.messages, cur));
     });
   }
 
@@ -260,7 +276,7 @@ export default function MessagesClient({
                         >{t.unread_count}</span>
                       )}
                     </span>
-                    <span className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", flexShrink: 0 }}>{t.last_at ? new Date(t.last_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span>
+                    <span className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", flexShrink: 0 }}>{fmtMessageStampShort(t.last_at)}</span>
                   </div>
                   <p className="meta" style={{ margin: "0.1rem 0 0", fontSize: "0.72rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.last_message}</p>
                 </li>
@@ -323,7 +339,7 @@ export default function MessagesClient({
                           )}
                         </div>
                         <div className="meta" style={{ fontSize: "0.6rem", marginTop: 1, textAlign: "center", fontStyle: "italic" }}>
-                          {new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          {fmtMessageStamp(m.created_at)}
                         </div>
                       </div>
                     );
@@ -342,7 +358,7 @@ export default function MessagesClient({
                         {m.body}
                       </div>
                       <div className="meta" style={{ fontSize: "0.66rem", marginTop: 1, textAlign: mine ? "right" : "left" }}>
-                        {mine ? "" : `${m.sender_name} · `}{new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        {mine ? "" : `${m.sender_name} · `}{fmtMessageStamp(m.created_at)}
                       </div>
                     </div>
                   );

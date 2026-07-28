@@ -2,6 +2,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import type { ThreadMessage } from "@/lib/messages";
+import { fmtMessageStamp } from "@/lib/format";
 import { sendMessage } from "@/app/coach/messages/actions";
 import { pollClientThread } from "./actions";
 
@@ -52,9 +53,14 @@ export default function ClientMessagesView({ threadId, initial, myId }: { thread
     }]);
     start(async () => {
       const res = await sendMessage(threadId, text);
-      if (!res.ok && !res.error.startsWith("Supabase not configured")) {
-        setInfo(res.error);
+      if (!res.ok) {
+        if (!res.error.startsWith("Supabase not configured")) setInfo(res.error);
+        return;
       }
+      // Swap the optimistic bubble for the persisted row straight away so it
+      // carries the server's timestamp instead of a browser-clock guess.
+      const fresh = await pollClientThread(threadId);
+      if (fresh.ok) setMessages((cur) => mergeServerMessages(fresh.messages, cur));
     });
   }
 
@@ -105,7 +111,7 @@ export default function ClientMessagesView({ threadId, initial, myId }: { thread
                   )}
                 </div>
                 <div className="meta" style={{ fontSize: "0.66rem", marginTop: 2, textAlign: "center", fontStyle: "italic" }}>
-                  {new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  {fmtMessageStamp(m.created_at)}
                 </div>
               </div>
             );
@@ -121,7 +127,7 @@ export default function ClientMessagesView({ threadId, initial, myId }: { thread
                 fontSize: "0.9rem"
               }}>{m.body}</div>
               <div className="meta" style={{ fontSize: "0.7rem", marginTop: 2, textAlign: mine ? "right" : "left" }}>
-                {mine ? "" : `${m.sender_name} · `}{new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                {mine ? "" : `${m.sender_name} · `}{fmtMessageStamp(m.created_at)}
               </div>
             </div>
           );
