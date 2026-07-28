@@ -1,10 +1,11 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { ClientProgramBlock, RecentDraft } from "./page";
 import { fmtDate } from "@/lib/format";
+import { archiveProgram } from "./actions";
 
 type ClientPick = { id: string; full_name: string; flagged: boolean };
 type BuildType = "session" | "program";
@@ -875,6 +876,15 @@ export default function ViewProgramsClient({ blocks, clients, recentDrafts }: { 
 // ─── Recently saved / drafted programs — collapsible at the top of Programs ──
 function RecentDraftsGroup({ drafts }: { drafts: RecentDraft[] }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  // Rows the coach has deleted this render, hidden immediately so the list
+  // reacts before the server round-trip lands.
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  // The row currently being deleted, so only that row shows the spinner.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pending, startDelete] = useTransition();
+  const visible = drafts.filter((d) => !removed.includes(d.id));
   return (
     <div style={{ border: "1px solid var(--line)", borderRadius: 4, overflow: "hidden", marginBottom: "1.25rem" }}>
       <button
@@ -890,38 +900,79 @@ function RecentDraftsGroup({ drafts }: { drafts: RecentDraft[] }) {
         <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>{open ? "▾" : "▸"}</span>
         <span style={{ fontWeight: 700, fontSize: "1.02rem" }}>Recently saved programs</span>
         <span className="meta" style={{ fontSize: "0.72rem" }}>most recent first</span>
-        <span className="badge" style={{ marginLeft: "auto", fontSize: "0.62rem" }}>{drafts.length}</span>
+        <span className="badge" style={{ marginLeft: "auto", fontSize: "0.62rem" }}>{visible.length}</span>
       </button>
       {open && (
-        drafts.length === 0 ? (
+        visible.length === 0 ? (
           <p className="meta" style={{ padding: "0.6rem 0.85rem", fontStyle: "italic", fontSize: "0.78rem", margin: 0 }}>
             No saved programs yet. Hit <strong>Build New +</strong> to start one.
           </p>
         ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-            {drafts.map((d) => {
+          <>
+            {error && (
+              <p role="alert" style={{
+                margin: 0, padding: "0.5rem 0.85rem", fontSize: "0.74rem",
+                borderTop: "1px solid var(--line)", color: "var(--rust)",
+              }}>{error}</p>
+            )}
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {visible.map((d) => {
               const isGym = d.program_kind === "in_gym";
               const type = isGym ? "session" : "program";
               const view = d.build_format === "template" ? "template" : "inapp";
               const href = `/coach/programming/build/new-way?type=${type}&client=${d.client_id}&program=${d.id}&view=${view}`;
+              const label = d.name || "Untitled program";
               return (
                 <li key={d.id} style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  gap: "0.6rem", padding: "0.5rem 0.85rem", borderTop: "1px solid var(--line)",
+                  gap: "0.5rem", padding: "0.5rem 0.85rem", borderTop: "1px solid var(--line)",
                 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: "0.86rem" }}>{d.name || "Untitled program"}</div>
+                    <div style={{ fontWeight: 600, fontSize: "0.86rem" }}>{label}</div>
                     <div className="meta" style={{ fontSize: "0.7rem" }}>
                       {d.client_name} · {d.program_kind === "at_home" ? "at-home" : "in-gym"} · {d.build_format === "template" ? "template" : "in app"}
                     </div>
                   </div>
-                  <Link href={href} className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.28rem 0.85rem", whiteSpace: "nowrap" }}>
-                    Edit →
+                  <Link href={href} className="btn btn-ghost" style={{ fontSize: "0.78rem", padding: "0.28rem 0.85rem", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    View →
                   </Link>
+                  <button
+                    type="button"
+                    title={`Delete ${label}`}
+                    aria-label={`Delete ${label}`}
+                    disabled={pending}
+                    onClick={() => {
+                      // Name the program AND the client: two rows here can
+                      // share a name, so the client is what tells them apart.
+                      const ok = window.confirm(
+                        `Delete "${label}" for ${d.client_name}?\n\n` +
+                        "It comes off this list and its shared link stops working for the client."
+                      );
+                      if (!ok) return;
+                      setError(null);
+                      setDeletingId(d.id);
+                      startDelete(async () => {
+                        const res = await archiveProgram(d.id);
+                        setDeletingId(null);
+                        if (!res.ok) { setError(res.error ?? "Could not delete that program."); return; }
+                        setRemoved((prev) => [...prev, d.id]);
+                        router.refresh();
+                      });
+                    }}
+                    style={{
+                      flexShrink: 0, width: "2.25rem", height: "2.25rem",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "0.95rem", lineHeight: 1, borderRadius: 3,
+                      border: "1px solid var(--line)", background: "transparent",
+                      color: "var(--muted)", cursor: pending ? "default" : "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >{deletingId === d.id ? "…" : "✕"}</button>
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </>
         )
       )}
     </div>

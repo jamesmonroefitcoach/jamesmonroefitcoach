@@ -12,10 +12,14 @@ import {
   getSessionProgramId,
   getProgramBuildFormat,
   saveDraftProgram,
-  deleteDraftProgram,
   deleteDraftSession,
   getPublicSheetLink,
 } from "../actions";
+// Shares the Programs page's delete so both "Recently saved programs" lists
+// behave the same. The older `deleteDraftProgram` in ../actions hard-deletes
+// the program but only unlinks its sheet, leaving the public /s/<token> link
+// live for work that's been deleted.
+import { archiveProgram } from "../../actions";
 import ReworkClient from "../rework/rework-client";
 import ProgramsReworkClient from "../programs-rework/programs-rework-client";
 import WorkoutSheetEmbed, { type ClientLite, type AutofillData } from "@/components/workout-sheet-embed";
@@ -560,10 +564,11 @@ export default function NewWayClient({
             key={p.id}
             primary={p.name || "Untitled program"}
             secondary={`${p.client_name} · ${p.program_kind === "at_home" ? "at-home" : "in-gym"}`}
-            ctaLabel="Edit program →"
+            ctaLabel="View program →"
             onClick={() => quickEditProgram(p)}
             onDelete={async () => {
-              await deleteDraftProgram(p.id);
+              const res = await archiveProgram(p.id);
+              if (!res.ok) return;
               setDraftPrograms((prev) => prev.filter((x) => x.id !== p.id));
             }}
           />

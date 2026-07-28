@@ -60,12 +60,26 @@ export default async function ProgrammingLandingPage() {
   const clients = await listClients(user.id);
   const activeClients = clients.filter((c) => c.lifecycle === "active" || c.lifecycle === "online");
 
+  // Programs the coach has deleted. `listProgramsForClient` (lib/data.ts) does
+  // not filter the archive bin, so a deleted program would still show up in
+  // the Sessions / Programs / history sections below with a working link into
+  // it. Drop them here.
+  const archivedProgramIds = new Set<string>();
+  if (hasSupabaseEnv()) {
+    const { data } = await createSupabaseAdmin()
+      .from("programs")
+      .select("id")
+      .not("archived_at", "is", null);
+    (data ?? []).forEach((p: { id: string }) => archivedProgramIds.add(p.id));
+  }
+
   // Fetch each client's appointments + programs in parallel
   const blocks: ClientProgramBlock[] = await Promise.all(activeClients.map(async (c) => {
-    const [appts, programs] = await Promise.all([
+    const [appts, allPrograms] = await Promise.all([
       listAppointmentsForClient(c.id),
       listProgramsForClient(c.id),
     ]);
+    const programs = allPrograms.filter((p) => !archivedProgramIds.has(p.id));
     const today = new Date().toISOString().slice(0, 10);
     const sessions = programs.find((p) => p.is_current && p.program_kind === "in_gym" && (!p.ends_on || p.ends_on >= today)) ?? null;
     const program = programs.find((p) => p.is_current && p.program_kind === "at_home" && (!p.ends_on || p.ends_on >= today)) ?? null;
