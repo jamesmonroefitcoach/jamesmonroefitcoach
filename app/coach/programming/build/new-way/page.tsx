@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listClients, listAppointmentsForClient, listAppointmentsForWeek, listMovements } from "@/lib/data";
-import { pastProgramsForClient } from "@/lib/programs";
+import { listClients, listAppointmentsForClient, listAppointmentsForWeek, listMovements, currentProgramsByClient } from "@/lib/data";
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import type { ClientProgramItem } from "../types";
 import NewWayClient from "./new-way-client";
@@ -64,10 +63,14 @@ export default async function NewWayPage({
 
   // ── Program-mode initial data ──
   const flaggedClients = clients.filter((c) => c.lifecycle === "active" && c.needs_at_home_programming);
+  // Real programs table — pastProgramsForClient() was demo data, so every
+  // flagged client came back with hasCurrent false. Both kinds count and are
+  // labelled; pass { kind: "at_home" } to narrow it back to Programs only.
+  const currentByClient = await currentProgramsByClient(
+    flaggedClients.map((c) => c.id)
+  );
   const clientProgramSummary: ClientProgramItem[] = flaggedClients.map((c) => {
-    const current = pastProgramsForClient(c.id).find(
-      (p) => p.is_current && p.program_kind === "at_home"
-    ) ?? null;
+    const current = currentByClient.get(c.id) ?? null;
     const daysUntilEnd = current?.ends_on
       ? Math.ceil((new Date(current.ends_on).getTime() - Date.now()) / 86400000)
       : null;
@@ -78,6 +81,7 @@ export default async function NewWayPage({
       endsOn: current?.ends_on ?? null,
       daysUntilEnd,
       hasCurrent: !!current,
+      programKind: current?.program_kind ?? null,
     };
   });
 
@@ -123,18 +127,21 @@ export default async function NewWayPage({
   // started); those WITH one drop to the bottom showing the program as status.
   // Reads the live `programs` table (not demo data) so saving/publishing a
   // program updates this list on the next load.
-  const currentAtHomeByClient = new Map<string, string>(); // client_id → program name
+  // Both kinds count here and the row labels which one it is; re-add
+  // .eq("program_kind", "at_home") to narrow it back to Programs only.
+  const currentAtHomeByClient = new Map<string, { name: string; kind: "in_gym" | "at_home" }>();
   if (hasSupabaseEnv()) {
     const { data } = await createSupabaseAdmin()
       .from("programs")
-      .select("client_id, name")
+      .select("client_id, name, program_kind")
       .eq("coach_id", user.id)
-      .eq("program_kind", "at_home")
       .eq("is_current", true)
       .is("archived_at", null);
-    (data ?? []).forEach((p: { client_id: string; name: string }) => {
-      if (p.client_id && !currentAtHomeByClient.has(p.client_id)) {
-        currentAtHomeByClient.set(p.client_id, p.name);
+    (data ?? []).forEach((p: { client_id: string; name: string; program_kind: "in_gym" | "at_home" }) => {
+      const seen = p.client_id ? currentAtHomeByClient.get(p.client_id) : undefined;
+      // At-home outranks in-gym when a client has both.
+      if (p.client_id && (!seen || (seen.kind === "in_gym" && p.program_kind === "at_home"))) {
+        currentAtHomeByClient.set(p.client_id, { name: p.name, kind: p.program_kind });
       }
     });
   }
@@ -144,7 +151,8 @@ export default async function NewWayPage({
       id: c.id,
       name: c.full_name,
       hasCurrent: currentAtHomeByClient.has(c.id),
-      programName: currentAtHomeByClient.get(c.id) ?? null,
+      programName: currentAtHomeByClient.get(c.id)?.name ?? null,
+      programKind: currentAtHomeByClient.get(c.id)?.kind ?? null,
     }))
     // Needs-one first; clients already covered sink to the bottom.
     .sort((a, b) => Number(a.hasCurrent) - Number(b.hasCurrent))

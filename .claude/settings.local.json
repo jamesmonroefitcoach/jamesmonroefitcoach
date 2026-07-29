@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm --version)",
+      "Read(//Users/jamesmonroe/**)",
+      "Read(//Users/jamesmonroe/.nvm/versions/**)",
+      "Read(//Users/jamesmonroe/.volta/**)"
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Read-only SQL through the Supabase MCP execute_sql tool: a single SELECT (or WITH ... SELECT) statement that inspects data or schema. Writes stay blocked - INSERT, UPDATE, DELETE, TRUNCATE, MERGE, and any DDL (CREATE, ALTER, DROP, GRANT) against the production database must be handed to Ryan as a paste-ready query instead, per CLAUDE.md."
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Any Supabase MCP call that writes to the production database - execute_sql with a non-SELECT statement, apply_migration, deploy_edge_function, or any branch, project, or schema mutation."
+    ]
+  }
+}

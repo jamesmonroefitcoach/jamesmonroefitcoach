@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { listClients, listProspects, listAppointmentsForWeek, startOfWeek } from "@/lib/data";
+import { listClients, listProspects, listAppointmentsForWeek, startOfWeek, currentProgramsByClient } from "@/lib/data";
 import ClientsClient from "./clients-client";
 
 export type NextSessionStatus = Record<string, {
@@ -54,5 +54,21 @@ export default async function ClientsPage() {
       }
     });
 
-  return <ClientsClient clients={clients} prospects={prospects} nextSessionStatus={nextSessionStatus} />;
+  // Program column: the real programs table. The old pastProgramsForClient()
+  // call read demo constants, so the column showed "No program" for everyone
+  // regardless of what was actually published. Both kinds are shown and
+  // labelled — at-home wins when a client has both. Pass { kind: "at_home" }
+  // to narrow it back to Programs only.
+  const currentByClient = Object.fromEntries(
+    await currentProgramsByClient(clients.map((c) => c.id))
+  );
+
+  return (
+    <ClientsClient
+      clients={clients}
+      prospects={prospects}
+      nextSessionStatus={nextSessionStatus}
+      currentByClient={currentByClient}
+    />
+  );
 }

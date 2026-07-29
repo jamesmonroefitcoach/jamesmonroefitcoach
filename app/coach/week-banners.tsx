@@ -20,7 +20,16 @@ export type WeekProgramItem = {
   hasCurrent: boolean;
   /** Current at-home program id — makes the Active row a View link. */
   programId?: string | null;
+  /** Which kind the current one is, so the row can label it. */
+  programKind?: "in_gym" | "at_home" | null;
 };
+
+/** James's naming: at-home = "Program", in-gym = "Session". Rendered as text,
+ *  never colour alone — the palette has to stay colourblind-safe. */
+export function kindLabel(kind: "in_gym" | "at_home" | null | undefined): string | null {
+  if (!kind) return null;
+  return kind === "at_home" ? "Program" : "Session";
+}
 
 export type NoSessionClient = {
   id: string;
@@ -229,7 +238,12 @@ function ProgramsBanner({ items }: { items: WeekProgramItem[] }) {
                     <>
                       <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0, color: "var(--fg)" }}>{item.clientName}</span>
                       <div style={{ textAlign: "right", minWidth: 0 }}>
-                        <div className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.programName}</div>
+                        <div className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {kindLabel(item.programKind) && (
+                            <span style={{ fontWeight: 700 }}>{kindLabel(item.programKind)}: </span>
+                          )}
+                          {item.programName}
+                        </div>
                         <div style={{
                           fontSize: "0.64rem",
                           color: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14) ? "var(--amber)" : "var(--muted)",

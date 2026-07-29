@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { ClientRow, Prospect } from "@/lib/data";
-import { pastProgramsForClient } from "@/lib/programs";
+import type { ClientRow, Prospect, CurrentClientProgram } from "@/lib/data";
 import { fmtMoney, fmtDate, fmtSessionAgo, fmtSessionAway } from "@/lib/format";
 import { addProspect, activateProspect, deleteProspect, updateProspect, quickUpdateClient, type ProspectInput } from "./actions";
 import type { NextSessionStatus } from "./page";
+import { kindLabel } from "@/app/coach/week-banners";
 import TierBoardModal from "./tier-board-modal";
 import QuickView from "./quick-view";
 
@@ -105,9 +105,10 @@ const SELECT_SM: React.CSSProperties = { ...INPUT_SM, height: "auto" };
 // Program column cell — handles the +/x flag and renders the standard view
 // (date range, status link) only when the client has been flagged as needing
 // at-home programming. The flag is optimistic so the +/x toggle feels instant.
-function ProgramCell({ client, atHomeProg, daysLeft }: {
+// Shows either kind, labelled: at-home reads "Program", in-gym reads "Session".
+function ProgramCell({ client, currentProg, daysLeft }: {
   client: ClientRow;
-  atHomeProg: ReturnType<typeof pastProgramsForClient>[number] | null;
+  currentProg: CurrentClientProgram | null;
   daysLeft: number | null;
 }) {
   const [flagged, setFlagged] = useState(client.needs_at_home_programming);
@@ -140,20 +141,35 @@ function ProgramCell({ client, atHomeProg, daysLeft }: {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
       <div className="meta" style={{ fontSize: "0.72rem" }}>
-        {atHomeProg?.ends_on ? (
+        {!currentProg ? (
+          <span style={{ color: "var(--muted)" }}>No program yet</span>
+        ) : (
           <>
-            {new Date(atHomeProg.ends_on).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            <span style={{ fontWeight: 700 }}>{kindLabel(currentProg.program_kind)}</span>
             {" · "}
-            <span style={{ color: daysLeft !== null && daysLeft <= 7 ? "var(--amber)" : undefined }}>
-              {daysLeft !== null ? (daysLeft <= 0 ? "expired" : `${daysLeft}d left`) : "no end"}
-            </span>
+            {currentProg.ends_on ? (
+              <>
+                {new Date(currentProg.ends_on).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                {" · "}
+                <span style={{ color: daysLeft !== null && daysLeft <= 7 ? "var(--amber)" : undefined }}>
+                  {daysLeft !== null ? (daysLeft <= 0 ? "expired" : `${daysLeft}d left`) : "no end"}
+                </span>
+              </>
+            ) : (
+              // A current program with no end date still needs to read as
+              // active — the old copy fell through to "No program yet" beside
+              // a "View →".
+              <span style={{ color: "var(--muted)" }}>no end date</span>
+            )}
           </>
-        ) : <span style={{ color: "var(--muted)" }}>No program yet</span>}
+        )}
       </div>
       <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
         <Link
-          href={atHomeProg
-            ? `/coach/programming/build/new-way?type=program&client=${client.id}&program=${atHomeProg.id}`
+          // Existing one opens the as-built view (same target as the dashboard
+          // banner); only "Build" goes to the builder, always in program mode.
+          href={currentProg
+            ? `/coach/programming/view/${currentProg.id}`
             : `/coach/programming/build/new-way?type=program&client=${client.id}`}
           style={{
             fontSize: "0.72rem", fontWeight: 600, padding: "0.15rem 0.45rem",
@@ -161,7 +177,7 @@ function ProgramCell({ client, atHomeProg, daysLeft }: {
             background: "rgba(90,107,74,0.07)", textDecoration: "none",
             whiteSpace: "nowrap", display: "inline-block",
           }}
-        >{atHomeProg ? "View →" : "Build →"}</Link>
+        >{currentProg ? "View →" : "Build →"}</Link>
         <button
           type="button"
           onClick={() => toggle(false)}
@@ -188,12 +204,13 @@ function fmtUpcoming(iso: string): string {
   );
 }
 
-function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionStatus: NextSessionStatus }) {
-  const atHomeProg = pastProgramsForClient(c.id).find(
-    (p) => p.is_current && p.program_kind === "at_home"
-  ) ?? null;
-  const daysLeft = atHomeProg?.ends_on
-    ? Math.ceil((new Date(atHomeProg.ends_on).getTime() - Date.now()) / 86400000)
+function ActiveClientRow({ c, nextSessionStatus, currentProg }: {
+  c: ClientRow;
+  nextSessionStatus: NextSessionStatus;
+  currentProg: CurrentClientProgram | null;
+}) {
+  const daysLeft = currentProg?.ends_on
+    ? Math.ceil((new Date(currentProg.ends_on).getTime() - Date.now()) / 86400000)
     : null;
   const nextStatus = c.next_session_at ? nextSessionStatus[c.id] : undefined;
 
@@ -313,7 +330,7 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
         <td><LastSessionCell iso={c.last_session_at} /></td>
         <td><NextSessionCell iso={c.next_session_at} /></td>
         <td className="meta" style={{ fontSize: "0.78rem" }}>
-          {atHomeProg ? atHomeProg.name : <span style={{ color: "var(--muted)" }}>No program</span>}
+          {currentProg ? currentProg.name : <span style={{ color: "var(--muted)" }}>No program</span>}
         </td>
         <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
         {/* Actions — empty while editing */}
@@ -425,7 +442,7 @@ function ActiveClientRow({ c, nextSessionStatus }: { c: ClientRow; nextSessionSt
           the cell shows the standard program view + a small x to clear the
           flag. Clearing does NOT erase any past program data. */}
       <td>
-        <ProgramCell client={c} atHomeProg={atHomeProg} daysLeft={daysLeft} />
+        <ProgramCell client={c} currentProg={currentProg} daysLeft={daysLeft} />
       </td>
       {/* Owed */}
       <td>{c.balance_owed > 0 ? <span className="badge badge-red">{fmtMoney(c.balance_owed)}</span> : <span className="meta">—</span>}</td>
@@ -785,7 +802,12 @@ function RosterSection({ title, count, defaultOpen, extra, children }: {
 
 // ── Main component ────────────────────────────────────────────────────────
 
-export default function ClientsClient({ clients, prospects, nextSessionStatus }: { clients: ClientRow[]; prospects: Prospect[]; nextSessionStatus: NextSessionStatus }) {
+export default function ClientsClient({ clients, prospects, nextSessionStatus, currentByClient }: {
+  clients: ClientRow[];
+  prospects: Prospect[];
+  nextSessionStatus: NextSessionStatus;
+  currentByClient: Record<string, CurrentClientProgram>;
+}) {
   const [showModal, setShowModal] = useState(false);
   const [tierBoardOpen, setTierBoardOpen] = useState(false);
   const [, startDel] = useTransition();
@@ -917,7 +939,14 @@ export default function ClientsClient({ clients, prospects, nextSessionStatus }:
                 </tr>
               </thead>
               <tbody>
-                {sortClients(active).map((c) => <ActiveClientRow key={c.id} c={c} nextSessionStatus={nextSessionStatus} />)}
+                {sortClients(active).map((c) => (
+                  <ActiveClientRow
+                    key={c.id}
+                    c={c}
+                    nextSessionStatus={nextSessionStatus}
+                    currentProg={currentByClient[c.id] ?? null}
+                  />
+                ))}
                 {active.length === 0 && (
                   <tr><td colSpan={12} className="meta" style={{ textAlign: "center", padding: "1.5rem" }}>No active clients.</td></tr>
                 )}

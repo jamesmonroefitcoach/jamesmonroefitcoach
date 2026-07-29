@@ -1051,27 +1051,35 @@ export type CurrentClientProgram = {
   program_kind: "in_gym" | "at_home";
 };
 export async function currentProgramsByClient(
-  clientIds: string[]
+  clientIds: string[],
+  opts?: { kind?: "in_gym" | "at_home" }
 ): Promise<Map<string, CurrentClientProgram>> {
   const map = new Map<string, CurrentClientProgram>();
   if (!clientIds.length) return map;
+  const kind = opts?.kind;
   if (!hasSupabaseEnv()) {
     for (const id of clientIds) {
-      const progs = pastProgramsForClient(id).filter((x) => x.is_current);
+      const progs = pastProgramsForClient(id)
+        .filter((x) => x.is_current)
+        .filter((x) => !kind || x.program_kind === kind);
       const p = progs.find((x) => x.program_kind === "at_home") ?? progs[0];
       if (p) map.set(id, { id: p.id, name: p.name, ends_on: p.ends_on ?? null, program_kind: p.program_kind });
     }
     return map;
   }
   const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
+  let query = supabase
     .from("programs")
     .select("id, client_id, name, ends_on, program_kind, created_at")
     .in("client_id", clientIds)
     .eq("is_current", true)
     .eq("is_published", true)
-    .is("archived_at", null)
-    .order("created_at", { ascending: false });
+    .is("archived_at", null);
+  // Callers gated behind the "+" needs-at-home-programming flag ask for
+  // at_home only: an in-gym workout must not make a flagged client look
+  // handled when they still need a Program.
+  if (kind) query = query.eq("program_kind", kind);
+  const { data, error } = await query.order("created_at", { ascending: false });
   if (error || !data) {
     console.error("[currentProgramsByClient] query error:", error);
     return map;
