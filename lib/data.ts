@@ -765,7 +765,10 @@ export async function listCoachThreads(coachId: string): Promise<ThreadPreview[]
     .select("id, client_id, profiles:client_id ( full_name ), messages ( body, created_at, read_at, sender_id )")
     .eq("coach_id", coachId)
     .order("created_at", { ascending: false })
-    .limit(50);
+    // This cap truncates threads before the per-client collapse below, so a
+    // low value drops whole clients out of the inbox rather than trimming the
+    // tail. At 50 against 54 threads it was hiding three active clients.
+    .limit(500);
   if (!data) return [];
   const perThread = data.map((t: any) => {
     // Sort messages by created_at so we always grab the truly-latest one,
@@ -977,6 +980,7 @@ export async function listProgramsForClient(clientId: string): Promise<ClientPro
       "id, name, program_kind, starts_on, ends_on, duration_weeks, at_home_cadence, is_current, is_published, created_by_client, builder_state, created_at, workout_sheet_id, workout_sheets:workout_sheet_id ( kind )"
     )
     .eq("client_id", clientId)
+    .is("archived_at", null)
     .order("starts_on", { ascending: false, nullsFirst: false });
   if (error || !data) return [];
   return (data as unknown as Array<{

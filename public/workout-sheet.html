@@ -106,7 +106,9 @@
   .remove-day { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.1rem; flex: none; align-self: center; }
   .remove-day:hover { color: var(--rust); }
 
-  /* Movement table — 4 columns: × | Movement | Sets | Notes */
+  /* Movement table — 3 columns: Movement | Sets | Notes. There is no leading ×
+     column: the row delete / duplicate controls ride at the right edge of the
+     Movement cell and only in the coach's edit view (see .row-tools). */
   .table-wrap { overflow-x: auto; padding-right: 1px; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   thead th {
@@ -116,14 +118,18 @@
     background: var(--bar); border: 1px solid var(--ink);
     padding: 0.26rem 0.4rem; white-space: nowrap; overflow: hidden;
   }
-  thead th.th-x { padding: 0; }
   .col-resizer { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize; touch-action: none; z-index: 3; }
   .col-resizer::after { content: ""; position: absolute; top: 15%; bottom: 15%; right: 4px; width: 2px; background: var(--line); }
   thead th:hover .col-resizer::after { background: var(--rust); }
   tbody td { border: 1px solid #b9ad98; padding: 0; vertical-align: top; }
 
-  /* Movement cell — textarea wraps and auto-grows */
+  /* Movement cell — textarea wraps and auto-grows. The row tools (delete /
+     duplicate) sit at the right edge of this cell, top-aligned to the first
+     line, and only in the coach's edit view. */
   tbody td.move-cell { padding: 0; }
+  .move-inner { display: flex; align-items: flex-start; width: 100%; min-width: 0; }
+  .move-inner textarea { flex: 1 1 auto; min-width: 0; }
+  .row-tools { display: flex; align-items: center; gap: 1px; flex: none; padding: 2px 2px 0 0; }
   tbody td.move-cell textarea {
     font-family: "Georgia", serif; font-size: 0.86rem; color: var(--ink);
     background: transparent; border: none; width: 100%; min-height: 1.1rem;
@@ -181,8 +187,7 @@
   }
   tbody td.notes-cell textarea:focus { outline: none; background: #fbf7ef; }
 
-  tbody td.x-cell { padding: 0; text-align: center; vertical-align: top; }
-  .row-del, .row-dup { display: block; width: 100%; border: none; background: transparent; cursor: pointer; line-height: 1; padding: 2px 0; }
+  .row-del, .row-dup { border: none; background: transparent; cursor: pointer; line-height: 1; padding: 1px 2px; flex: none; }
   .row-del { color: var(--muted); font-size: 0.82rem; }
   .row-del:hover { color: var(--rust); }
   .row-dup { color: #d5cbbf; font-size: 0.68rem; }
@@ -218,6 +223,11 @@
     .col-resizer { touch-action: pan-y; }
     input, textarea, select { font-size: 16px !important; }
     .set-pair input { width: 44px; }
+    /* Row delete / duplicate need a bigger target on a phone, but they now sit
+       next to the Movement textarea, so keep them modest — an oversized delete
+       here is a mis-tap that eats a row. */
+    .row-tools { gap: 2px; }
+    .row-del, .row-dup { padding: 3px 4px; }
   }
 
   /* lock banner */
@@ -236,7 +246,7 @@
   body.locked-by-other input,
   body.locked-by-other select,
   body.locked-by-other .mini,
-  body.locked-by-other .row-del,
+  body.locked-by-other .row-tools,
   body.locked-by-other .pair-del,
   body.locked-by-other .row-add-set,
   body.locked-by-other .remove-day,
@@ -252,8 +262,8 @@
   /* Client viewer: James's published prescription is read-only. The client
      can only fill in weight, notes, and their bodyweight/sleep. Structure
      controls (add/remove row, set, day, clear) are hidden. */
-  body.client-locked .row-del,
-  body.client-locked .row-dup,
+  body.client-locked .row-tools,
+  body.client-locked .day-controls,
   body.client-locked .pair-del,
   body.client-locked .row-add-set,
   body.client-locked .remove-day,
@@ -283,13 +293,12 @@
 
   /* View mode: a saved sheet opens read-only until "Edit" is pressed, but it
      looks exactly like the edit view — same borders, underlines and fills.
-     Only the content-editing controls are hidden. The delete/duplicate buttons
-     inside the × column are hidden individually (below) rather than hiding the
-     whole .x-cell, so the column stays and Movement/Sets/Notes don't shift. */
+     Only the content-editing controls are hidden, including the row tools
+     (delete / duplicate) at the right edge of the Movement cell. */
   body.view-mode input[readonly],
   body.view-mode textarea[readonly] { cursor: default; }
-  body.view-mode .row-del,
-  body.view-mode .row-dup,
+  body.view-mode .row-tools,
+  body.view-mode .day-controls,
   body.view-mode .pair-del,
   body.view-mode .row-add-set,
   body.view-mode .remove-day,
@@ -300,11 +309,9 @@
 
   /* View-only (coach opening a program to read it): everything is locked and
      every editing control is hidden, but it still looks like the edit view —
-     same borders, underlines and fills. The delete/duplicate buttons in the ×
-     column are hidden individually so the column stays and the table columns
-     don't shift. Save PDF stays so it can be printed. */
-  body.view-only .row-del,
-  body.view-only .row-dup,
+     same borders, underlines and fills. Save PDF stays so it can be printed. */
+  body.view-only .row-tools,
+  body.view-only .day-controls,
   body.view-only .pair-del,
   body.view-only .row-add-set,
   body.view-only .remove-day,
@@ -322,12 +329,9 @@
      It opens directly editable and autosaves every keystroke, so there's no
      edit / save / cancel workflow and no structural editing — just the form
      (client fills their own cells; the coach's prescription stays frozen via
-     applyClientLock). Save PDF stays so the client can keep a copy. The
-     delete/duplicate buttons in the × column are hidden individually rather
-     than hiding the whole .x-cell, so the column stays and the Movement/Sets/
-     Notes columns don't shift. */
-  body.public-mode .row-del,
-  body.public-mode .row-dup,
+     applyClientLock). Save PDF stays so the client can keep a copy. */
+  body.public-mode .row-tools,
+  body.public-mode .day-controls,
   body.public-mode .pair-del,
   body.public-mode .row-add-set,
   body.public-mode .remove-day,
@@ -383,7 +387,7 @@
     @page { size: letter portrait; margin: 0.5in; }
     html, body { background: #fff; }
     .toolbar, .sheet-controls, .remove-day, .day-controls, .col-resizer,
-    .pair-del, .row-add-set, .row-del, .lock-banner, .modal { display: none !important; }
+    .pair-del, .row-add-set, .row-tools, .lock-banner, .modal { display: none !important; }
     .table-wrap { overflow: visible; }
     .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; }
     .field input, tbody td input, tbody td textarea, .day-bar .bar-field input { background: transparent !important; }
@@ -464,7 +468,7 @@
     var DEFAULT_SETS = 3;
     var DEFAULT_ROWS = 9;
     var STORE_KEY = "mfc-workout-sheet-v4";
-    var XW = 22, MOVE_W = 200, MIN_COL = 30;
+    var MOVE_W = 200, MIN_COL = 30;
 
     var dayCount = 0;
     var restoring = false;
@@ -475,11 +479,13 @@
       el.style.height = (el.scrollHeight + 2) + "px";
     }
 
-    function xCell() {
-      var td = document.createElement("td");
-      td.className = "x-cell";
-      var b = document.createElement("button");
-      b.type = "button"; b.className = "row-del"; b.title = "Delete row"; b.textContent = "×";
+    // Row tools — duplicate + delete for this row. These used to own a
+    // dedicated leading × column, which rendered as a skinny empty strip in
+    // every published / read-only view. They now ride at the right edge of the
+    // Movement cell and are hidden outside the coach's edit view (CSS).
+    function rowTools() {
+      var tools = document.createElement("span");
+      tools.className = "row-tools";
       var dup = document.createElement("button");
       dup.type = "button"; dup.className = "row-dup"; dup.title = "Duplicate row";
       dup.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle"><rect x="2.5" y="2.5" width="6.5" height="6.5" rx="0.5" stroke="currentColor" stroke-width="1"/><rect x="1" y="1" width="6.5" height="6.5" rx="0.5" stroke="currentColor" stroke-width="1" fill="inherit"/></svg>';
@@ -497,21 +503,29 @@
         tr.parentNode.insertBefore(newTr, tr.nextSibling);
         saveState();
       });
-      td.appendChild(b);
-      td.appendChild(dup);
-      return td;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "row-del"; b.title = "Delete row"; b.textContent = "×";
+      tools.appendChild(dup);
+      tools.appendChild(b);
+      return tools;
     }
 
-    // Movement column — textarea so long names wrap and the row grows
+    // Movement column — textarea so long names wrap and the row grows. The
+    // textarea stays the first field in the row so the positional row shape
+    // [movement, reps1, wt1, …, notes] is unchanged.
     function movementCell() {
       var td = document.createElement("td");
       td.className = "move-cell";
+      var inner = document.createElement("div");
+      inner.className = "move-inner";
       var ta = document.createElement("textarea");
       ta.rows = 1;
       ta.autocomplete = "off";
       ta.spellcheck = false;
       ta.addEventListener("input", function () { autoGrow(ta); });
-      td.appendChild(ta);
+      inner.appendChild(ta);
+      inner.appendChild(rowTools());
+      td.appendChild(inner);
       return td;
     }
 
@@ -591,11 +605,10 @@
       return td;
     }
 
-    // Row: [×] | Movement textarea | Sets (per-row) | Notes textarea
+    // Row: Movement textarea (+ row tools) | Sets (per-row) | Notes textarea
     // querySelectorAll("input, textarea") order: [movement, reps1, wt1, reps2, wt2, ..., notes]
     function makeRow(sets) {
       var tr = document.createElement("tr");
-      tr.appendChild(xCell());
       tr.appendChild(movementCell());
       tr.appendChild(setsCell(sets || DEFAULT_SETS));
       tr.appendChild(notesCell());
@@ -608,7 +621,6 @@
       var oldCg = table.querySelector("colgroup"); if (oldCg) oldCg.remove();
       var cg = document.createElement("colgroup");
       cg.innerHTML =
-        '<col style="width:' + XW + 'px" />' +
         '<col style="width:' + MOVE_W + 'px" />' +
         '<col />' +
         '<col style="width:160px" />';
@@ -616,10 +628,9 @@
       var thead = document.createElement("thead");
       thead.innerHTML =
         '<tr>' +
-        '<th class="th-x"></th>' +
-        '<th>Movement &amp; Equipment<span class="col-resizer" data-col="1"></span></th>' +
-        '<th>Sets &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;font-family:Georgia,serif;font-size:0.58rem;color:var(--muted)">(Reps &middot; Wt per set)</span><span class="col-resizer" data-col="2"></span></th>' +
-        '<th>Load / Notes<span class="col-resizer" data-col="3"></span></th>' +
+        '<th>Movement &amp; Equipment<span class="col-resizer" data-col="0"></span></th>' +
+        '<th>Sets &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;font-family:Georgia,serif;font-size:0.58rem;color:var(--muted)">(Reps &middot; Wt per set)</span><span class="col-resizer" data-col="1"></span></th>' +
+        '<th>Load / Notes<span class="col-resizer" data-col="2"></span></th>' +
         '</tr>';
       table.insertBefore(thead, cg.nextSibling);
     }
@@ -702,7 +713,7 @@
 
     // column resize — dragging col N steals from / gives to its neighbour
     // so the total never exceeds the table width and the right border stays visible.
-    // col 1 (Movement) ↔ col 2 (Sets); col 2 (Sets) ↔ col 3 (Notes); col 3 (Notes) ↔ col 2 (Sets)
+    // col 0 (Movement) ↔ col 1 (Sets); col 1 (Sets) ↔ col 2 (Notes); col 2 (Notes) ↔ col 1 (Sets)
     document.addEventListener("pointerdown", function (e) {
       var t = e.target;
       if (!t || !t.classList || !t.classList.contains("col-resizer")) return;
@@ -712,9 +723,9 @@
       var idx = parseInt(t.getAttribute("data-col"), 10);
       var col = cols[idx];
       if (!col) return;
-      // counterpart column: moving col 2 (Sets) steals from col 3 (Notes);
-      // moving col 1 or col 3 steals from/gives to col 2 (Sets).
-      var otherIdx = idx === 2 ? 3 : 2;
+      // counterpart column: moving col 1 (Sets) steals from col 2 (Notes);
+      // moving col 0 or col 2 steals from/gives to col 1 (Sets).
+      var otherIdx = idx === 1 ? 2 : 1;
       var other = cols[otherIdx];
       var startX = e.clientX;
       var startW = parseFloat(col.style.width) || col.offsetWidth || 40;

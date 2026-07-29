@@ -31,6 +31,10 @@ export async function getWorkoutSheet(id: string): Promise<WorkoutSheet | null> 
 }
 
 // Resolve a sheet by its open-access token (backs the public /s/<token> link).
+// Archived sheets deliberately resolve to null: when the coach deletes a
+// program the sheet row survives (so the delete stays reversible) but its
+// public link must go dead, otherwise the token keeps serving an editable
+// sheet for work that's been deleted. Callers render "Link not found" / 404.
 export async function getWorkoutSheetByPublicToken(token: string): Promise<WorkoutSheet | null> {
   if (!hasSupabaseEnv()) return null;
   if (!token) return null;
@@ -38,9 +42,37 @@ export async function getWorkoutSheetByPublicToken(token: string): Promise<Worko
     .from("workout_sheets")
     .select(COLS)
     .eq("public_token", token)
+    .neq("status", "archived")
     .maybeSingle();
   if (error || !data) return null;
   return rowToSheet(data);
+}
+
+// Archive every sheet paired with a program. This is what actually kills the
+// open-access /s/<token> link when a program is deleted — `status` already
+// allows 'archived' (migration 0015), so no schema change is needed. Matches
+// on both directions of the program↔sheet link because either side can be the
+// one that's populated.
+export async function archiveWorkoutSheetsForProgram(
+  programId: string,
+  sheetId?: string | null
+): Promise<boolean> {
+  if (!hasSupabaseEnv()) return false;
+  const supabase = createSupabaseAdmin();
+  const status: WorkoutSheetStatus = "archived";
+  const { error } = await supabase
+    .from("workout_sheets")
+    .update({ status })
+    .eq("program_id", programId);
+  let ok = !error;
+  if (sheetId) {
+    const { error: sheetErr } = await supabase
+      .from("workout_sheets")
+      .update({ status })
+      .eq("id", sheetId);
+    ok = ok && !sheetErr;
+  }
+  return ok;
 }
 
 export type ListFilter = {

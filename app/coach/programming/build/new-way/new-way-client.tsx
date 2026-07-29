@@ -11,11 +11,15 @@ import {
   getOrCreatePairedSheetAction,
   getSessionProgramId,
   getProgramBuildFormat,
-  saveDraftProgram,
-  deleteDraftProgram,
+  markSheetProgramAtHome,
   deleteDraftSession,
   getPublicSheetLink,
 } from "../actions";
+// Shares the Programs page's delete so both "Recently saved programs" lists
+// behave the same. The older `deleteDraftProgram` in ../actions hard-deletes
+// the program but only unlinks its sheet, leaving the public /s/<token> link
+// live for work that's been deleted.
+import { archiveProgram } from "../../actions";
 import ReworkClient from "../rework/rework-client";
 import ProgramsReworkClient from "../programs-rework/programs-rework-client";
 import WorkoutSheetEmbed, { type ClientLite, type AutofillData } from "@/components/workout-sheet-embed";
@@ -297,23 +301,15 @@ export default function NewWayClient({
     setStarted(true);
     syncUrl({ client: clientId, type: "program", view: "inapp" });
   }
-  // At-home Program + Template, "+ New": a brand-new client sheet would be
-  // born `in_gym` by the bridge, so pre-create an empty at_home draft first,
-  // then open its (correctly-kinded) paired sheet.
-  const [creatingTemplate, startCreateTemplate] = useTransition();
+  // At-home Program + Template, "+ New": opens a blank sheet and writes NOTHING
+  // to the database yet, so clicking around never leaves empty draft programs
+  // behind. A brand-new client sheet would be born `in_gym` by the bridge, so
+  // the at-home intent rides along with the first real save instead — see
+  // markSheetProgramAtHome in the embed's onSaved below.
   function startNewProgramTemplate() {
-    startCreateTemplate(async () => {
-      const res = await saveDraftProgram({
-        clientId,
-        name: "Untitled program",
-        programKind: "at_home",
-        builderState: {},
-        buildFormat: "template",
-      });
-      if (!res.ok) { alert(res.error || "Could not start the program."); return; }
-      setEditProgramId(res.draftId); setView("template"); setStarted(true);
-      syncUrl({ client: clientId, type: "program", program: res.draftId, view: "template" });
-    });
+    setEditProgramId(""); setAutosaveDraftId(""); setPairedSheetId(null);
+    setView("template"); setStarted(true);
+    syncUrl({ client: clientId, type: "program", view: "template" });
   }
   function editProgram(p: ImportableProgram) {
     // Opens in whichever format is active (In App or Template) — both are the
@@ -421,7 +417,20 @@ export default function NewWayClient({
             sheetId={pairedSheetId ?? undefined}
             autofill={sessionAutofill ?? { clientName: selectedClient?.full_name }}
             clearLocal={!editProgramId && !pairedSheetId}
-            onSaved={(id) => setPairedSheetId(id)}
+            onSaved={(id) => {
+              setPairedSheetId(id);
+              // At-home programs are sheet-first now: the paired programs row is
+              // created by this save, and the bridge kinds any new sheet-origin
+              // program `in_gym`. Stamp the at-home intent onto it. Runs on
+              // every save, so a failed attempt heals on the next one.
+              if (type === "program") {
+                const warn = () =>
+                  alert("Saved, but this could not be filed as an at-home program. Save again to retry.");
+                markSheetProgramAtHome(id)
+                  .then((res) => { if (!res.ok) warn(); })
+                  .catch(warn);
+              }
+            }}
             sessionMode={type === "session"}
           />
         </div>
@@ -560,10 +569,11 @@ export default function NewWayClient({
             key={p.id}
             primary={p.name || "Untitled program"}
             secondary={`${p.client_name} · ${p.program_kind === "at_home" ? "at-home" : "in-gym"}`}
-            ctaLabel="Edit program →"
+            ctaLabel="View program →"
             onClick={() => quickEditProgram(p)}
             onDelete={async () => {
-              await deleteDraftProgram(p.id);
+              const res = await archiveProgram(p.id);
+              if (!res.ok) return;
               setDraftPrograms((prev) => prev.filter((x) => x.id !== p.id));
             }}
           />
@@ -832,9 +842,8 @@ export default function NewWayClient({
               className="btn btn-primary"
               style={{ padding: "0.4rem 1rem", fontSize: "0.86rem" }}
               onClick={view === "template" ? startNewProgramTemplate : startNewProgram}
-              disabled={creatingTemplate}
             >
-              {creatingTemplate ? "Starting…" : "+ New program"}
+              + New program
             </button>
           </div>
           {programsLoading ? (

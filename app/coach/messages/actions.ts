@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session";
-import { loadThreadMessages, type ThreadMessage } from "@/lib/messages";
+import { loadOrCreateClientThread, loadThreadMessages, type ThreadMessage } from "@/lib/messages";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -161,17 +161,13 @@ export async function startThreadWithClient(clientId: string): Promise<{ ok: tru
   if (!clientId) return { ok: false, error: "missing client" };
   if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
 
-  const supabase = createSupabaseAdmin();
   // Use topic=null for the default DM thread (one per coach/client pair).
-  const { data: th, error } = await supabase
-    .from("message_threads")
-    .upsert(
-      { coach_id: me.id, client_id: clientId, topic: null },
-      { onConflict: "coach_id,client_id,topic" }
-    )
-    .select("id")
-    .single();
-  if (error || !th?.id) return { ok: false, error: error?.message ?? "thread create failed" };
+  // This used to upsert with onConflict "coach_id,client_id,topic", but that
+  // unique index can't match rows whose topic is null (Postgres treats nulls
+  // as distinct), so every click minted a fresh empty thread. Go through the
+  // same resolver the client's own inbox uses so both sides open one thread.
+  const th = await loadOrCreateClientThread(clientId, me.id);
+  if (!th?.id) return { ok: false, error: "thread create failed" };
   revalidatePath("/coach/messages");
   return { ok: true, thread_id: th.id };
 }
