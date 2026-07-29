@@ -5,7 +5,7 @@ import type { GoalCategoryWithGoals, GoalKind, GoalRow } from "@/lib/goals";
 import { targetLabel, progressPct } from "@/lib/goals";
 import {
   createCategory, updateCategory, deleteCategory,
-  createGoal, updateGoal, deleteGoal,
+  createGoal, updateGoal, deleteGoal, saveWeeklyCheckin,
 } from "@/app/goals/actions";
 
 // Simpler goals view — small category sections, each goal as a one-line
@@ -13,10 +13,16 @@ import {
 // spreadsheet layout, which surfaced too many controls at once.
 
 export default function GoalsClient({
-  ownerLabel, categories,
+  ownerLabel, categories, checkin,
 }: {
   ownerLabel: string;
   categories: GoalCategoryWithGoals[];
+  /** Weekly self-survey data (coach side only). Absent = card hidden. */
+  checkin?: {
+    weekStart: string;
+    entries: Record<string, { value: number | null; stars: number | null }>;
+    tableMissing: boolean;
+  };
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -105,6 +111,18 @@ export default function GoalsClient({
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* ── Weekly check-in survey (coach side) ─────────────── */}
+          {checkin && (
+            <WeeklyCheckinCard
+              weekStart={checkin.weekStart}
+              entries={checkin.entries}
+              tableMissing={checkin.tableMissing}
+              items={flat.weekly}
+              onAction={run}
+              pending={pending}
+            />
+          )}
+
           {/* ── Annual / high-level ────────────────────────────── */}
           <FlatGoalsCard
             title="Annual / high-level"
@@ -227,6 +245,156 @@ function Cell({ label, value, sub, accent }: { label: string; value: string; sub
 }
 
 // ── Flat list card (Annual / Weekly) ────────────────────────────────
+
+// ── Weekly check-in survey ──────────────────────────────────────────
+// James scores each weekly goal once a week: goals with a numeric target
+// get a "type the latest number" input; the rest get a 1-5 star self-score
+// (Ryan's spec, Jul 2026). Rows save individually via saveWeeklyCheckin.
+
+type CheckinEntry = { value: number | null; stars: number | null };
+
+function goalIsNumeric(g: GoalRow): boolean {
+  return g.kind !== "one_time" &&
+    (g.target_value != null || g.target_range_low != null || g.target_range_high != null);
+}
+
+function WeeklyCheckinCard({
+  weekStart, entries, tableMissing, items, onAction, pending,
+}: {
+  weekStart: string;
+  entries: Record<string, CheckinEntry>;
+  tableMissing: boolean;
+  items: { goal: GoalRow; cat: GoalCategoryWithGoals; subs: GoalRow[] }[];
+  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
+  pending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const done = items.filter(({ goal }) => {
+    const e = entries[goal.id];
+    return e && (e.value != null || e.stars != null);
+  }).length;
+  const weekLabel = new Date(weekStart + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  return (
+    <section style={{ border: "1px solid var(--line)", borderRadius: 3, background: "var(--paper)", overflow: "hidden" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: "0.5rem",
+          padding: "0.4rem 0.7rem", background: "var(--bg)", border: "none",
+          borderBottom: open ? "1px solid var(--line)" : "none", cursor: "pointer",
+          fontFamily: "var(--font-heading), Oswald, sans-serif", textTransform: "uppercase",
+          letterSpacing: "0.06em", fontSize: "0.74rem", color: "var(--muted)", fontWeight: 700,
+        }}
+      >
+        <span style={{ fontSize: "0.66rem" }}>{open ? "▾" : "▸"}</span>
+        Weekly check-in · week of {weekLabel}
+        <span style={{ marginLeft: "auto", fontWeight: 600, fontSize: "0.68rem", textTransform: "none", letterSpacing: 0 }}>
+          {done}/{items.length} scored
+        </span>
+      </button>
+      {open && (
+        tableMissing ? (
+          <p className="meta" style={{ padding: "0.6rem 0.7rem", margin: 0, fontSize: "0.78rem", fontStyle: "italic" }}>
+            Check-in storage isn&rsquo;t set up yet (migration 0035). Scores can&rsquo;t be saved until it runs.
+          </p>
+        ) : items.length === 0 ? (
+          <p className="meta" style={{ padding: "0.6rem 0.7rem", margin: 0, fontSize: "0.78rem", fontStyle: "italic" }}>
+            No weekly goals to score yet.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {items.map(({ goal, cat }) => (
+              <li key={goal.id} style={{ borderLeft: `3px solid ${cat.color}`, borderBottom: "1px solid var(--line)" }}>
+                <CheckinRow
+                  goal={goal}
+                  weekStart={weekStart}
+                  entry={entries[goal.id]}
+                  onAction={onAction}
+                  pending={pending}
+                />
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+    </section>
+  );
+}
+
+function CheckinRow({
+  goal, weekStart, entry, onAction, pending,
+}: {
+  goal: GoalRow;
+  weekStart: string;
+  entry: CheckinEntry | undefined;
+  onAction: <T>(p: Promise<{ ok: true; data?: T } | { ok: false; error: string }>) => Promise<void>;
+  pending: boolean;
+}) {
+  const numeric = goalIsNumeric(goal);
+  const [draft, setDraft] = useState(entry?.value != null ? String(entry.value) : "");
+
+  function saveNumber() {
+    const v = draft.trim() === "" ? null : parseFloat(draft);
+    if (v == null || Number.isNaN(v)) return;
+    if (entry?.value === v) return;
+    void onAction(saveWeeklyCheckin(goal.id, weekStart, { value: v }));
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.4rem 0.7rem", flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 140 }}>
+        <div style={{ fontSize: "0.82rem", fontWeight: 600 }}>{goal.name}</div>
+        <div className="meta" style={{ fontSize: "0.66rem" }}>
+          {numeric ? <>target {targetLabel(goal)}</> : "rate your week"}
+        </div>
+      </div>
+      {numeric ? (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+          <input
+            className="input"
+            type="number"
+            inputMode="decimal"
+            value={draft}
+            placeholder={goal.current_value != null ? String(goal.current_value) : "—"}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={saveNumber}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+            disabled={pending}
+            style={{ width: 74, padding: "0.25rem 0.4rem", fontSize: "0.82rem", textAlign: "right" }}
+          />
+          {goal.target_unit && <span className="meta" style={{ fontSize: "0.72rem" }}>{goal.target_unit}</span>}
+          {entry?.value != null && (
+            <span style={{ color: "var(--sage)", fontSize: "0.78rem", fontWeight: 700 }} title="Saved for this week">✓</span>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: "0.1rem" }}>
+          {[1, 2, 3, 4, 5].map((s) => {
+            const filled = (entry?.stars ?? 0) >= s;
+            return (
+              <button
+                key={s}
+                type="button"
+                disabled={pending}
+                onClick={() => { if (entry?.stars !== s) void onAction(saveWeeklyCheckin(goal.id, weekStart, { stars: s })); }}
+                aria-label={`${s} star${s === 1 ? "" : "s"}`}
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontSize: "1.15rem", lineHeight: 1, padding: "0.1rem",
+                  color: filled ? "var(--rust)" : "var(--muted)",
+                }}
+              >
+                {filled ? "★" : "☆"}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function FlatGoalsCard({
   title, empty, items, onAction, pending, groupByCategory = false,

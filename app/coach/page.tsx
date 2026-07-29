@@ -3,10 +3,9 @@ import { getSessionUser } from "@/lib/session";
 import {
   listClients, listAppointmentsForWeek, listAppointmentsForMonth,
   countOpenRequests, listCoachThreads, startOfWeek,
-  getAllTimeSessionStats,
+  getAllTimeSessionStats, currentProgramsByClient,
 } from "@/lib/data";
 import { listSlotOffers } from "./availability/data";
-import { pastProgramsForClient } from "@/lib/programs";
 import { listAllTestimonials } from "@/app/testimonials/actions";
 import { listConsultationRequests } from "@/app/consult/actions";
 import DashboardClient from "./dashboard-client";
@@ -77,12 +76,14 @@ export default async function CoachDashboard() {
     }))
     .sort((a, b) => (a.claimed_at ?? "").localeCompare(b.claimed_at ?? ""));
 
-  // Build client program info map (used in session table)
-  const clientProgramInfo = new Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null }>();
+  // Build client program info map (used in session table + Programs banner).
+  // Reads the real programs table — the old pastProgramsForClient() call was
+  // demo data only, so the banner always showed "0 active" with no way to
+  // open anyone's published program (James' tracker bug, Jul 2026).
+  const atHomePrograms = await currentProgramsByClient(clients.map((c) => c.id));
+  const clientProgramInfo = new Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null; programId: string | null }>();
   for (const c of clients) {
-    const current = pastProgramsForClient(c.id).find(
-      (p) => p.is_current && p.program_kind === "at_home"
-    ) ?? null;
+    const current = atHomePrograms.get(c.id) ?? null;
     const daysLeft = current?.ends_on
       ? Math.ceil((new Date(current.ends_on).getTime() - now) / 86400000)
       : null;
@@ -90,6 +91,7 @@ export default async function CoachDashboard() {
       endsOn: current?.ends_on ?? null,
       daysLeft,
       name: current?.name ?? null,
+      programId: current?.id ?? null,
     });
   }
 

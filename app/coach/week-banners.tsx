@@ -18,6 +18,8 @@ export type WeekProgramItem = {
   endsOn: string | null;
   daysUntilEnd: number | null;
   hasCurrent: boolean;
+  /** Current at-home program id — makes the Active row a View link. */
+  programId?: string | null;
 };
 
 export type NoSessionClient = {
@@ -216,23 +218,42 @@ function ProgramsBanner({ items }: { items: WeekProgramItem[] }) {
               <p className="meta" style={{ fontSize: "0.75rem" }}>None yet.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                {active.map((item) => (
-                  <div key={item.clientId} style={{
+                {active.map((item) => {
+                  const rowStyle = {
                     padding: "0.25rem 0.45rem", borderRadius: 3,
                     background: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14)
                       ? "rgba(217,119,6,0.07)" : "rgba(90,107,74,0.07)",
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
-                  }}>
-                    <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0 }}>{item.clientName}</span>
-                    <div style={{ textAlign: "right", minWidth: 0 }}>
-                      <div className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.programName}</div>
-                      <div style={{
-                        fontSize: "0.64rem",
-                        color: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14) ? "var(--amber)" : "var(--muted)",
-                      }}>{daysLabel(item.daysUntilEnd)}</div>
-                    </div>
-                  </div>
-                ))}
+                  } as const;
+                  const body = (
+                    <>
+                      <span style={{ fontWeight: 600, fontSize: "0.8rem", flexShrink: 0, color: "var(--fg)" }}>{item.clientName}</span>
+                      <div style={{ textAlign: "right", minWidth: 0 }}>
+                        <div className="meta" style={{ fontSize: "0.68rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.programName}</div>
+                        <div style={{
+                          fontSize: "0.64rem",
+                          color: (item.daysUntilEnd !== null && item.daysUntilEnd <= 14) ? "var(--amber)" : "var(--muted)",
+                        }}>
+                          {daysLabel(item.daysUntilEnd)}
+                          {item.programId && <span style={{ color: "var(--sage)", fontWeight: 600 }}> · view →</span>}
+                        </div>
+                      </div>
+                    </>
+                  );
+                  // With a program id the whole row opens the as-built view;
+                  // otherwise render the same row inert.
+                  return item.programId ? (
+                    <Link
+                      key={item.clientId}
+                      href={`/coach/programming/view/${item.programId}`}
+                      style={{ ...rowStyle, textDecoration: "none" }}
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <div key={item.clientId} style={rowStyle}>{body}</div>
+                  );
+                })}
               </div>
             )}
           </div>

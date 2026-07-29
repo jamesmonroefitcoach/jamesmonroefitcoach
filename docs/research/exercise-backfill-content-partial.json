@@ -1,0 +1,1162 @@
+[
+ {
+  "name": "Incline Cable Press",
+  "cues": "Set an incline bench between the low pulleys and grab a handle in each hand / Press up and slightly together over your upper chest until elbows straighten / Keep shoulder blades pinned to the bench the whole set / Lower slowly and do not let the shoulders shrug up toward your ears",
+  "muscles": [
+   "Upper chest",
+   "Front delts",
+   "Triceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=qctZmqNhkfU",
+  "demo_channel": "HASfit",
+  "notes": null
+ },
+ {
+  "name": "Seated Incline Press",
+  "cues": "Set the seat so the handles start at mid to upper chest height / Sit tall with back and shoulder blades against the pad, feet flat / Press until arms are straight without letting shoulders roll forward / Lower under control until you feel a light stretch across the chest",
+  "muscles": [
+   "Upper chest",
+   "Front delts",
+   "Triceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=TrTSvn5-MTk",
+  "demo_channel": "Renaissance Periodization",
+  "notes": "Equipment field is blank. Interpreted as the seated incline chest press machine since dumbbell and cable incline presses are separate rows. Confirm this is not meant to be a seated incline dumbbell press."
+ },
+ {
+  "name": "Dumbbell Over Head Press",
+  "cues": "Start with dumbbells at shoulder height, palms facing forward / Squeeze your glutes and brace your core before you press / Press straight up until the weights finish over your ears, arms locked / Lower back to shoulder height under control, do not arch the lower back",
+  "muscles": [
+   "Front delts",
+   "Side delts",
+   "Triceps",
+   "Upper traps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=Raemd3qWgJc",
+  "demo_channel": "Renaissance Periodization",
+  "notes": "Position field is blank, so the standing version was chosen. Swap to a seated demo if that is the intent."
+ },
+ {
+  "name": "Incline Dumbbell Press",
+  "cues": "Set the bench to roughly 30 to 45 degrees and plant your feet / Start with dumbbells over your upper chest, shoulder blades pinched back / Lower to the sides of the chest with elbows about 45 degrees from your body / Press up and slightly in until arms straighten, no clanking the weights together",
+  "muscles": [
+   "Upper chest",
+   "Front delts",
+   "Triceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=5CECBjd7HLQ",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Barbell Overhead Press",
+  "cues": "Grip just outside your shoulders with the bar resting on your front delts / Squeeze glutes and brace so your ribs stay down, not flared / Press the bar in a straight line, moving your head back out of the way then through at the top / Finish with the bar locked out over the middle of your foot, avoid leaning way back",
+  "muscles": [
+   "Front delts",
+   "Side delts",
+   "Triceps",
+   "Upper traps",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=eNFXEEdfQp4",
+  "demo_channel": "Alan Thrall (Untamed Strength)",
+  "notes": null
+ },
+ {
+  "name": "Chair Pose",
+  "cues": "Stand with feet together or hip width, then sink hips back and down like sitting into a chair / Keep your weight in your heels and knees behind your toes / Reach arms overhead with chest lifted, shoulders away from the ears / Hold and breathe steadily, five slow breaths to start",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Calves",
+   "Core",
+   "Shoulders"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=ySafTekJ3Ls",
+  "demo_channel": "Yoga With Adriene",
+  "notes": null
+ },
+ {
+  "name": "Tree Pose",
+  "cues": "Root down through the standing foot and spread the toes / Place the other foot on your calf or inner thigh, never on the knee / Bring hands to your heart or reach overhead, hips level / Fix your gaze on one still point and breathe slowly to hold your balance",
+  "muscles": [
+   "Glutes",
+   "Ankles",
+   "Core",
+   "Inner thighs",
+   "Hips"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=yVE4XXFFO70",
+  "demo_channel": "Yoga With Adriene",
+  "notes": null
+ },
+ {
+  "name": "Warrior 1",
+  "cues": "Take a long stance with the back foot turned out about 45 degrees / Square both hips toward the front of the mat / Bend the front knee so it stacks over the ankle / Reach arms overhead, press through the back heel, and breathe",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Hip flexors",
+   "Calves",
+   "Shoulders"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=5rT--p_cLOc",
+  "demo_channel": "Yoga With Adriene",
+  "notes": null
+ },
+ {
+  "name": "Warrior 3",
+  "cues": "From standing, hinge forward at the hips onto one leg / Extend the other leg straight back until your body forms a T / Keep hips level and a soft bend in the standing knee / Reach arms back or forward, gaze down, and hold with steady breath",
+  "muscles": [
+   "Glutes",
+   "Hamstrings",
+   "Core",
+   "Lower back",
+   "Ankles"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=HuETB2HA2FM",
+  "demo_channel": "Yoga With Adriene",
+  "notes": null
+ },
+ {
+  "name": "Downward Dog",
+  "cues": "From hands and knees, tuck your toes and lift your hips up and back into an upside down V / Spread your fingers and press the floor away / Keep a long spine, bending the knees if your hamstrings are tight / Let the heels sink toward the floor and take slow full breaths",
+  "muscles": [
+   "Hamstrings",
+   "Calves",
+   "Shoulders",
+   "Lats",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=j97SSGsnCAQ",
+  "demo_channel": "Yoga With Adriene",
+  "notes": null
+ },
+ {
+  "name": "Chatteronga",
+  "cues": "From plank, shift forward onto your toes / Bend the elbows and lower halfway down, elbows tucked tight to your ribs / Keep the body in one straight line, chest and hips lowering together / Do not let the shoulders dip below elbow height",
+  "muscles": [
+   "Triceps",
+   "Chest",
+   "Front delts",
+   "Abs",
+   "Serratus anterior"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=D3DXO4REdQI",
+  "demo_channel": "Yoga With Adriene",
+  "notes": "Name is almost certainly a typo for Chaturanga (Chaturanga Dandasana). Confirm whether to keep James's spelling or correct it in the library."
+ },
+ {
+  "name": "Cobra",
+  "cues": "Lie face down with hands under shoulders, elbows hugging in / Press the tops of the feet down and lift the chest using your back muscles, not by pushing hard with the arms / Keep shoulders drawn away from the ears and elbows slightly bent / Breathe steadily and lower down on an exhale",
+  "muscles": [
+   "Lower back",
+   "Glutes",
+   "Abs (stretched)",
+   "Chest (stretched)",
+   "Hip flexors (stretched)"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=n6jrC6WeF84",
+  "demo_channel": "Yoga With Adriene",
+  "notes": null
+ },
+ {
+  "name": "Spinal Twist",
+  "cues": "Lie on your back and hug one knee into your chest / Guide the knee across your body toward the floor, arms out wide / Keep both shoulders grounded and turn your gaze the opposite way / Hold and breathe slowly, then switch sides",
+  "muscles": [
+   "Lower back",
+   "Obliques",
+   "Glutes",
+   "Chest (stretched)"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=mKC3IeldPOc",
+  "demo_channel": "Yoga With Adriene",
+  "notes": "Interpreted as the reclined (lying) spinal twist. If James means a seated spinal twist, the video should be swapped."
+ },
+ {
+  "name": "Side Bridge",
+  "cues": "Lie on your side with your elbow or hand directly under your shoulder / Lift the hips so your body forms a straight line from head to feet / Stack or stagger the feet and do not let the hips sag / Hold and breathe, then switch sides",
+  "muscles": [
+   "Obliques",
+   "Abs",
+   "Shoulders",
+   "Outer hips (glute med)"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=dFCrqn0RzJA",
+  "demo_channel": "Yoga With Adriene",
+  "notes": "Taken as Side Plank (Vasisthasana) since it sits in the Yoga category; the video covers easier and harder variations."
+ },
+ {
+  "name": "Back Bridge",
+  "cues": "Lie on your back with knees bent, feet hip width and close to your glutes / Press through the feet and lift the hips toward the ceiling / Keep knees tracking over ankles, do not let them flare out / Breathe at the top, then roll the spine down slowly",
+  "muscles": [
+   "Glutes",
+   "Hamstrings",
+   "Lower back",
+   "Hip flexors (stretched)",
+   "Chest (stretched)"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=NnbvPeAIhmA",
+  "demo_channel": "Yoga With Adriene",
+  "notes": "Interpreted as yoga Bridge Pose (Setu Bandhasana). If James means a full gymnastic back bridge (Wheel Pose, hands and feet on floor), a different video is needed."
+ },
+ {
+  "name": "Boat Pose",
+  "cues": "Sit tall, then lean back slightly and balance just behind your sit bones / Lift the shins parallel to the floor with the chest open and back flat / Hold behind the thighs or extend the legs for full boat / Keep breathing and do not let the lower back round",
+  "muscles": [
+   "Abs",
+   "Hip flexors",
+   "Quads",
+   "Lower back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=-ZEkAdq2WZQ",
+  "demo_channel": "Alba Yoga with Celest & Hannah",
+  "notes": "Yoga With Adriene has no dedicated Boat Pose tutorial, so a beginner tutorial from Alba Yoga (large dedicated yoga tutorial channel) was used instead."
+ },
+ {
+  "name": "Cat Cow",
+  "cues": "Start on all fours with wrists under shoulders and knees under hips / Inhale, drop the belly and lift the chest and tailbone for cow / Exhale, round the spine and tuck the chin and tailbone for cat / Move slowly, matching each shape to the breath",
+  "muscles": [
+   "Spinal erectors",
+   "Abs",
+   "Neck",
+   "Shoulders"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=y39PrKY_4JM",
+  "demo_channel": "Yoga With Adriene",
+  "notes": null
+ },
+ {
+  "name": "Cable Reverse Fly",
+  "cues": "Set both pulleys at shoulder height and grab the left handle with your right hand and the right handle with your left, arms crossed in front of you / Step back so there is tension on the cables, slight bend in the elbows / Pull the arms apart and back in a wide arc until they line up with your shoulders / Control the return and avoid shrugging or swinging",
+  "muscles": [
+   "Rear delts",
+   "Rhomboids",
+   "Mid traps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=er15V96hG5U",
+  "demo_channel": "PureGym",
+  "notes": null
+ },
+ {
+  "name": "Fly",
+  "cues": "Lie on a flat bench holding dumbbells above your chest, palms facing each other / Lower the arms out wide in an arc, keeping a soft bend in the elbows / Stop when you feel a stretch across the chest / Squeeze the chest to bring the weights back together without banging them",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Biceps (stabilizer)"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=LzFvciCdoW0",
+  "demo_channel": "Buff Dudes Workouts",
+  "notes": "Sheet lists no equipment; assumed flat dumbbell chest fly. Confirm whether a machine or cable fly was intended."
+ },
+ {
+  "name": "Chest High Pull",
+  "cues": "Stand with dumbbells resting in front of your thighs, palms facing you / Drive the elbows up and out to pull the weights to chest height / Keep the elbows above the wrists and the weights close to your body / Lower under control without swinging or leaning back",
+  "muscles": [
+   "Rear delts",
+   "Traps",
+   "Upper back",
+   "Biceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=o0KJD3Xn3fc",
+  "demo_channel": "OPEX Fitness",
+  "notes": "Read as a high pull to chest height; no equipment specified, so a dumbbell demo was chosen. Confirm intended implement (dumbbell, cable, or barbell)."
+ },
+ {
+  "name": "Assisted Dips",
+  "cues": "Set the counterweight, more weight means more help / Knees on the pad, grip the bars, chest up / Lower under control until elbows reach about 90 degrees / Press back up without shrugging the shoulders",
+  "muscles": [
+   "Chest",
+   "Triceps",
+   "Front delts"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=yZ83t4mrPrI",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Downward Cable Cross Over",
+  "cues": "Set both pulleys high and take a small step forward in a split stance / Keep a slight bend in the elbows and sweep the handles down and together toward your hips / Squeeze the lower chest as your hands meet / Don't let it turn into a press, arms stay long",
+  "muscles": [
+   "Lower chest",
+   "Front delts",
+   "Triceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=hhruLxo9yZU",
+  "demo_channel": "PureGym",
+  "notes": null
+ },
+ {
+  "name": "Decline Cable Chest Press",
+  "cues": "Set the pulleys high and press the handles down and slightly together / Keep elbows about 45 degrees from your sides / Squeeze the lower chest at the end of each press / Stop just short of locking the elbows to keep tension on",
+  "muscles": [
+   "Lower chest",
+   "Triceps",
+   "Front delts"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=lxHdVzwO98A",
+  "demo_channel": "OriGym",
+  "notes": null
+ },
+ {
+  "name": "Dumbbell Unilateral Row",
+  "cues": "Brace one hand and knee on the bench, back flat / Pull the dumbbell up toward your hip, elbow close to your side / Squeeze the shoulder blade at the top / Don't twist the torso or yank the weight",
+  "muscles": [
+   "Lats",
+   "Upper back",
+   "Rear delts",
+   "Biceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=DMo3HJoawrU",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Seated Cable Row",
+  "cues": "Sit tall with knees slightly bent, chest up / Pull the handle to your belly button and squeeze the shoulder blades together / Let the arms straighten fully on the return / Avoid leaning way back or shrugging the shoulders",
+  "muscles": [
+   "Lats",
+   "Mid back",
+   "Rear delts",
+   "Biceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=UCXxvVItLoM",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Chest Supported T Bar Row",
+  "cues": "Chest flat against the pad, feet planted / Pull the handles toward your chest and squeeze the shoulder blades / Lower slowly until arms are fully stretched / Don't push off the pad or jerk the weight up",
+  "muscles": [
+   "Lats",
+   "Upper back",
+   "Rear delts",
+   "Biceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=X44rFB4MwwM",
+  "demo_channel": "OriGym",
+  "notes": "Video is titled Lying T Bar Row, which is the chest supported machine version. Confirm this matches the gym's equipment."
+ },
+ {
+  "name": "Chest Suported Row I",
+  "cues": "Lie face down on an incline bench with light dumbbells hanging / Raise straight arms overhead in line with your body to make an I shape, thumbs up / Squeeze between the shoulder blades at the top, then lower slowly / Keep the neck neutral and go light",
+  "muscles": [
+   "Lower traps",
+   "Rear delts",
+   "Upper back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=9G_n19V3q70",
+  "demo_channel": "WODprep",
+  "notes": "Name likely a typo: Suported should be Supported. Interpreted as the prone incline I raise (part of the I/Y/T series), not a rowing pull. Video covers I, Y, and T together; channel is mid-size. Confirm interpretation."
+ },
+ {
+  "name": "Chest Supported Row Y",
+  "cues": "Lie face down on an incline bench with light dumbbells / Raise the arms up and out at 45 degrees to form a Y, thumbs pointing up / Lead with the thumbs and squeeze the lower traps at the top / Lower under control, no swinging",
+  "muscles": [
+   "Lower traps",
+   "Rear delts",
+   "Upper back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=gDHQX1iend4",
+  "demo_channel": "PureGym",
+  "notes": "Interpreted as the prone incline Y raise (I/Y/T series) rather than a rowing pull, based on the sibling I and T entries. Confirm interpretation."
+ },
+ {
+  "name": "Chest Supported Row T",
+  "cues": "Lie face down on an incline bench with light dumbbells / Raise straight arms out to the sides to form a T / Squeeze the shoulder blades together at the top / Keep a slight elbow bend and avoid shrugging",
+  "muscles": [
+   "Rear delts",
+   "Mid traps",
+   "Rhomboids"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=C5urNoYCQSM",
+  "demo_channel": "FIT.nl",
+  "notes": "Interpreted as the prone incline T raise (I/Y/T series) rather than a rowing pull. Video matches exactly but channel is a Dutch fitness site; swap if an English channel is preferred. Confirm interpretation."
+ },
+ {
+  "name": "TRX Row",
+  "cues": "Grab the handles, lean back with your body in a straight line / Pull your chest up to the handles and squeeze the shoulder blades / Keep the core tight, no sagging hips / Walk your feet forward to make it harder, back to make it easier",
+  "muscles": [
+   "Lats",
+   "Upper back",
+   "Biceps",
+   "Rear delts",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=yCuSGoe1gjY",
+  "demo_channel": "PureGym",
+  "notes": null
+ },
+ {
+  "name": "Bent Over Barbell Row",
+  "cues": "Hinge at the hips with a flat back, torso near 45 degrees / Pull the bar to your lower ribs, driving the elbows behind you / Squeeze the shoulder blades together at the top / Don't heave the torso upright to move the weight",
+  "muscles": [
+   "Lats",
+   "Upper back",
+   "Rear delts",
+   "Biceps",
+   "Lower back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=G8l_8chR5BE",
+  "demo_channel": "Alan Thrall (Untamed Strength)",
+  "notes": null
+ },
+ {
+  "name": "Lying Dumbbell Press",
+  "cues": "Lie on your back on the floor with knees bent and feet flat / Press the dumbbells up over your chest to a full lockout / Lower with control until the upper arms lightly touch the floor / Pause briefly, then press back up without bouncing the elbows",
+  "muscles": [
+   "Chest",
+   "Triceps",
+   "Front delts"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=uUGDRwge4F8",
+  "demo_channel": "ScottHermanFitness",
+  "notes": "Interpreted as a dumbbell floor press since Position is Lying and a separate Dumbbell Bench Press row exists. If James means a flat bench dumbbell press instead, swap the video for the Dumbbell Bench Press one."
+ },
+ {
+  "name": "Cable Cross Over",
+  "cues": "Set the pulleys at or above shoulder height and stand centered with a small split stance / Keep a slight bend in the elbows and hold it through the whole rep / Sweep the handles down and together in front of your chest like hugging a barrel / Control the return, don't let the stack yank your arms back",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Serratus"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=4mfLHnFL0Uw",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Dumbbell Bench Press",
+  "cues": "Kick the dumbbells up from your knees as you lie back on the bench / Feet flat, shoulder blades pinched back and down, slight arch / Lower to the sides of the chest with forearms staying vertical / Press up and slightly in without clanging the dumbbells together",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Triceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=YQ2s_Y7g5Qk",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Barbell Bench Press",
+  "cues": "Grip so your wrists stack over your elbows at the bottom / Squeeze the shoulder blades onto the bench, feet planted, slight arch / Lower the bar to the lower chest under control / Drive the bar back up without bouncing it off the chest",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Triceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=hWbUlkb5Ms4",
+  "demo_channel": "Jeff Nippard",
+  "notes": null
+ },
+ {
+  "name": "Seated Press",
+  "cues": "Set the seat so the handles line up with mid chest / Chest up, back and shoulder blades against the pad / Press the handles to a full lockout without letting the shoulders roll forward / Lower slowly until you feel a stretch across the chest",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Triceps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=NwzUje3z0qY",
+  "demo_channel": "Renaissance Periodization",
+  "notes": "Name is ambiguous. Interpreted as a seated machine chest press because Subcategory is Horizontal Push, but Equipment is blank; confirm with James it isn't a seated shoulder press."
+ },
+ {
+  "name": "Push Ups",
+  "cues": "Hands slightly wider than shoulders, body in one straight line from head to heels / Brace the core and squeeze the glutes / Lower until the chest almost touches the floor, elbows about 45 degrees from the body / Don't let the hips sag or the head poke forward",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Triceps",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=IODxDxX7oi4",
+  "demo_channel": "Calisthenicmovement",
+  "notes": null
+ },
+ {
+  "name": "Band Assisted Push Up",
+  "cues": "Anchor a band overhead and loop it under your hips or chest / Set up like a normal push up, body in one straight line / Let the band help you out of the bottom, but keep the core braced the whole time / Lower with control until the chest nears the floor, then press up",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Triceps",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=Saq-JVbRZx0",
+  "demo_channel": "Clench Fitness",
+  "notes": "None of the preferred coaching channels have a dedicated band assisted push up video; this one is from a band-training channel and matches the setup exactly. Swap if you find a better source."
+ },
+ {
+  "name": "Standing Cable Lat Push Down",
+  "cues": "Stand facing a high pulley and grab the bar at shoulder width with straight arms / Hinge slightly at the hips, soft bend in the elbows / Push the bar down in an arc to your thighs using the lats, arms staying straight / Don't bend the elbows and turn it into a triceps pressdown",
+  "muscles": [
+   "Lats",
+   "Rear delts",
+   "Triceps (long head)",
+   "Abs"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=wcVDItawocI",
+  "demo_channel": "Bodybuilding.com",
+  "notes": "This name usually refers to the straight arm cable pulldown; the video matches that movement."
+ },
+ {
+  "name": "Seated Lat Pulldown",
+  "cues": "Grip the bar just outside shoulder width, thighs snug under the pad / Lean back slightly with the chest up / Pull the bar to the upper chest, driving the elbows down and back / Control the bar back up to a full stretch, don't let it lift you out of the seat",
+  "muscles": [
+   "Lats",
+   "Biceps",
+   "Upper back",
+   "Rear delts"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=jhnxJEzX8rY",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Assisted Pull Ups",
+  "cues": "Set the assist weight, heavier stack means more help / Kneel or stand on the pad and grip just outside shoulder width / Pull your chest to the bar, leading with your elbows / Lower slowly to a full hang without shrugging your shoulders up",
+  "muscles": [
+   "Lats",
+   "Biceps",
+   "Mid back",
+   "Rear delts"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=gx0RWT7WbmA",
+  "demo_channel": "Colossus Fitness",
+  "notes": "None of the preferred channels have a machine-specific assisted pull up video; Colossus Fitness tutorial chosen as best form breakdown. Swap if a preferred-channel video is required."
+ },
+ {
+  "name": "Straight Arm Pushdown",
+  "cues": "Face a high cable, grab the bar with straight arms and hinge slightly forward / Keep a soft bend in the elbows and lock it in / Sweep the bar down to your thighs using your lats, not your arms / Do not let the elbows bend, that turns it into a triceps exercise",
+  "muscles": [
+   "Lats",
+   "Teres major",
+   "Rear delts",
+   "Triceps",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=G9uNaXGTJ4w",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "90/90 Stretch",
+  "cues": "Sit with your front leg bent 90 degrees in front and back leg bent 90 degrees behind / Sit tall, then hinge your chest over the front shin / Keep both sit bones as close to the floor as you can / Hold and breathe slowly, then switch sides",
+  "muscles": [
+   "Glutes",
+   "Piriformis",
+   "Hip rotators",
+   "Hip flexors"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=P4GfbdNvOT8",
+  "demo_channel": "Tom Morrison",
+  "notes": null
+ },
+ {
+  "name": "Kneeling Moving Adductor Stretch",
+  "cues": "From hands and knees, straighten one leg out to the side with the foot flat / Keep your back flat and hips level / Rock your hips back toward your heel until you feel the inner thigh stretch / Rock in and out with control instead of holding still",
+  "muscles": [
+   "Adductors",
+   "Inner hamstring",
+   "Hip flexors"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=zfO4HhPUxDw",
+  "demo_channel": "[P]rehab",
+  "notes": null
+ },
+ {
+  "name": "Foam Roll",
+  "cues": "Place the target muscle on the roller and support yourself with hands and feet / Roll slowly, about an inch per second / Pause on tender spots and take a few slow breaths / Stay on muscle, avoid rolling directly over joints or the lower back",
+  "muscles": [
+   "Quads",
+   "Hamstrings",
+   "Calves",
+   "Glutes",
+   "Upper back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=c0JRlrKJXPg",
+  "demo_channel": "nourishmovelove",
+  "notes": "Entry is generic (no body area specified), so cues and the chosen video cover a full-body foam rolling routine. Confirm whether James wants area-specific foam roll entries instead."
+ },
+ {
+  "name": "Kneeling Moving Hamstring Stretch",
+  "cues": "Half kneel with the front leg straight, heel down and toes pulled up / Keep your back flat and chest proud / Rock your hips back until you feel the stretch behind the thigh / Rock in and out smoothly, do not bounce or round the back",
+  "muscles": [
+   "Hamstrings",
+   "Calves",
+   "Glutes"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=9qcljmlT8Ls",
+  "demo_channel": "Lu Strength & Therapy",
+  "notes": null
+ },
+ {
+  "name": "Iron Cross",
+  "cues": "Lie on your back with arms out wide in a T / Swing one leg up and across your body toward the opposite hand / Keep both shoulders pinned to the floor / Alternate sides with slow control, exhaling as the leg crosses over",
+  "muscles": [
+   "Glutes",
+   "Obliques",
+   "Lower back",
+   "Hip flexors",
+   "Chest"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=uBEXsoMclPY",
+  "demo_channel": "National Academy of Sports Medicine (NASM)",
+  "notes": null
+ },
+ {
+  "name": "Worlds Greatest Stretch",
+  "cues": "Step into a long lunge and plant both hands inside the front foot / Drop the inside elbow toward the instep, then rotate and reach that hand to the ceiling / Follow your hand with your eyes to open the upper back / Keep the back leg long and switch sides after a few reps",
+  "muscles": [
+   "Hip flexors",
+   "Hamstrings",
+   "Glutes",
+   "Obliques",
+   "Mid back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=-CiWQ2IvY34",
+  "demo_channel": "Squat University",
+  "notes": null
+ },
+ {
+  "name": "Agility Ladder",
+  "cues": "Stay on the balls of your feet with knees soft / Quick, light ground contacts, land quietly / Pump your arms and keep your eyes up, not at your feet / Master the pattern slowly first, then add speed",
+  "muscles": [
+   "Calves",
+   "Quads",
+   "Hip flexors",
+   "Glutes"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=Kb0bfAGiub8",
+  "demo_channel": "Pick 6 Athletics",
+  "notes": "Entry names the equipment, not a specific drill, so a beginner drill compilation was chosen. Confirm which ladder patterns James actually coaches."
+ },
+ {
+  "name": "Forward Foot Drill",
+  "cues": "Stay tall on the balls of your feet / Take small, rapid steps moving forward / Keep contacts light and quick, arms pumping in rhythm / Speed comes from fast feet, not long strides",
+  "muscles": [
+   "Calves",
+   "Hip flexors",
+   "Quads"
+  ],
+  "demo_url": null,
+  "demo_channel": null,
+  "notes": "Name is ambiguous: could be fast feet traveling forward, a forward ladder run, or a NASM-style foot drill. No confidently matching video found; needs James or Ryan to confirm the intended drill before assigning a demo."
+ },
+ {
+  "name": "Side to Side Foot Drill",
+  "cues": "Stay on the balls of your feet with knees soft and hips low / Take quick, small steps side to side over a line or ladder / Keep chest up and eyes forward, not down at your feet / Pump the arms and stay light and fast",
+  "muscles": [
+   "Calves",
+   "Quads",
+   "Glutes",
+   "Hip flexors"
+  ],
+  "demo_url": null,
+  "demo_channel": null,
+  "notes": "Generic SAQ drill name with no equipment listed, so the exact drill is ambiguous (line quick-steps vs ladder lateral shuffle vs cone shuffle). No confident single video match; confirm which drill James actually runs before attaching a demo."
+ },
+ {
+  "name": "Backward Food Drill",
+  "cues": "Drop into a slight crouch with chest tilted a little forward / Take quick, short steps backward on the balls of your feet / Push the ground away with each step, do not reach back with long strides / Keep eyes ahead so you do not tip backward",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Hamstrings",
+   "Calves"
+  ],
+  "demo_url": null,
+  "demo_channel": null,
+  "notes": "Name is almost certainly a typo for 'Backward Foot Drill'. Like the other foot drill, the exact movement (backpedal vs backward ladder run) is ambiguous, so no video attached; confirm the intended drill and the spelling fix with a human."
+ },
+ {
+  "name": "Box Jumps",
+  "cues": "Stand about a foot back from the box, feet hip width / Swing the arms back, dip the hips, then drive up onto the box / Land softly in a quarter squat with your whole foot on the box / Stand all the way up on top, then step down, never jump backward off",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Hamstrings",
+   "Calves"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=hxldG9FX4j4",
+  "demo_channel": "ScottHermanFitness",
+  "notes": null
+ },
+ {
+  "name": "Plyometric Chest Pass",
+  "cues": "Stand facing a wall or partner with the medicine ball at chest height, elbows behind the ball / Soften the knees and brace your core / Explode the arms forward and release the ball hard, like a two-hand basketball pass / Reset fully between reps and throw with max effort every time",
+  "muscles": [
+   "Chest",
+   "Front delts",
+   "Triceps",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=68SjXgERIvk",
+  "demo_channel": "J2FIT Strength & Conditioning",
+  "notes": null
+ },
+ {
+  "name": "Dumbbell Z Press",
+  "cues": "Sit on the floor with legs straight out and dumbbells at your shoulders / Sit as tall as you can and brace your core before each rep / Press straight up until biceps are by your ears / Do not lean back or let the lower back round; keep heels pressed into the floor",
+  "muscles": [
+   "Front delts",
+   "Side delts",
+   "Triceps",
+   "Upper traps",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=BK2z6pRRbvQ",
+  "demo_channel": "Horton Barbell",
+  "notes": null
+ },
+ {
+  "name": "Plyometric Floor Throws",
+  "cues": "Hold the medicine ball at your chest and reach tall overhead / Slam the ball into the floor as hard as you can, driving with hips and abs, not just arms / Hinge at the hips as you slam and keep the back flat / Catch or grab the ball and flow right into the next rep",
+  "muscles": [
+   "Lats",
+   "Abs",
+   "Shoulders",
+   "Glutes"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=YFORkljMrEQ",
+  "demo_channel": "Seriously Strong Training",
+  "notes": "Name is ambiguous: cues and video assume an overhead medicine ball slam into the floor. If James means lying-on-floor chest throws instead, this entry needs a different video and cues; confirm with him."
+ },
+ {
+  "name": "Plyometric Oblique Throws",
+  "cues": "Stand sideways to a sturdy wall with the ball at your back hip / Load by rotating slightly away, then drive the back hip and torso toward the wall / Throw the ball hard with the rotation, arms staying relaxed like a whip / Finish all reps on one side, then face the other way and switch",
+  "muscles": [
+   "Obliques",
+   "Abs",
+   "Glutes",
+   "Shoulders"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=c7fB-K8Ih54",
+  "demo_channel": "CrossFit Invictus",
+  "notes": null
+ },
+ {
+  "name": "Skiers",
+  "cues": "Stand with feet together and knees soft, like you are on skis / Hop side to side over an imaginary line, keeping feet together / Land quietly on the balls of your feet with knees bent / Keep chest up and swing the arms for rhythm",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Calves",
+   "Inner thighs",
+   "Abs"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=yk7yXdzabxY",
+  "demo_channel": "Howcast",
+  "notes": "Interpreted as feet-together side-to-side ski jumps. If James actually means skaters (alternating single-leg lateral bounds), the cues and video should be swapped; worth a quick confirm."
+ },
+ {
+  "name": "Transverse Box Jump",
+  "cues": "Stand sideways to the box, feet hip width / Swing the arms and jump while turning 90 degrees to land facing the box, on top of it / Land soft in a quarter squat and stick the landing before standing tall / Step down, reset, and alternate which side you start from",
+  "muscles": [
+   "Glutes",
+   "Quads",
+   "Calves",
+   "Obliques"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=z8ks1w0rnxM",
+  "demo_channel": "National Academy of Sports Medicine (NASM)",
+  "notes": "Spreadsheet subcategory has a typo ('Tansverse Box Jump'). Video chosen is NASM's transverse-plane box jump-up, which matches the NASM-style naming of this entry."
+ },
+ {
+  "name": "Bird Dogs",
+  "cues": "Start on hands and knees, hands under shoulders and knees under hips / Brace your abs, then reach one arm and the opposite leg out long / Keep hips level and back flat, no arching or twisting / Pause a beat, return slowly, then switch sides while breathing steadily",
+  "muscles": [
+   "Core",
+   "Lower back",
+   "Glutes",
+   "Hamstrings",
+   "Shoulders"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=ZdAHe9_HeEw",
+  "demo_channel": "National Academy of Sports Medicine (NASM)",
+  "notes": null
+ },
+ {
+  "name": "Hip Circles",
+  "cues": "Stand tall with feet shoulder width apart and hands on hips / Brace your abs and draw big slow circles with your hips / Keep chest steady so the motion comes from the hips, not the knees / Circle both directions",
+  "muscles": [
+   "Obliques",
+   "Abs",
+   "Hip flexors",
+   "Glutes",
+   "Lower back"
+  ],
+  "demo_url": null,
+  "demo_channel": null,
+  "notes": "Ambiguous variation: could be standing hip circles (hands on hips, core focus, matches the Abs category) or quadruped/hip-CAR mobility circles. No confident match from a known coaching channel; candidates found were small or unidentified channels. Needs a human pick on which variation James means."
+ },
+ {
+  "name": "Standing Overhead Press",
+  "cues": "Grip just outside shoulders with the bar on your front delts, elbows slightly in front / Squeeze glutes and brace abs so you don't lean back / Press the bar in a straight line, moving your head back then through at the top / Finish locked out with biceps by your ears",
+  "muscles": [
+   "Front delts",
+   "Side delts",
+   "Triceps",
+   "Upper chest",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=_RlRDWO2jfg",
+  "demo_channel": "Jeff Nippard",
+  "notes": null
+ },
+ {
+  "name": "Dead Bugs",
+  "cues": "Lie on your back with arms straight up and knees bent 90 degrees over hips / Press your lower back flat into the floor and keep it there / Slowly lower opposite arm and leg, exhaling as you extend / Never let the lower back arch off the floor",
+  "muscles": [
+   "Abs",
+   "Deep core (transverse abdominis)",
+   "Obliques",
+   "Hip flexors"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=bxn9FBrt4-A",
+  "demo_channel": "NASM (National Academy of Sports Medicine)",
+  "notes": null
+ },
+ {
+  "name": "Heel Taps",
+  "cues": "Lie on your back with knees bent, feet flat, arms at your sides / Lift your shoulder blades slightly off the floor / Reach side to side, tapping each heel with your hand / Keep the crunch held, don't pull on your neck",
+  "muscles": [
+   "Obliques",
+   "Abs"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=YIOIGUQMck8",
+  "demo_channel": "Anytime Fitness (Fitness with Averee series)",
+  "notes": null
+ },
+ {
+  "name": "Z Press",
+  "cues": "Sit on the floor with legs straight out and chest tall / No back support, so brace your abs and sit as tall as you can the whole set / Press straight overhead and lock out with biceps by your ears / If you tip backward, the weight is too heavy",
+  "muscles": [
+   "Front delts",
+   "Side delts",
+   "Triceps",
+   "Upper back",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=fReC_7JVwpE",
+  "demo_channel": "Mind Pump TV",
+  "notes": "Spreadsheet does not specify barbell vs dumbbell; video demonstrates the general Z press setup."
+ },
+ {
+  "name": "Plank",
+  "cues": "Forearms under shoulders, body in a straight line from head to heels / Squeeze glutes and tuck hips slightly under / Brace abs like you're about to take a punch and keep breathing / Don't let hips sag down or pike up",
+  "muscles": [
+   "Abs",
+   "Deep core (transverse abdominis)",
+   "Obliques",
+   "Glutes",
+   "Shoulders"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=kL_NJAkCQBg",
+  "demo_channel": "Calisthenicmovement",
+  "notes": null
+ },
+ {
+  "name": "Side Plank",
+  "cues": "Elbow directly under shoulder, feet stacked, body in a straight line / Lift hips high and keep them from dipping toward the floor / Press the floor away through your forearm / Hold while breathing steadily, then switch sides",
+  "muscles": [
+   "Obliques",
+   "Deep core (transverse abdominis)",
+   "Glute med",
+   "Shoulders"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=44ND4bOB-T0",
+  "demo_channel": "NASM (National Academy of Sports Medicine)",
+  "notes": null
+ },
+ {
+  "name": "Hollow Body Hold",
+  "cues": "Lie on your back and press your lower back into the floor / Lift shoulders and legs off the ground into a shallow banana shape / Pull ribs down and keep the lower back glued to the floor / Bend knees or raise legs higher to make it easier",
+  "muscles": [
+   "Abs",
+   "Deep core (transverse abdominis)",
+   "Hip flexors",
+   "Quads"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=hf00_b2sRdc",
+  "demo_channel": "Men's Health",
+  "notes": "Spreadsheet sub-subcategory reads 'Reverse Plank' but the name is Hollow Body Hold; treated as a hollow hold (reverse plank is a different exercise). Worth confirming with James."
+ },
+ {
+  "name": "Cable Side Crunch",
+  "cues": "Stand side-on to a high cable holding the handle at your head or shoulder / Crunch sideways, pulling your ribs down toward your hip / Keep hips still so the obliques do the work, not your arms / Control back up slowly, finish the set then switch sides",
+  "muscles": [
+   "Obliques",
+   "Abs"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=UQY3NeQmGmc",
+  "demo_channel": "SET FOR SET",
+  "notes": null
+ },
+ {
+  "name": "Cable Chops",
+  "cues": "Set the cable high and stand side-on with feet wide / Keep arms long and chop across your body toward the opposite hip / Rotate through hips and torso, letting the back foot pivot / Control the return, don't let the cable snap you back",
+  "muscles": [
+   "Obliques",
+   "Abs",
+   "Shoulders",
+   "Glutes"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=pAplQXk3dkU",
+  "demo_channel": "ScottHermanFitness",
+  "notes": null
+ },
+ {
+  "name": "Band Chops",
+  "cues": "Anchor the band at or above shoulder height and stand side-on with feet shoulder width / Hold with both hands, arms long, and pull the band down and across your body to the opposite hip / Rotate through your ribs and hips, not just your arms / Control the return, do not let the band snap you back",
+  "muscles": [
+   "Obliques",
+   "Abs",
+   "Shoulders",
+   "Hips"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=kPugGvTvl1A",
+  "demo_channel": "Bodylastics",
+  "notes": "Video demonstrates the low-to-high chop direction with a band; band chops are also commonly done high-to-low. Confirm which direction (or both) James programs."
+ },
+ {
+  "name": "Cable Crunches",
+  "cues": "Kneel facing the stack with the rope held at the sides of your head / Keep your hips still and crunch your ribs down toward your pelvis, rounding the upper back / Think elbows toward knees and let the abs do the work, not the arms / Control the way back up to a full stretch",
+  "muscles": [
+   "Abs",
+   "Obliques",
+   "Hip flexors"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=ToJeyhydUxU",
+  "demo_channel": "Testosterone Nation (T Nation)",
+  "notes": null
+ },
+ {
+  "name": "Wall Back Extensions",
+  "cues": "Stand about a foot in front of the wall, facing away, feet hip width / Push your hips straight back until they touch the wall, knees soft and back flat / Keep chest up and spine long, feel the hamstrings load / Squeeze the glutes to drive the hips forward and stand tall",
+  "muscles": [
+   "Lower back",
+   "Glutes",
+   "Hamstrings"
+  ],
+  "demo_url": null,
+  "demo_channel": null,
+  "notes": "Name is ambiguous: could be a wall-supported hip hinge (hips tap the wall, cues written for this) or an ATG-style back extension using a wall. No video found under this exact name, so no demo linked. If it is the hip hinge version, Dr. John Rusin's Wall & Dowel Hip Hinge Drills (https://www.youtube.com/watch?v=59sLe8-GIu8) is a close match. Confirm with James/Ryan."
+ },
+ {
+  "name": "Wall Kettlebell Back Extension",
+  "cues": "Hold a kettlebell at your chest, heels about a foot from the wall / Push your hips back to tap the wall, back flat and chest up / Keep the bell tight to your body and do not round the lower back / Drive through the hips and squeeze the glutes to stand",
+  "muscles": [
+   "Lower back",
+   "Glutes",
+   "Hamstrings",
+   "Core"
+  ],
+  "demo_url": null,
+  "demo_channel": null,
+  "notes": "Same ambiguity as Wall Back Extensions (this is the kettlebell-loaded version); cues assume a wall-supported hip hinge holding the bell at the chest. No confident video match found for this exact variation. Source row also has an Equipment typo (Kettllebell)."
+ },
+ {
+  "name": "Lying Leg Abduction",
+  "cues": "Lie on your side with your body in a straight line and hips stacked / Lift the top leg toward the ceiling with the leg straight, toes pointing forward, not up / Stop about 45 degrees up and lower slowly / Do not let your hips roll backward as you lift",
+  "muscles": [
+   "Outer glutes (glute med)",
+   "Hip abductors",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=EwBJKBa4PKU",
+  "demo_channel": "AskDoctorJo",
+  "notes": null
+ },
+ {
+  "name": "Lying Leg Adduction",
+  "cues": "Lie on your side with the bottom leg straight and the top foot planted in front of it / Lift the bottom leg a few inches using the inner thigh / Keep your body in a straight line, no rolling back / Pause at the top and lower with control",
+  "muscles": [
+   "Inner thighs (adductors)",
+   "Core",
+   "Hip flexors"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=y4BmebZvZRE",
+  "demo_channel": "AskDoctorJo",
+  "notes": null
+ },
+ {
+  "name": "Leg Extension",
+  "cues": "Set the pad on the front of your ankles and line your knees up with the machine pivot / Kick up until your knees are straight and squeeze the quads at the top / Lower slowly, do not let the stack slam / Keep your butt on the seat, no lifting the hips to cheat",
+  "muscles": [
+   "Quads",
+   "Hip flexors"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=m0FOpMEgero",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "Hamstring Curl",
+  "cues": "Set the thigh pad snug and line your knees up with the machine pivot / Curl your heels down and under as far as they will go / Pause at the bottom and squeeze the hamstrings / Return slowly and keep your hips pressed into the seat",
+  "muscles": [
+   "Hamstrings",
+   "Calves",
+   "Glutes"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=Orxowest56U",
+  "demo_channel": "Renaissance Periodization",
+  "notes": "This is the Seated machine version (source row Position: Seated); same name as the next row, distinguished by position."
+ },
+ {
+  "name": "Hamstring Curl",
+  "cues": "Lie face down with the pad just above your heels / Curl your heels toward your glutes without letting your hips lift off the bench / Squeeze at the top, then lower slowly to a full stretch / Point your toes to keep the work in the hamstrings",
+  "muscles": [
+   "Hamstrings",
+   "Calves",
+   "Glutes"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=n5WDXD_mpVY",
+  "demo_channel": "Renaissance Periodization",
+  "notes": "This is the Lying machine version (source row Position: Lying); same name as the previous row, distinguished by position."
+ },
+ {
+  "name": "Deadlift",
+  "cues": "Bar over mid foot, shins about an inch away, hinge down and grip just outside your knees / Flatten your back, chest up, and pull the slack out of the bar / Push the floor away and stand up, dragging the bar along your legs / Lock out by squeezing the glutes, no leaning back at the top",
+  "muscles": [
+   "Glutes",
+   "Hamstrings",
+   "Lower back",
+   "Quads",
+   "Traps"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=MBbyAqvTNkU",
+  "demo_channel": "Alan Thrall (Untamed Strength)",
+  "notes": null
+ },
+ {
+  "name": "Dumbbell RDL",
+  "cues": "Stand tall with a dumbbell in each hand resting on your thighs / Push your hips straight back with a soft knee bend, sliding the dumbbells down your legs / Keep your back flat and chest up until you feel a hamstring stretch around mid shin / Squeeze your glutes to stand back up, do not round your lower back",
+  "muscles": [
+   "Hamstrings",
+   "Glutes",
+   "Lower back",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=FQKfr1YDhEk",
+  "demo_channel": "ScottHermanFitness",
+  "notes": null
+ },
+ {
+  "name": "Barbell RDL",
+  "cues": "Start standing with the bar at hip height, shoulder width grip / Hinge by pushing your hips back, keeping the bar dragging close along your legs / Soft knees stay in one position, back stays flat, lats tight / Lower to about mid shin, then drive your hips forward to stand",
+  "muscles": [
+   "Hamstrings",
+   "Glutes",
+   "Lower back",
+   "Lats",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=_oyxCn2iSjU",
+  "demo_channel": "Jeff Nippard",
+  "notes": null
+ },
+ {
+  "name": "Belt Squat RDL",
+  "cues": "Load the belt around your hips and stand tall on the platform / Push your hips straight back with a slight knee bend, letting the belt pull down and back / Keep your chest up and back flat as you feel the hamstring stretch / Squeeze your glutes through to stand, no weight in your hands or on your spine",
+  "muscles": [
+   "Hamstrings",
+   "Glutes",
+   "Lower back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=OfitTmkNL7A",
+  "demo_channel": "Dave Rienzi",
+  "notes": null
+ },
+ {
+  "name": "Single Legged Hip Thrusts",
+  "cues": "Lie back with knees bent, plant one foot and lift the other leg off the floor / Drive through the planted heel and squeeze that glute to lift your hips / Get hips fully extended so your body is a straight line from knee to shoulder / Keep hips level, do not let the free leg side sag, lower with control",
+  "muscles": [
+   "Glutes",
+   "Hamstrings",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=qCObDXTe4KY",
+  "demo_channel": "Mind Pump TV",
+  "notes": "Row says Position: Lying with no equipment. The chosen demo shows the movement with shoulders elevated (bench version); if James means the floor glute-bridge version, a floor-based demo may be a better fit."
+ },
+ {
+  "name": "Cable Pull Through",
+  "cues": "Set the cable low, face away, and hold the rope between your legs / Walk out, then push your hips back with soft knees, letting the rope pull through / Keep your back flat and arms relaxed, feel the stretch in your hamstrings / Squeeze your glutes to stand tall, do not pull with your arms or lean back at the top",
+  "muscles": [
+   "Glutes",
+   "Hamstrings",
+   "Lower back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=pv8e6OSyETE",
+  "demo_channel": "Renaissance Periodization",
+  "notes": null
+ },
+ {
+  "name": "LPHC",
+  "cues": "Category label for lumbo pelvic hip complex work / Not a single exercise, so no setup or form cues apply",
+  "muscles": [
+   "Lower back",
+   "Glutes",
+   "Core",
+   "Hip flexors"
+  ],
+  "demo_url": null,
+  "demo_channel": null,
+  "notes": "LPHC (lumbo-pelvic-hip complex) appears to be a category header, not an actual exercise. Its Subcategory is also LPHC and it has no position, specification, or equipment. Needs a human decision on whether to add it as a preset at all."
+ },
+ {
+  "name": "Supermans",
+  "cues": "Lie face down with arms extended overhead and legs straight / Squeeze your glutes and lift arms, chest, and legs a few inches off the floor / Hold briefly at the top while breathing, then lower with control / Keep your neck neutral, look at the floor, do not crank your head up",
+  "muscles": [
+   "Lower back",
+   "Glutes",
+   "Hamstrings",
+   "Upper back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=kTMBsUwEGPM",
+  "demo_channel": "PureGym",
+  "notes": null
+ },
+ {
+  "name": "Seated Leg Press",
+  "cues": "Sit with your back and hips flat against the pad, feet shoulder width on the platform / Lower the weight until your knees reach about 90 degrees without your lower back rounding off the pad / Press through your whole foot back to the start / Do not lock your knees hard at the top and keep knees tracking over your toes",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Hamstrings"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=IZxyjW7MPJQ",
+  "demo_channel": "ScottHermanFitness",
+  "notes": null
+ },
+ {
+  "name": "Kettle Bell Squat",
+  "cues": "Hold the kettlebell by the horns at your chest, elbows tucked in / Feet about shoulder width, toes slightly out, brace your core / Squat down between your knees, keeping your chest up and heels down / Elbows track inside your knees at the bottom, then drive up through your whole foot",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Core",
+   "Upper back"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=MWHIs0zxkCU",
+  "demo_channel": "National Academy of Sports Medicine (NASM)",
+  "notes": "Name is generic. Cues and video assume the goblet-style kettlebell squat (bell held at chest), the most common version. Confirm with James if he means a different kettlebell squat variation."
+ },
+ {
+  "name": "Lunges",
+  "cues": "Stand tall, step forward with one leg into a split stance / Lower until both knees are near 90 degrees, back knee hovering just above the floor / Keep your torso upright and front knee tracking over your toes, not caving in / Push through the front foot to step back to standing, then switch legs",
+  "muscles": [
+   "Quads",
+   "Glutes",
+   "Hamstrings",
+   "Calves",
+   "Core"
+  ],
+  "demo_url": "https://www.youtube.com/watch?v=g8-Ge9S0aUw",
+  "demo_channel": "PureGym",
+  "notes": null
+ }
+]

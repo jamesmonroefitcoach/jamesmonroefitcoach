@@ -886,7 +886,7 @@ export default function DashboardClient({
   newTestimonials: { id: string; name: string; created_at: string }[];
   newConsultRequests: { id: string; name: string; created_at: string }[];
   baseWeekStart: Date;
-  clientProgramInfo: Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null }>;
+  clientProgramInfo: Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null; programId?: string | null }>;
   allTimeStats: {
     weeks: { weekStart: string; count: number }[];
     totalSessions: number;
@@ -1047,6 +1047,7 @@ export default function DashboardClient({
         endsOn: prog?.endsOn ?? null,
         daysUntilEnd: prog?.daysLeft ?? null,
         hasCurrent: !!prog?.name,
+        programId: prog?.programId ?? null,
       };
     });
 
@@ -1686,15 +1687,23 @@ function AllTimeSessionsBlock({
             );
           })}
         </div>
-        {/* Reference line for the avg */}
-        <div style={{ height: 1, background: "var(--line)", marginTop: 4 }} />
-        <div className="meta" style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", marginTop: "0.2rem" }}>
-          <span>{firstLabel}</span>
-          <span style={{ fontStyle: "italic" }}>
-            Rust = at or above all-time avg · faded = below
-          </span>
-          <span>{lastLabel}</span>
+        {/* Axis: sized to the bars' actual pixel width so the line and the
+            first/last date labels sit under the bars themselves — the old
+            full-width space-between drifted off whenever the bars didn't
+            fill the card (James' tracker bug: x axis not aligned). */}
+        <div style={{ width: stats.weeks.length * (BAR_W + BAR_GAP) - BAR_GAP }}>
+          <div style={{ height: 1, background: "var(--line)", marginTop: 4 }} />
+          <div className="meta" style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", marginTop: "0.2rem" }}>
+            <span>{firstLabel}</span>
+            <span>{lastLabel}</span>
+          </div>
         </div>
+      </div>
+
+      {/* Colour key — its own line, since it no longer fits between the
+          width-constrained axis labels. */}
+      <div className="meta" style={{ fontSize: "0.62rem", fontStyle: "italic", marginTop: "0.2rem" }}>
+        Rust = at or above all-time avg · faded = below
       </div>
 
       {/* Hover detail strip — fixed height so hovering never shifts layout

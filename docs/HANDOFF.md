@@ -1,191 +1,188 @@
-# Handoff — 2026-07-27 session
+# Handoff — updated 2026-07-28 (pickup session)
 
-Written by Claude (this session) for whichever Claude picks this up next.
-Read this fully before touching code — several items below reference prior
-decisions/rules you won't rediscover just by reading the codebase.
+Written by Claude for whichever Claude picks this up next. Read this fully
+before touching code — several items reference prior decisions/rules you
+won't rediscover just by reading the codebase. This file has been updated
+twice now (2026-07-27 original, 2026-07-28 pickup); treat it, not git log
+alone, as the source of truth for what's actually done vs. still open.
 
 **Read [`CLAUDE.md`](../CLAUDE.md) first if you haven't** — hard rules on
 this repo: ask before design decisions, don't commit/push without being
-told (I was told this session — see below), all SQL goes through Ryan, and
-phone-view (375px) checks are mandatory on every UI change.
+told, all SQL goes through Ryan, phone-view (375px) checks are mandatory on
+every UI change.
 
-## 0. Set up the Supabase CLI before doing anything DB-related
+## 0. Supabase CLI — still not set up
 
-The Supabase MCP tools were connected this session but errored on every
-call:
-
-> Your account does not have the necessary privileges to access this
-> endpoint... your access token may be scoped to a different organization
-
-The CLI is installed locally (`supabase 2.98.2` at `/opt/homebrew/bin/supabase`,
-an update to 2.110.0 is available — update if convenient) but **not logged
-in and not linked** to this project. Run:
+Unchanged from the original handoff: the CLI (`supabase 2.98.2`,
+`/opt/homebrew/bin/supabase`) is installed but never logged in or linked.
+The `mcp__supabase__*` tools error with an org/privilege message for the
+same reason. Run:
 
 ```bash
 supabase login
 ```
-
 ```bash
 supabase link --project-ref knixmjpvdfmqpjwhkrgd
 ```
 
-(Project ref is the subdomain in `NEXT_PUBLIC_SUPABASE_URL` in
-`.env.local`: `https://knixmjpvdfmqpjwhkrgd.supabase.co`.)
+Until then, use a throwaway Node script against `.env.local`'s
+`SUPABASE_SERVICE_ROLE_KEY` for read-only verification (load
+`@supabase/supabase-js` via `createRequire` in a `.mjs` file — this repo has
+no `"type": "module"`). Per CLAUDE.md you still never run SQL against prod
+yourself — schema/data changes go to Ryan as one paste-ready query.
 
-Until this is done, don't rely on the `mcp__supabase__*` tools either — they
-hit the same org/privilege wall. For read-only verification in the
-meantime, a plain Node script against `.env.local`'s
-`SUPABASE_SERVICE_ROLE_KEY` works fine — load `@supabase/supabase-js` via
-`createRequire` if you write it as `.mjs` (this repo has no
-`"type": "module"` in `package.json`, so a bare `import` will fail).
-**Per CLAUDE.md, you still don't run SQL against prod yourself** —
-schema/data changes go to Ryan as one paste-ready query for the Supabase
-SQL editor; CLI/read-only access is for verification and local dev only.
+## 1. Shipped and pushed to `main` (live on monroefitcoach.com)
 
-## 1. What shipped this session (already committed + pushed to main)
+Commit `4dd0869` — the original handoff doc + persisted research, pushed
+after Ryan said "commit" then "push" explicitly. `main` here is both the
+GitHub branch and what Vercel deploys from; there's only one.
 
-Commit `a6eb735`, pushed to `origin/main` — Ryan explicitly said "publish"
-after reviewing, so this is live on `monroefitcoach.com` already, not
-pending review:
+## 2. Built this pickup session — on localhost, UNCOMMITTED
 
-- **Pay-band chart hover glitch** (James's bug report) — fixed. Root cause
-  was two compounding bugs in `app/coach/dashboard-client.tsx`'s
-  `IncomeByBandChart`: per-segment `onMouseLeave` handlers caused a
-  null-hover flash between adjacent elements, and the detail panel below
-  the chart auto-grew to fit content, which shifted the chart under the
-  cursor mid-hover and re-triggered the flash — a layout-shift feedback
-  loop. Fixed by moving to a single container-level `onMouseLeave` and a
-  fixed-height (150px, internally scrolling) detail panel.
-- **Bonus bug found + fixed**: `GroupShell` (same file) nested the
-  right-side action buttons inside the section's collapse-toggle
-  `<button>` — invalid HTML, threw a React hydration error on every single
-  dashboard load in dev. Unrelated to what James reported, but I was in
-  the file and it's a real defect, so I fixed it (restructured to a `<div>`
-  header with the toggle as one inner button and the actions as a sibling).
-- **All-time session history**: hovering a week's bar now shows a
-  fixed-height detail strip with that week's count + its calendar month's
-  running total.
-- **Pay-band legend width bug**: the client-count/income text could overlap
-  the % text at narrow widths — swapped a fixed-width grid column for
-  `minmax()`.
-- **Clients table** (`app/coach/clients/clients-client.tsx`,
-  `lib/data.ts`): under the Scheduled column, added % of past sessions
-  completed, cancellation count, and the next 2 upcoming session
-  date/times. Explicitly **excluded reschedule rate** per Ryan — "could
-  just be James moving things around," not a meaningful signal.
-- **Goals page** (`components/goals-client.tsx`): weekly goals now render
-  grouped under category subheaders in one view instead of one flat mixed
-  list (annual goals unchanged, still flat).
+Everything below is working-tree changes, not yet committed. Don't assume
+it's live. Files touched: `app/coach/dashboard-client.tsx`,
+`app/coach/page.tsx`, `app/coach/week-banners.tsx`, `app/coach/goals/page.tsx`,
+`app/goals/actions.ts`, `components/goals-client.tsx`, `lib/data.ts`,
+`lib/goals.server.ts`, plus new file
+`supabase/migrations/0035_goal_weekly_checkins.sql`. `npx tsc --noEmit`
+clean; each item verified in-browser (desktop + 375px mobile, console
+checked) using the `mfc_session` cookie trick — see §5.
 
-All four changed files type-check clean (`npx tsc --noEmit`) and were
-verified in-browser (impersonated James via the legacy `mfc_session`
-cookie — see §4 — since email/password sign-in isn't scriptable) at both
-desktop and 375px mobile width, with console/network checked for errors.
-The pay-band and all-time-session numbers were cross-checked against a
-direct read-only DB query and matched exactly.
+- **All-time chart x-axis alignment** (James' tracker "quick win"). The
+  axis line + date labels used full-width `space-between` while the bars
+  were fixed-width and left-anchored, so they drifted apart as history
+  grew. Now sized to the bars' exact pixel width
+  (`stats.weeks.length * (BAR_W + BAR_GAP) - BAR_GAP`). Verified pixel-exact
+  in-browser.
+- **Client Programs dropdown showing 0 active** (James' tracker "quick
+  win"). Real root cause, not cosmetic: the dashboard was calling
+  `pastProgramsForClient()` from `lib/programs.ts`, which is **demo data
+  only** — it always returned nothing for a real Supabase-backed roster, so
+  the banner said "0 active" no matter what James published, with no way
+  to open anyone's program. Added `currentProgramsByClient()` in
+  `lib/data.ts` that queries the real `programs` table (current +
+  published, at-home preferred over in-gym when both exist — verified
+  against actual data that in-gym is what James mostly publishes, so
+  at-home-only would have kept the banner nearly empty). Active rows are
+  now links to `/coach/programming/view/[programId]`. Verified: banner
+  went from "0 active · 8 need programming" to "2 active · 6 need
+  programming" with working links to both.
+  - **Known follow-on bug, not yet fixed**: the same demo-data problem
+    likely affects the Program column on the Clients table and the client
+    profile page (anywhere else that calls `pastProgramsForClient()` /
+    `currentProgramsForClient()` / `currentProgramForClient()` from
+    `lib/programs.ts` expecting real data). `grep` those call sites before
+    assuming any of them show real programs.
+- **Weekly goals check-in survey** (Ryan's ask, clarified via
+  AskUserQuestion this session: *"depends on the goal — either James types
+  the latest number, or he stars it 1-5"*). Built as a collapsible card
+  above the goal lists on `/coach/goals` only (not client-side — this is
+  James scoring himself, not client-facing). One row per weekly
+  (non-`one_time`) top-level goal: goals with a numeric target
+  (`target_value`/`target_range_low`/`target_range_high` set) get a
+  type-a-number input that also writes through to `goals.current_value`;
+  everything else gets 1-5 stars. Saves per-row via the new
+  `saveWeeklyCheckin` server action, one row per `(goal_id, week_start)`
+  in the new `goal_weekly_checkins` table (migration 0035, **not yet run
+  by Ryan** — the card correctly shows "Check-in storage isn't set up yet"
+  until it is; verified that fallback state in-browser). Week is
+  Monday-anchored, same convention as the rest of the app.
 
-## 2. Open work — nothing built yet, in priority order Ryan hasn't set
+**Tracker log text for these two, paste-ready** (or write directly — see
+§6, Ryan said Claude should be able to update the Sheet itself):
 
-### 2a. Resources tab — corrective exercise procedures (both portals)
+> x-axis row: `Resolved 2026-07-28 — Claude: axis line and dates now sized
+> to the bars' width, aligned exactly. Deploy pending.`
+>
+> Client Programs row: `Resolved 2026-07-28 — Claude: dashboard was reading
+> demo data, never the real programs table, and only counted at-home
+> programs. Now shows anyone with a current published program, and their
+> name opens the program view. Deploy pending.`
 
-Ryan asked for: a deep-research pass on corrective exercise procedures for
-common injuries, turned into a page that lives on **both** the coach and
-client portal, in a tab literally named **"Resources"**, **coach-editable,
-client read-only**.
+## 3. Open work
 
-**Research is done** — see
-[`docs/research/corrective-exercise-research.md`](research/corrective-exercise-research.md)
-for the full write-up (8 verified findings, 3 refuted claims to avoid, 5
-unverified claims that need a re-run, and real coverage gaps). Read the
-"Coverage gaps" and "Unverified" sections before writing client copy —
-**do not publish anything about rotator cuff/shoulder from this research
-pass**, the verification run hit a session-limit wall on every rotator cuff
-claim (0 valid votes, not because they were false — genuinely untested).
-Tennis/golfer's elbow, hip tightness/APT, standalone ankle mobility, and
-neck pain beyond upper-crossed posture also have **zero verified findings**
-— the original ask named all of these, so either run a follow-up
-deep-research pass on just the gaps, or scope the first version of the page
-down to what's actually verified (patellofemoral pain, plantar fasciitis,
-Achilles tendinopathy, low back pain activity guidance, upper crossed
-syndrome) and say so.
+### 3a. Resources tab — corrective exercise procedures
 
-**I have not designed or built anything for this yet** — no schema, no
-route, no component. Before writing code, bring Ryan a plan (per CLAUDE.md's
-"ask before acting" rule). Things to decide in that plan:
+**Placement decided this session** (AskUserQuestion): a "Corrective
+Exercise" subtab under Programming → Library on both portals, next to
+Exercise Library and Materials — per James' own tracker comment ("put this
+under the library and call it corrective exercise"), not a new top-level
+nav item as originally floated.
 
-- Data model: the existing Materials feature
-  (`lib/materials-seed.ts`, `app/coach/programming/library/materials/`,
-  `app/client/programming/library/materials/`) is the closest precedent —
-  same shape (coach edits, client reads), but it's **localStorage-only
-  today**, not backed by Supabase (see the comment at the top of
-  `lib/materials-seed.ts`: "Until edits move to Supabase, James's edits
-  remain coach-local in localStorage and clients see these defaults" —
-  meaning right now James's Materials edits on his laptop don't even show
-  up for clients, let alone sync across his devices). If Resources needs
-  real coach→client sync (implied by "coach can edit, clients see it"),
-  it needs an actual table, not the same localStorage pattern. That's a
-  schema change — SQL goes to Ryan per the hard rule.
-- Where "Resources" sits in nav on each portal, and whether it replaces or
-  sits alongside the existing Materials tab (there's real content overlap:
-  Materials already has an "Injury Prevention" category with entries like
-  "Common Joint Injuries" and "Postural Imbalances" — decide whether
-  Resources subsumes that or is a separate, more clinical-feeling section).
+**Scope decision**: Ryan chose "research gaps first" over shipping the
+5-condition version now. A gap-filling research pass was launched but
+**hit the session's usage limit mid-run and did not finish** — see
+[`docs/research/corrective-exercise-research-gaps-raw.md`](research/corrective-exercise-research-gaps-raw.md).
+It only produced 4 fully-verified claims (all about rotator cuff dosing
+limits) before the limit hit; 21 more claims got pulled from real sources
+but never verified (infrastructure failure, not falsified — don't discard
+them, but don't publish them either without re-running verification).
+Ankle dorsiflexion, neck pain, and refer-out red flags weren't reached at
+all. **One thing in there is worth flagging to Ryan/James now, even
+unverified**: a 2020 systematic review found "very low" certainty evidence
+that anything corrects anterior pelvic tilt, and no causal link between APT
+and pain — which would mean going easy on the APT-correction framing
+already live in the app's Materials → Injury Prevention section. Re-verify
+before acting on it, but it's a real enough lead to mention.
 
-### 2b. Exercise library backfill draft
+**Original pass's clean, fully-verified research** is still solid — see
+[`docs/research/corrective-exercise-research.md`](research/corrective-exercise-research.md):
+patellofemoral pain, plantar fasciitis, Achilles tendinopathy, low back pain
+activity guidance, upper crossed syndrome, plus the NASM assessment
+framework. That's 8 real findings you can build from immediately.
 
-Ryan asked to combine (a) the app's existing exercise library
-(`app/coach/programming/library/exercise-library/`,
-`app/client/programming/library/exercise-library/page.tsx`, plus
-`ExercisePreset` types referenced from
-`app/coach/programming/build/build-program-client.tsx` — see the "Danger
-zones" section of CLAUDE.md before touching that file, its default export
-is dead code but other files import types/components from it), (b) the
-"Excercise Backfill" tab of James's Google Sheet, and (c) more deep
-research, into a finalized library James can edit later. **Draft for
-approval first, don't integrate directly.**
+**Next step**: re-run the gap pass's verify + synthesis stages (resume
+`wf_1ec5c064-8df`, or start fresh — the raw doc has resume instructions),
+then decide with Ryan whether to wait for full coverage or ship what's
+verified. Data model still needs a design decision — the existing Materials
+feature (`lib/materials-seed.ts`) is the closest precedent but is
+**localStorage-only, not Supabase-backed** (see the comment at the top of
+that file). If Corrective Exercise needs real coach→client sync, it needs
+an actual table — schema change, SQL goes to Ryan. No schema, route, or
+component built yet.
 
-I pulled and extracted the Backfill tab — see
-[`docs/research/exercise-backfill-source.md`](research/exercise-backfill-source.md)
-and the raw JSON next to it. Key finding: **the sheet has names/taxonomy
-only — zero rows have cues, muscles, or demo links filled in.** It's a
-naming/category skeleton, not usable content on its own. You'll need a
-deep-research pass (similar to §2a's, scoped to "cues + muscle groups +
-form notes for common gym exercises") to actually fill it in, then diff
-against what's already in the app's exercise library to avoid duplicating
-entries.
+### 3b. Exercise library backfill
 
-No draft has been started. James's own dashboard To Do list already has
-"Generate backfill document for exercises (RM to assist)" — so this is
-expected, not a surprise to him.
+**Scope decided**: full ~110-exercise set in one pass, not a small sample
+first (AskUserQuestion this session).
 
-### 2c. Goals page — weekly self-survey (1-5 stars)
+**Status: partial, blocked on the same session limit.** See
+[`docs/research/exercise-backfill-content-partial.md`](research/exercise-backfill-content-partial.md)
+and the JSON next to it — 90 of 106 exercises got cues + muscles +
+candidate demo links generated, but the **independent link-verification
+pass never ran** (session limit), and the last 16 exercises never even
+reached generation. I recovered the 90 generated-but-unverified entries
+directly from the workflow's journal rather than let the pipeline's
+all-or-nothing failure discard them — but **none of the demo_url values in
+that file have been checked**, treat them as unverified leads only.
 
-Ryan wants a **weekly** survey on the Goals page where James scores himself
-1-5 stars on unspecified items, or otherwise marks items he "knows." This
-needs a design decision from Ryan before any code: what the survey items
-actually are, and whether it's a star rating or a binary "I know this"
-checkbox style (her phrasing used both "scores himself 1-5 star" and "hits
-up for things he knows" — those aren't obviously the same UI). Ask before
-building. No code exists for this yet.
+**Next step**: resume the workflow (`wf_d5da78f1-287` /
+`exercise-backfill-content-wf_9216a421-6d5.js`, same file path — completed
+generation batches replay from cache) to verify links on the 90 and
+generate+verify the remaining 16. Then diff against the app's real
+`movements` table (31 active rows, confirmed via direct DB query this
+session — zero of them have cues/muscles/demo_url either) before drafting
+import SQL for Ryan.
 
-## 3. Task list state (if your session shares TaskList with mine)
+### 3c. (Resolved) Goals weekly self-survey — see §2
 
-If you have access to the same task-tracking as this session, tasks #1, #2,
-#7, #9 are the shipped work above (mark completed if not already). #4, #5,
-#8 are the three open items in §2. #6 ("log session work in James' Tracker
-under Claude") is **still outstanding** — I never got to it this session,
-see §5.
+Was open in the original handoff; built this session. Migration 0035 still
+needs Ryan to run it before it's live.
 
-If your session does NOT share task state with mine (likely, if this is a
-fresh conversation), just use this doc as the source of truth instead.
+## 4. Task list state
 
-## 4. How to verify changes in-browser without real credentials
+If your session shares TaskList with mine: #1, #2, #3, #7, #8, #9, #10,
+#11 are done. #4 (Resources tab) and #5 (exercise library) are open —
+partial research exists per §3a/§3b above, needs a fresh pass to finish
+before building. #6 (tracker log) — see §6, attempt a direct write first.
 
-The app now requires Supabase Auth email/password sign-in at `/login`,
-which isn't scriptable from a headless session. There's a legacy fallback
-(`lib/session.ts`, `mfc_session` cookie, consulted only when there's no
-Supabase Auth session) — I used it to impersonate James for browser
-verification:
+If you don't share task state (fresh conversation), use this doc instead.
+
+## 5. How to verify changes in-browser without real credentials
+
+App requires Supabase Auth email/password at `/login`, not scriptable
+headlessly. Use the legacy `mfc_session` cookie fallback
+(`lib/session.ts`, only consulted when there's no real Auth session):
 
 ```js
 document.cookie = "mfc_session=" + encodeURIComponent(JSON.stringify({
@@ -194,24 +191,22 @@ document.cookie = "mfc_session=" + encodeURIComponent(JSON.stringify({
 })) + "; path=/";
 ```
 
-Then navigate/reload. This is a **dev-only convenience**, not a real
-session — don't treat it as auth-bypass-worthy of concern, it's the same
-fallback path that's existed in the codebase already.
+Navigate/reload after. Dev-only convenience, not a real session.
 
-One more gotcha: the in-app preview browser reports
-`visibilityState=hidden`, so anything gated on page visibility (and
-`requestAnimationFrame`, which never fires) won't run there — I hit this
-testing chart hover timing and had to swap `requestAnimationFrame` for a
-plain `setTimeout`. See memory `reference_preview_tab_hidden` if you have
-access to it, otherwise just know this going in.
+The in-app preview browser reports `visibilityState=hidden` and never fires
+`requestAnimationFrame` — use `setTimeout` instead when timing hover/async
+UI in tests.
 
-## 5. Still owed: log this session's work in James' Tracker
+## 6. James' Tracker — try a direct write before falling back to paste-ready
 
-Per the standing working agreement, coach-facing bug fixes should get
-logged in James' Tracker Google Sheet
-(`1L-C4U7J7vKzPQoijQ7B8QLbsH8TLIKuEK20HK-JvT5o`) under the name "Claude." I
-did not do this before running out of turn budget this session — the
-pay-band hover glitch fix and the all-time-history hover addition are the
-two items James would recognize from his own bug report / feature ask.
-Please add those entries if you have Sheets access and haven't already seen
-them logged.
+Ryan said this session that Claude should be able to update the tracker
+directly, not just hand over paste-ready text. There's no Sheets-write MCP
+tool connected (checked `ToolSearch` — only Drive read/download/copy
+tools), but a Chrome browser **is** connected via the `claude-in-chrome`
+MCP (confirmed this session: `list_connected_browsers` returned "Browser 1"
+on macOS, `isLocal: true`). Try opening the Sheet at
+`https://docs.google.com/spreadsheets/d/1L-C4U7J7vKzPQoijQ7B8QLbsH8TLIKuEK20HK-JvT5o`
+in that browser and editing the Resolution Status / Comments cells directly
+via `computer`/`find`/`form_input` before falling back to giving Ryan
+paste-ready text. Log entries: name "Claude", the two paste-ready blurbs in
+§2 above for the x-axis and Client Programs fixes.

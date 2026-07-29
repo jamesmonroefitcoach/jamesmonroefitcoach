@@ -1,5 +1,5 @@
 import { createSupabaseAdmin, hasSupabaseEnv } from "@/lib/supabase/server";
-import { MOVEMENT_LIBRARY } from "@/lib/programs";
+import { MOVEMENT_LIBRARY, pastProgramsForClient } from "@/lib/programs";
 
 // Extract injury info from the specific intake form field
 function extractInjuriesFromForm(formData: Record<string, string> | null): string | null {
@@ -1032,6 +1032,57 @@ export type AllTimeSessionStats = {
   /** ISO of the first week's Monday — null when no data. */
   firstWeek: string | null;
 };
+
+/** Current published program per client, from the real programs table.
+ *  At-home programs win over in-gym session workouts; within a kind the
+ *  newest wins. Replaces the demo-only pastProgramsForClient() lookup the
+ *  dashboard relied on, which made the Programs banner always show
+ *  "0 active" with no way to open anyone's published program — and in-gym
+ *  workouts count because in practice that's what James publishes (the
+ *  at-home-only rule left every published client marked "needs program"). */
+export type CurrentClientProgram = {
+  id: string;
+  name: string;
+  ends_on: string | null;
+  program_kind: "in_gym" | "at_home";
+};
+export async function currentProgramsByClient(
+  clientIds: string[]
+): Promise<Map<string, CurrentClientProgram>> {
+  const map = new Map<string, CurrentClientProgram>();
+  if (!clientIds.length) return map;
+  if (!hasSupabaseEnv()) {
+    for (const id of clientIds) {
+      const progs = pastProgramsForClient(id).filter((x) => x.is_current);
+      const p = progs.find((x) => x.program_kind === "at_home") ?? progs[0];
+      if (p) map.set(id, { id: p.id, name: p.name, ends_on: p.ends_on ?? null, program_kind: p.program_kind });
+    }
+    return map;
+  }
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("programs")
+    .select("id, client_id, name, ends_on, program_kind, created_at")
+    .in("client_id", clientIds)
+    .eq("is_current", true)
+    .eq("is_published", true)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false });
+  if (error || !data) {
+    console.error("[currentProgramsByClient] query error:", error);
+    return map;
+  }
+  const rows = data as { id: string; client_id: string; name: string; ends_on: string | null; program_kind: "in_gym" | "at_home" }[];
+  for (const p of rows) {
+    const existing = map.get(p.client_id);
+    // Rows arrive newest-first, so only replace when an at-home program
+    // outranks a previously seen in-gym one.
+    if (!existing || (existing.program_kind === "in_gym" && p.program_kind === "at_home")) {
+      map.set(p.client_id, { id: p.id, name: p.name, ends_on: p.ends_on, program_kind: p.program_kind });
+    }
+  }
+  return map;
+}
 
 export async function getAllTimeSessionStats(coachId: string): Promise<AllTimeSessionStats> {
   if (!hasSupabaseEnv()) {

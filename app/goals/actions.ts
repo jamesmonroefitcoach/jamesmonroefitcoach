@@ -215,6 +215,56 @@ export async function deleteGoal(goalId: string): Promise<Result> {
   return { ok: true };
 }
 
+/** Weekly check-in save — one row per goal per week. Numeric goals send
+ *  `value` (and mirror it onto goals.current_value so the lists reflect the
+ *  typed number immediately); non-numeric goals send `stars` (1-5). */
+export async function saveWeeklyCheckin(
+  goalId: string,
+  weekStart: string,
+  entry: { value?: number | null; stars?: number | null }
+): Promise<Result> {
+  const id = await ownerId();
+  if (!id) return { ok: false, error: "Not signed in." };
+  if (!hasSupabaseEnv()) return { ok: false, error: "Supabase not configured." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return { ok: false, error: "Bad week." };
+  const stars = entry.stars ?? null;
+  const value = entry.value ?? null;
+  if (stars != null && (stars < 1 || stars > 5)) return { ok: false, error: "Stars must be 1-5." };
+  if (stars == null && value == null) return { ok: false, error: "Nothing to save." };
+
+  const supabase = createSupabaseAdmin();
+  // Ownership guard via the category.
+  const { data: g } = await supabase
+    .from("goals")
+    .select("category_id, goal_categories:category_id ( owner_id )")
+    .eq("id", goalId)
+    .maybeSingle();
+  type GuardRow = { category_id: string; goal_categories?: { owner_id: string } | { owner_id: string }[] | null };
+  const guardRow = g as GuardRow | null;
+  const cats = guardRow?.goal_categories;
+  const owner = Array.isArray(cats) ? cats[0]?.owner_id : cats?.owner_id;
+  if (!guardRow || owner !== id) return { ok: false, error: "Not allowed." };
+
+  const { error } = await supabase
+    .from("goal_weekly_checkins")
+    .upsert(
+      { goal_id: goalId, week_start: weekStart, value, stars, updated_at: new Date().toISOString() },
+      { onConflict: "goal_id,week_start" }
+    );
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "42P01" || code === "PGRST205") {
+      return { ok: false, error: "Check-in table missing — run migration 0035 first." };
+    }
+    return { ok: false, error: error.message };
+  }
+  if (value != null) {
+    await supabase.from("goals").update({ current_value: value }).eq("id", goalId);
+  }
+  revalidate();
+  return { ok: true };
+}
+
 export async function reorderGoals(categoryId: string, orderedIds: string[]): Promise<Result> {
   const id = await ownerId();
   if (!id) return { ok: false, error: "Not signed in." };
