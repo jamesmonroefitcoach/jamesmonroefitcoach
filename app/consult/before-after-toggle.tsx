@@ -14,6 +14,12 @@ export default function BeforeAfterToggle({
   fit = "cover",
   beforeFit,
   afterFit,
+  beforeZoom,
+  beforePosX,
+  beforePosY,
+  afterZoom,
+  afterPosX,
+  afterPosY,
 }: {
   label: string;
   summary: string;
@@ -30,24 +36,44 @@ export default function BeforeAfterToggle({
   fit?: "cover" | "contain";
   beforeFit?: "cover" | "contain";
   afterFit?: "cover" | "contain";
+  // Zoom (1 = none) + focal point as a % of the image, set by James in the
+  // Before/After editor. Only meaningful when the corresponding fit is
+  // "cover" — undefined/1/50/0 reproduces the old fixed "center top" crop.
+  beforeZoom?: number;
+  beforePosX?: number;
+  beforePosY?: number;
+  afterZoom?: number;
+  afterPosX?: number;
+  afterPosY?: number;
 }) {
   const bFit = beforeFit ?? fit;
   const aFit = afterFit ?? fit;
   const photoClassFor = (f: "cover" | "contain") =>
     "public-photo" + (f === "contain" ? " is-contain" : "");
+  const cropStyle = (f: "cover" | "contain", zoom?: number, posX?: number, posY?: number) => {
+    if (f !== "cover") return undefined;
+    const x = posX ?? 50;
+    const y = posY ?? 0;
+    const z = zoom ?? 1;
+    return {
+      objectPosition: `${x}% ${y}%`,
+      transform: z !== 1 ? `scale(${z})` : undefined,
+      transformOrigin: `${x}% ${y}%`,
+    };
+  };
   return (
     <div className="public-result">
       <div className="public-result-row">
         <div className="public-result-photos">
           <div className={photoClassFor(bFit)}>
             {beforeSrc
-              ? <img src={beforeSrc} alt={`${label} - before`} />
+              ? <img src={beforeSrc} alt={`${label} - before`} style={cropStyle(bFit, beforeZoom, beforePosX, beforePosY)} />
               : <span>BEFORE</span>}
             <span className="public-photo-tag">BEFORE</span>
           </div>
           <div className={photoClassFor(aFit)}>
             {afterSrc
-              ? <img src={afterSrc} alt={`${label} - after`} />
+              ? <img src={afterSrc} alt={`${label} - after`} style={cropStyle(aFit, afterZoom, afterPosX, afterPosY)} />
               : <span>AFTER</span>}
             <span className="public-photo-tag">AFTER</span>
           </div>

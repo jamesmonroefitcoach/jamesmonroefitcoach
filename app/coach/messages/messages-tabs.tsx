@@ -4,11 +4,13 @@ import { usePathname } from "next/navigation";
 
 // Sub-nav for the Messages section. Used at the top of:
 //   /coach/messages       → Direct messages with clients
-//   /coach/testimonials   → Client testimonial moderation
+//   /coach/testimonials   → Client testimonial quote moderation
+//   /coach/before-after   → Client transformation photo editing
 export default function MessagesTabs() {
   const path = usePathname() ?? "";
   const isTestimonials = path.startsWith("/coach/testimonials");
-  const isMessages = !isTestimonials;
+  const isBeforeAfter = path.startsWith("/coach/before-after");
+  const isMessages = !isTestimonials && !isBeforeAfter;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -37,6 +39,7 @@ export default function MessagesTabs() {
       >
         <Link href="/coach/messages" style={tabStyle(isMessages)}>Messages</Link>
         <Link href="/coach/testimonials" style={tabStyle(isTestimonials)}>Testimonials</Link>
+        <Link href="/coach/before-after" style={tabStyle(isBeforeAfter)}>Before / After</Link>
       </nav>
     </div>
   );

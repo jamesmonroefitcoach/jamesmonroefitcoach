@@ -212,6 +212,14 @@ export default async function MarketingPage({
         summary: t.meta_line ?? t.body.slice(0, 120),
         beforeSrc: before,
         afterSrc:  after,
+        beforeFit: t.before_fit ?? undefined,
+        afterFit:  t.after_fit ?? undefined,
+        beforeZoom: t.before_zoom ?? undefined,
+        beforePosX: t.before_pos_x ?? undefined,
+        beforePosY: t.before_pos_y ?? undefined,
+        afterZoom:  t.after_zoom ?? undefined,
+        afterPosX:  t.after_pos_x ?? undefined,
+        afterPosY:  t.after_pos_y ?? undefined,
       }))
     : BEFORE_AFTER;
 
@@ -494,6 +502,12 @@ export default async function MarketingPage({
               const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
               const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
               const weights = (b as { weights?: string }).weights;
+              const beforeZoom = (b as { beforeZoom?: number }).beforeZoom;
+              const beforePosX = (b as { beforePosX?: number }).beforePosX;
+              const beforePosY = (b as { beforePosY?: number }).beforePosY;
+              const afterZoom = (b as { afterZoom?: number }).afterZoom;
+              const afterPosX = (b as { afterPosX?: number }).afterPosX;
+              const afterPosY = (b as { afterPosY?: number }).afterPosY;
               return (
                 <BeforeAfterToggle
                   key={i}
@@ -506,6 +520,12 @@ export default async function MarketingPage({
                   fit={fit}
                   beforeFit={beforeFit}
                   afterFit={afterFit}
+                  beforeZoom={beforeZoom}
+                  beforePosX={beforePosX}
+                  beforePosY={beforePosY}
+                  afterZoom={afterZoom}
+                  afterPosX={afterPosX}
+                  afterPosY={afterPosY}
                 />
               );
             })}

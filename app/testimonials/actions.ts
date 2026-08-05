@@ -139,15 +139,14 @@ export async function coachUploadTestimonialPhoto(formData: FormData): Promise<R
   return { ok: true, data: { url: urls[0] } };
 }
 
-// Coach-created entry (no client submission behind it): lands approved +
-// published so it shows on the site immediately. Quote is optional —
-// photo-only entries appear in the results grid but not the quotes list.
+// Coach-created quote entry (no client submission behind it): lands
+// approved + published so it shows on the site immediately. Photo fields
+// live on coachCreateBeforeAfter below — this one is text-only, to match
+// the Testimonials screen it belongs to.
 export async function coachCreateTestimonial(input: {
   display_name: string;
   meta_line?: string | null;
   body?: string | null;
-  before_image_url?: string | null;
-  after_image_url?: string | null;
 }): Promise<Result<{ id: string }>> {
   const me = await getSessionUser();
   if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
@@ -164,8 +163,6 @@ export async function coachCreateTestimonial(input: {
       display_name: name,
       meta_line: (input.meta_line ?? "").trim().slice(0, 200) || null,
       body: (input.body ?? "").trim(),
-      before_image_url: (input.before_image_url ?? "").trim() || null,
-      after_image_url: (input.after_image_url ?? "").trim() || null,
       status: "approved",
       is_published: true,
       approved_at: new Date().toISOString(),
@@ -210,16 +207,16 @@ export async function listMyTestimonials(): Promise<Testimonial[]> {
   return data as Testimonial[];
 }
 
+// Text-only edit — quote body, display name, subtitle, sort, publish.
+// Photo fields live on updateBeforeAfterPhoto below: James edits before/after
+// images from their own screen, separate from moderating the written quote,
+// even though both write the same row.
 export async function updateTestimonial(
   id: string,
   patch: {
     display_name?: string | null;
     meta_line?: string | null;
     body?: string;
-    before_image_url?: string | null;
-    after_image_url?: string | null;
-    before_image_urls?: string[] | null;
-    after_image_urls?: string[] | null;
     sort_order?: number;
     is_published?: boolean;
   },
@@ -232,10 +229,6 @@ export async function updateTestimonial(
   if (patch.display_name !== undefined) next.display_name = patch.display_name?.trim() || null;
   if (patch.meta_line !== undefined) next.meta_line = patch.meta_line?.trim() || null;
   if (patch.body !== undefined) next.body = patch.body.trim();
-  if (patch.before_image_url !== undefined) next.before_image_url = patch.before_image_url?.trim() || null;
-  if (patch.after_image_url !== undefined) next.after_image_url = patch.after_image_url?.trim() || null;
-  if (patch.before_image_urls !== undefined) next.before_image_urls = patch.before_image_urls;
-  if (patch.after_image_urls !== undefined) next.after_image_urls = patch.after_image_urls;
   if (patch.sort_order !== undefined) next.sort_order = patch.sort_order;
   if (patch.is_published !== undefined) next.is_published = patch.is_published;
 
@@ -245,6 +238,119 @@ export async function updateTestimonial(
   revalidatePath("/coach/testimonials");
   revalidatePath("/");
   return { ok: true };
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+// Photo-only edit for the Before/After screen — never touches body/quote.
+export async function updateBeforeAfterPhoto(
+  id: string,
+  patch: {
+    display_name?: string | null;
+    meta_line?: string | null;
+    before_image_url?: string | null;
+    after_image_url?: string | null;
+    before_image_urls?: string[] | null;
+    after_image_urls?: string[] | null;
+    before_fit?: "cover" | "contain" | null;
+    after_fit?: "cover" | "contain" | null;
+    before_zoom?: number;
+    before_pos_x?: number;
+    before_pos_y?: number;
+    after_zoom?: number;
+    after_pos_x?: number;
+    after_pos_y?: number;
+    sort_order?: number;
+    is_published?: boolean;
+  },
+): Promise<Result> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+
+  const sb = createSupabaseAdmin();
+  const next: Record<string, unknown> = {};
+  if (patch.display_name !== undefined) next.display_name = patch.display_name?.trim() || null;
+  if (patch.meta_line !== undefined) next.meta_line = patch.meta_line?.trim() || null;
+  if (patch.before_image_url !== undefined) next.before_image_url = patch.before_image_url?.trim() || null;
+  if (patch.after_image_url !== undefined) next.after_image_url = patch.after_image_url?.trim() || null;
+  if (patch.before_image_urls !== undefined) next.before_image_urls = patch.before_image_urls;
+  if (patch.after_image_urls !== undefined) next.after_image_urls = patch.after_image_urls;
+  if (patch.before_fit !== undefined) next.before_fit = patch.before_fit;
+  if (patch.after_fit !== undefined) next.after_fit = patch.after_fit;
+  if (patch.before_zoom !== undefined) next.before_zoom = clamp(patch.before_zoom, 1, 4);
+  if (patch.before_pos_x !== undefined) next.before_pos_x = clamp(patch.before_pos_x, 0, 100);
+  if (patch.before_pos_y !== undefined) next.before_pos_y = clamp(patch.before_pos_y, 0, 100);
+  if (patch.after_zoom !== undefined) next.after_zoom = clamp(patch.after_zoom, 1, 4);
+  if (patch.after_pos_x !== undefined) next.after_pos_x = clamp(patch.after_pos_x, 0, 100);
+  if (patch.after_pos_y !== undefined) next.after_pos_y = clamp(patch.after_pos_y, 0, 100);
+  if (patch.sort_order !== undefined) next.sort_order = patch.sort_order;
+  if (patch.is_published !== undefined) next.is_published = patch.is_published;
+
+  const { error } = await sb.from("testimonials").update(next).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/coach/before-after");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// Coach-created photo-only entry (no quote) — for the Before/After screen's
+// own "Add entry +". Mirrors coachCreateTestimonial but forces an empty
+// body so it never shows up in the quotes strip.
+export async function coachCreateBeforeAfter(input: {
+  display_name: string;
+  meta_line?: string | null;
+  before_image_url?: string | null;
+  after_image_url?: string | null;
+  before_fit?: "cover" | "contain" | null;
+  after_fit?: "cover" | "contain" | null;
+  before_zoom?: number;
+  before_pos_x?: number;
+  before_pos_y?: number;
+  after_zoom?: number;
+  after_pos_x?: number;
+  after_pos_y?: number;
+}): Promise<Result<{ id: string }>> {
+  const me = await getSessionUser();
+  if (!me || me.role !== "coach") return { ok: false, error: "unauthorized" };
+
+  const name = (input.display_name ?? "").trim();
+  if (!name) return { ok: false, error: "Give the entry a client name." };
+
+  const sb = createSupabaseAdmin();
+  const { data, error } = await sb
+    .from("testimonials")
+    .insert({
+      client_id: null,
+      submitted_name: name,
+      display_name: name,
+      meta_line: (input.meta_line ?? "").trim().slice(0, 200) || null,
+      body: "",
+      before_image_url: (input.before_image_url ?? "").trim() || null,
+      after_image_url: (input.after_image_url ?? "").trim() || null,
+      before_fit: input.before_fit ?? null,
+      after_fit: input.after_fit ?? null,
+      before_zoom: input.before_zoom !== undefined ? clamp(input.before_zoom, 1, 4) : undefined,
+      before_pos_x: input.before_pos_x !== undefined ? clamp(input.before_pos_x, 0, 100) : undefined,
+      before_pos_y: input.before_pos_y !== undefined ? clamp(input.before_pos_y, 0, 100) : undefined,
+      after_zoom: input.after_zoom !== undefined ? clamp(input.after_zoom, 1, 4) : undefined,
+      after_pos_x: input.after_pos_x !== undefined ? clamp(input.after_pos_x, 0, 100) : undefined,
+      after_pos_y: input.after_pos_y !== undefined ? clamp(input.after_pos_y, 0, 100) : undefined,
+      status: "approved",
+      is_published: true,
+      approved_at: new Date().toISOString(),
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: me.id,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/coach/before-after");
+  revalidatePath("/");
+  return { ok: true, data: { id: data.id } };
 }
 
 export async function setTestimonialStatus(
