@@ -80,10 +80,10 @@ export default async function CoachDashboard() {
   // Reads the real programs table — the old pastProgramsForClient() call was
   // demo data only, so the banner always showed "0 active" with no way to
   // open anyone's published program (James' tracker bug, Jul 2026).
-  const atHomePrograms = await currentProgramsByClient(clients.map((c) => c.id));
-  const clientProgramInfo = new Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null; programId: string | null }>();
+  const currentPrograms = await currentProgramsByClient(clients.map((c) => c.id));
+  const clientProgramInfo = new Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null; programId: string | null; programKind: "in_gym" | "at_home" | null }>();
   for (const c of clients) {
-    const current = atHomePrograms.get(c.id) ?? null;
+    const current = currentPrograms.get(c.id) ?? null;
     const daysLeft = current?.ends_on
       ? Math.ceil((new Date(current.ends_on).getTime() - now) / 86400000)
       : null;
@@ -92,6 +92,7 @@ export default async function CoachDashboard() {
       daysLeft,
       name: current?.name ?? null,
       programId: current?.id ?? null,
+      programKind: current?.program_kind ?? null,
     });
   }
 

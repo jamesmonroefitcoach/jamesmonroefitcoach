@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { AppointmentRow, ClientRow, RateChange } from "@/lib/data";
 import { fmtMoney } from "@/lib/format";
-import { pastProgramsForClient } from "@/lib/programs";
 import { fetchWeekAppts, fetchMonthAppts, markApptPaid, setApptRate, setApptStatus } from "@/app/coach/schedule/actions";
 import { CANCEL_REASONS, CANCEL_REASON_LABELS, type CancelReason } from "@/lib/cancel-reasons";
 import WeekBanners from "./week-banners";
@@ -886,7 +885,7 @@ export default function DashboardClient({
   newTestimonials: { id: string; name: string; created_at: string }[];
   newConsultRequests: { id: string; name: string; created_at: string }[];
   baseWeekStart: Date;
-  clientProgramInfo: Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null; programId?: string | null }>;
+  clientProgramInfo: Map<string, { endsOn: string | null; daysLeft: number | null; name: string | null; programId?: string | null; programKind?: "in_gym" | "at_home" | null }>;
   allTimeStats: {
     weeks: { weekStart: string; count: number }[];
     totalSessions: number;
@@ -1048,6 +1047,7 @@ export default function DashboardClient({
         daysUntilEnd: prog?.daysLeft ?? null,
         hasCurrent: !!prog?.name,
         programId: prog?.programId ?? null,
+        programKind: prog?.programKind ?? null,
       };
     });
 

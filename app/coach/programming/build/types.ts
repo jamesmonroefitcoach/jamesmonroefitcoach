@@ -8,4 +8,7 @@ export type ClientProgramItem = {
   endsOn: string | null;
   daysUntilEnd: number | null;  // negative = already expired, null = no end date
   hasCurrent: boolean;
+  /** Which kind the current one is, so the UI can label it — at-home reads
+   *  "Program", in-gym reads "Session". Null when there's no current one. */
+  programKind?: "in_gym" | "at_home" | null;
 };

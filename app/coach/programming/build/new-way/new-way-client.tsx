@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientRow, MovementRow } from "@/lib/data";
 import type { ClientProgramItem } from "../types";
+import { kindLabel } from "@/app/coach/week-banners";
 import type { ApptOption, ImportableProgram, InGymProgram } from "../actions";
 import {
   getClientAppointments,
@@ -42,7 +43,7 @@ const MVP_SHEET_ONLY = true;
 // the program↔sheet bridge, so the workspace still exposes a toggle to flip
 // between them.
 type QuickSession = { id: string; starts_at: string; client_id: string; client_name: string };
-type QuickClient = { id: string; name: string; hasCurrent: boolean; programName: string | null };
+type QuickClient = { id: string; name: string; hasCurrent: boolean; programName: string | null; programKind?: "in_gym" | "at_home" | null };
 type QuickDraftProgram = { id: string; name: string; client_id: string; client_name: string; created_at: string; program_kind: "in_gym" | "at_home" };
 
 export default function NewWayClient({
@@ -530,7 +531,9 @@ export default function NewWayClient({
           <QuickRow
             key={c.id}
             primary={c.name}
-            secondary={c.hasCurrent ? `Active: ${c.programName ?? "program"}` : "No current at-home program"}
+            secondary={c.hasCurrent
+              ? `Active ${kindLabel(c.programKind) ?? "Program"}: ${c.programName ?? "untitled"}`
+              : "No current Program"}
             ctaLabel={c.hasCurrent ? "Update →" : "Create →"}
             onClick={() => quickStartProgramForClient(c)}
           />
