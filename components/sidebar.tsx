@@ -87,7 +87,7 @@ export default function Sidebar({ user }: { user: SessionUser }) {
   // the top-level link still lights up as active.
   const SECTION_ROUTES: Record<string, string[]> = {
     "/coach/schedule": ["/coach/schedule", "/coach/appointments", "/coach/availability"],
-    "/coach/messages": ["/coach/messages", "/coach/testimonials"],
+    "/coach/messages": ["/coach/messages", "/coach/testimonials", "/coach/before-after"],
   };
 
   const navLinks = links.map((link) => {

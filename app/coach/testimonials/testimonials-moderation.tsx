@@ -6,7 +6,6 @@ import {
   setTestimonialStatus,
   updateTestimonial,
   deleteTestimonial,
-  coachUploadTestimonialPhoto,
   coachCreateTestimonial,
 } from "@/app/testimonials/actions";
 import {
@@ -204,12 +203,18 @@ function TestimonialCard({
       }}>{t.body}</blockquote>
 
       {/* Image grid — collapses legacy single-URL + new array columns
-          into one flat list per side. Each side renders all attached
-          photos as small tiles so James can scan the set. */}
+          into one flat list per side. Read-only here: this is just context
+          while moderating the quote. Editing the photos themselves happens
+          on the Before / After screen. */}
       {(allBeforeUrls(t).length > 0 || allAfterUrls(t).length > 0) && (
-        <div style={{ marginTop: "0.5rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
-          <PhotoStrip urls={allBeforeUrls(t)} label="Before" />
-          <PhotoStrip urls={allAfterUrls(t)}  label="After"  />
+        <div style={{ marginTop: "0.5rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+            <PhotoStrip urls={allBeforeUrls(t)} label="Before" />
+            <PhotoStrip urls={allAfterUrls(t)}  label="After"  />
+          </div>
+          <a href="/coach/before-after" className="meta" style={{ display: "inline-block", marginTop: "0.35rem", fontSize: "0.76rem" }}>
+            Edit these photos on the Before / After screen →
+          </a>
         </div>
       )}
 
@@ -268,7 +273,7 @@ function TestimonialCard({
             className="btn btn-ghost"
             style={{ padding: "0.25rem 0.7rem", fontSize: "0.78rem" }}
             onClick={onEdit}
-          >✎ Edit / name / photos</button>
+          >✎ Edit / name</button>
           <button
             type="button"
             style={{
@@ -365,8 +370,6 @@ function EditForm({
   const [name, setName] = useState(t.display_name ?? "");
   const [meta, setMeta] = useState(t.meta_line ?? "");
   const [body, setBody] = useState(t.body);
-  const [before, setBefore] = useState(t.before_image_url ?? "");
-  const [after, setAfter] = useState(t.after_image_url ?? "");
   const [order, setOrder] = useState(String(t.sort_order));
 
   return (
@@ -411,11 +414,6 @@ function EditForm({
         />
       </label>
 
-      <div className="test-mod-image-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
-        <PhotoField kind="before" label="Before photo" value={before} onChange={setBefore} />
-        <PhotoField kind="after" label="After photo" value={after} onChange={setAfter} />
-      </div>
-
       <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
         <button
           type="button"
@@ -433,8 +431,6 @@ function EditForm({
               display_name: name || null,
               meta_line: meta || null,
               body,
-              before_image_url: before || null,
-              after_image_url: after || null,
               sort_order: Number(order) || 0,
             }));
             onClose();
@@ -445,8 +441,9 @@ function EditForm({
   );
 }
 
-// Coach-authored entry: name + optional subtitle/quote + photos. Lands
-// approved & published, so it's on the site as soon as it's saved.
+// Coach-authored quote entry: name + optional subtitle/quote. Lands
+// approved & published, so it's on the site as soon as it's saved. For a
+// photo-only entry, use "Add entry +" on the Before / After screen instead.
 function AddEntryForm({
   pending, run, onDone,
 }: {
@@ -457,8 +454,6 @@ function AddEntryForm({
   const [name, setName] = useState("");
   const [meta, setMeta] = useState("");
   const [body, setBody] = useState("");
-  const [before, setBefore] = useState("");
-  const [after, setAfter] = useState("");
 
   return (
     <div style={{ marginTop: "0.6rem", padding: "0.7rem", border: "1px solid var(--line)", borderRadius: 4, display: "flex", flexDirection: "column", gap: "0.45rem" }}>
@@ -473,13 +468,9 @@ function AddEntryForm({
         </label>
       </div>
       <label style={col}>
-        <span style={lbl}>Quote (optional — leave blank for photos only)</span>
+        <span style={lbl}>Quote</span>
         <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} style={inp} />
       </label>
-      <div className="test-mod-image-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
-        <PhotoField kind="before" label="Before photo" value={before} onChange={setBefore} />
-        <PhotoField kind="after" label="After photo" value={after} onChange={setAfter} />
-      </div>
       <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
         <button type="button" className="btn btn-ghost" style={{ padding: "0.25rem 0.7rem", fontSize: "0.78rem" }} onClick={onDone}>Cancel</button>
         <button
@@ -492,78 +483,12 @@ function AddEntryForm({
               display_name: name,
               meta_line: meta || null,
               body: body || null,
-              before_image_url: before || null,
-              after_image_url: after || null,
             }));
             onDone();
           }}
         >Add to site</button>
       </div>
     </div>
-  );
-}
-
-// URL field + phone-friendly upload button. Picking a file uploads it to the
-// testimonial-photos bucket right away and drops the public URL into the
-// field; James still hits Save to persist it on the row.
-function PhotoField({
-  kind, label, value, onChange,
-}: {
-  kind: "before" | "after";
-  label: string;
-  value: string;
-  onChange: (url: string) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function pick(file: File | undefined) {
-    if (!file) return;
-    setErr(null);
-    setBusy(true);
-    const fd = new FormData();
-    fd.set("file", file);
-    fd.set("kind", kind);
-    const res = await coachUploadTestimonialPhoto(fd);
-    setBusy(false);
-    if (res.ok && res.data?.url) onChange(res.data.url);
-    else setErr(res.ok ? "Upload failed — please try again." : res.error);
-  }
-
-  return (
-    <label style={col}>
-      <span style={lbl}>{label}</span>
-      <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
-        <input
-          type="url"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="https://… or upload →"
-          style={{ ...inp, flex: "1 1 0", minWidth: 0 }}
-        />
-        <label
-          className="btn btn-ghost"
-          style={{ padding: "0.25rem 0.55rem", fontSize: "0.74rem", cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap" }}
-        >
-          {busy ? "Uploading…" : "📷 Upload"}
-          <input
-            type="file"
-            accept="image/*"
-            disabled={busy}
-            onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }}
-            style={{ display: "none" }}
-          />
-        </label>
-      </div>
-      {value ? (
-        <img
-          src={value}
-          alt={`${label} preview`}
-          style={{ marginTop: "0.25rem", maxWidth: 96, maxHeight: 96, objectFit: "cover", borderRadius: 3, border: "1px solid var(--line)" }}
-        />
-      ) : null}
-      {err ? <span style={{ fontSize: "0.72rem", color: "var(--rust)" }}>{err}</span> : null}
-    </label>
   );
 }
 

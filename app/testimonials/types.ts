@@ -17,6 +17,21 @@ export type Testimonial = {
   after_image_url: string | null;
   before_image_urls: string[] | null;
   after_image_urls: string[] | null;
+  // "cover" crops to the 4/5 frame (default); "contain" letterboxes so the
+  // full body shows. Lives on the row, not just in code, so James can fix
+  // clipped feet/legs from the Before/After editor without a redeploy.
+  before_fit: "cover" | "contain" | null;
+  after_fit: "cover" | "contain" | null;
+  // Zoom (1 = no zoom) + focal point as a % of the image (x/y), used only
+  // when fit === "cover". Defaults (1, 50, 0) reproduce the old fixed
+  // "center top" crop exactly. James sets these by dragging/zooming in the
+  // Before/After editor.
+  before_zoom: number | null;
+  before_pos_x: number | null;
+  before_pos_y: number | null;
+  after_zoom: number | null;
+  after_pos_x: number | null;
+  after_pos_y: number | null;
   sort_order: number;
   client_feedback: string | null;
   created_at: string;
