@@ -62,20 +62,53 @@ const STORAGE_BUCKET = "testimonial-photos";
 const MAX_FILE_BYTES = 8 * 1024 * 1024;   // 8 MB per file
 const ALLOWED_TYPES = /^image\//;          // any image/*
 
+// iPhones hand us HEIC, which uploads fine but no browser can display —
+// the photo then renders as a broken frame on the public site. Detect it
+// from the ISO-BMFF box (bytes 4..12 are "ftyp" + a brand like "heic") so
+// we catch it even when the phone reports a wrong or empty MIME type, and
+// transcode to JPEG before it ever reaches storage.
+const HEIC_BRANDS = ["heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1"];
+
+function isHeic(buf: Buffer, file: File): boolean {
+  if (buf.length >= 12 && buf.toString("latin1", 4, 8) === "ftyp") {
+    if (HEIC_BRANDS.includes(buf.toString("latin1", 8, 12).toLowerCase())) return true;
+  }
+  if (/^image\/hei[cf]/i.test(file.type)) return true;
+  return /\.hei[cf]$/i.test(file.name);
+}
+
 async function uploadFiles(files: File[], prefix: string): Promise<string[]> {
   const sb = createSupabaseAdmin();
   const urls: string[] = [];
   for (const f of files) {
     if (!(f instanceof File) || f.size === 0) continue;
     if (f.size > MAX_FILE_BYTES) continue;
-    if (!ALLOWED_TYPES.test(f.type)) continue;
+    if (!ALLOWED_TYPES.test(f.type) && !/\.hei[cf]$/i.test(f.name)) continue;
     // Path keeps client_id namespace + a slugified original filename so
     // James can pick out whose photos he's reviewing in the bucket.
-    const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    let safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    let buf = Buffer.from(await f.arrayBuffer());
+    let contentType = f.type || "image/jpeg";
+
+    if (isHeic(buf, f)) {
+      try {
+        // Loaded lazily — it pulls in a WASM decoder we don't want on the
+        // hot path for the ordinary JPEG/PNG upload.
+        const { default: heicConvert } = await import("heic-convert");
+        const jpeg = await heicConvert({ buffer: buf, format: "JPEG", quality: 0.82 });
+        buf = Buffer.from(jpeg);
+        contentType = "image/jpeg";
+        safeName = safeName.replace(/\.hei[cf]$/i, "") + ".jpg";
+      } catch (err) {
+        // Keep the original rather than dropping the photo — it will at
+        // least be in the bucket for James to re-save by hand.
+        console.error("[testimonials] HEIC conversion failed", f.name, err);
+      }
+    }
+
     const path = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
-    const buf = Buffer.from(await f.arrayBuffer());
     const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, buf, {
-      contentType: f.type,
+      contentType,
       upsert: false,
     });
     if (error) continue;
