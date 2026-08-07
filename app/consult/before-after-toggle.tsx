@@ -6,6 +6,7 @@
 
 export default function BeforeAfterToggle({
   label,
+  tag,
   summary,
   weights,
   index,
@@ -16,6 +17,9 @@ export default function BeforeAfterToggle({
   afterFit,
 }: {
   label: string;
+  // Short category line above the name (e.g. "Body Recomposition").
+  tag?: string;
+  // James's write-up for this client. Empty on photo-only entries.
   summary: string;
   // Small caption under the summary for before → after lift numbers.
   weights?: string;
@@ -57,7 +61,8 @@ export default function BeforeAfterToggle({
             {(index + 1).toString().padStart(2, "0")}
           </span>
           <strong className="public-result-title">{label}</strong>
-          <p className="public-result-summary">{summary}</p>
+          {tag && <span className="public-result-tag">{tag}</span>}
+          {summary && <p className="public-result-summary">{summary}</p>}
           {weights && <p className="public-result-weights">{weights}</p>}
         </div>
       </div>

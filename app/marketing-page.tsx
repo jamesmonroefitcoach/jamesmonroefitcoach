@@ -121,25 +121,7 @@ const PRICING = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    quote: "James got me back to deadlifting heavy after two surgeries thought I'd never lift again.",
-    name: "PLACEHOLDER · Client A",
-    meta: "Down 28 lb · Deadlift 405 lb",
-  },
-  {
-    quote: "He coaches the boring stuff that actually moves the needle.",
-    name: "PLACEHOLDER · Client B",
-    meta: "First sub-23 5K at 47",
-  },
-  {
-    quote: "I haven't missed a Monday in 14 months. That alone changed my life.",
-    name: "PLACEHOLDER · Client C",
-    meta: "Body comp + bloodwork dialed",
-  },
-];
-
-const BEFORE_AFTER: { label: string; summary: string; weights?: string; beforeSrc?: string; afterSrc?: string; fit?: "cover" | "contain"; beforeFit?: "cover" | "contain"; afterFit?: "cover" | "contain" }[] = [
+const BEFORE_AFTER: { label: string; tag?: string; summary: string; weights?: string; beforeSrc?: string; afterSrc?: string; fit?: "cover" | "contain"; beforeFit?: "cover" | "contain"; afterFit?: "cover" | "contain" }[] = [
   {
     label: "Body recomposition · Austin client",
     summary: "Strength + recomp focus. Leaner build, less softness, more confidence. Same person, different season.",
@@ -196,20 +178,13 @@ export default async function MarketingPage({
       after:  allAfterUrls(t)[0],
     }))
     .filter((r) => r.before && r.after);
-  // Photo-only coach entries carry an empty body — keep them out of the
-  // quotes strip (they still qualify for the results grid above).
-  const quoteRows = approvedTestimonials.filter((t) => t.body.trim());
-  const renderedTestimonials = quoteRows.length > 0
-    ? quoteRows.map((t) => ({
-        quote: t.body,
-        name: t.display_name || t.submitted_name,
-        meta: t.meta_line ?? "",
-      }))
-    : TESTIMONIALS;
+  // There is no separate quotes section — each client's write-up rides
+  // along with their own before/after pair in the results grid.
   const renderedBeforeAfters = approvedBeforeAfters.length > 0
     ? approvedBeforeAfters.map(({ t, before, after }) => ({
         label: t.display_name || t.submitted_name,
-        summary: t.meta_line ?? t.body.slice(0, 120),
+        tag: t.meta_line ?? undefined,
+        summary: t.body.trim(),
         beforeSrc: before,
         afterSrc:  after,
       }))
@@ -494,10 +469,12 @@ export default async function MarketingPage({
               const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
               const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
               const weights = (b as { weights?: string }).weights;
+              const tag = (b as { tag?: string }).tag;
               return (
                 <BeforeAfterToggle
                   key={i}
                   label={b.label}
+                  tag={tag}
                   summary={b.summary}
                   weights={weights}
                   index={i}
@@ -509,25 +486,6 @@ export default async function MarketingPage({
                 />
               );
             })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Testimonials ─────────────────────────────────────── */}
-      <section className="public-section public-section-tinted">
-        <div className="public-section-inner">
-          <span className="public-eyebrow">Testimonials</span>
-          <h2 className="public-h2">In their words.</h2>
-          <div className="public-testimonial-grid">
-            {renderedTestimonials.map((t, i) => (
-              <figure key={i} className="public-testimonial">
-                <blockquote className="public-quote">&ldquo;{t.quote}&rdquo;</blockquote>
-                <figcaption className="public-quote-cite">
-                  <strong>{t.name}</strong>
-                  {t.meta && <span>{t.meta}</span>}
-                </figcaption>
-              </figure>
-            ))}
           </div>
         </div>
       </section>

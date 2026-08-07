@@ -933,12 +933,20 @@ th.tbl-sticky-last {
   color: var(--ink);
   line-height: 1.2;
 }
+.public-result-tag {
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .public-result-summary {
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.55;
   color: var(--ink);
-  max-width: 50ch;
+  max-width: 62ch;
 }
 .public-result-weights {
   margin: 0.15rem 0 0;
