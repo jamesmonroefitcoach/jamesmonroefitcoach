@@ -617,6 +617,24 @@ th.tbl-sticky-last {
   width: min(1100px, 100% - 2rem);
   margin: 0 auto;
 }
+
+/* Full-bleed banner photo sitting between the hero and About. The file is
+   already cropped to the 5:2 framing we want, so it renders at its own
+   aspect and nothing gets trimmed at ordinary widths — the pose is tall
+   and a thinner band clips his hands. max-height only engages on very
+   large monitors, to stop the photo swallowing the fold. */
+.public-banner {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.public-banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: cover;
+  object-position: center 45%;
+}
 .public-eyebrow {
   display: inline-block;
   font-family: var(--font-heading), "Oswald", sans-serif;

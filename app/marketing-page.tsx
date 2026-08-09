@@ -224,6 +224,19 @@ export default async function MarketingPage({
         </div>
       </section>
 
+      {/* ── Banner ───────────────────────────────────────────── */}
+      {/* Full-bleed band between the hero and About. No text sits on
+          top of it — the photo swings from a blown-out sky to near-black
+          trees, so any overlaid copy would need a scrim heavy enough to
+          kill the light that makes the shot work. */}
+      <section className="public-banner">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/banner.jpg"
+          alt="James Monroe training outdoors in a field at sunset"
+        />
+      </section>
+
       {/* ── About ────────────────────────────────────────────── */}
       <section id="about" className="public-section">
         <div className="public-section-inner public-two-col">
@@ -232,14 +245,16 @@ export default async function MarketingPage({
             <h2 className="public-h2">To move is to live, and to live is to move.</h2>
             <p className="public-p">
               Born and raised in Portland, Oregon, James grew up playing
-              sports from soccer to wrestling. He started weight training at
-              twelve and later took up boxing, Muay Thai, and yoga. He got
-              into coaching because of family members and close friends who
-              struggled to build healthy habits and lose weight. Over the
-              years he&rsquo;s worked with clients from high school youth to
-              senior citizens, including physique competitors, recreational
-              athletes, and people coming back from injury, helping them lose
-              body fat, gain muscle, and lead more active lives.
+              sports from soccer to skateboarding. He started weight training
+              at twelve and later took up boxing, Muay Thai kickboxing and
+              yoga. His desire to coach came from having family members and
+              close friends who struggled to build healthy habits and lose
+              weight. After successfully helping them achieve their goals he
+              decided coaching was the right career for him. Over the years
+              he&rsquo;s worked with clients from high school youth to senior
+              citizens, including physique competitors, recreational athletes,
+              and people coming back from injury, helping them lose body fat,
+              gain muscle, and lead more active lives.
             </p>
             <p className="public-p">
               His sessions are concentrated, but also fun and enjoyable.
@@ -248,16 +263,13 @@ export default async function MarketingPage({
               you.
             </p>
             <p className="public-p">
-              The current roster runs the full range: men, women,
-              families, couples, and groups training together. From high
-              school youth to senior citizens, beginners through competitive
-              athletes. James works with
-              LGBTQIA+ clients and has experience supporting transitioning men
-              and women through training that meets them where they are.
-              Goals run just as wide: first pull-up, getting back to lifting
-              after surgery, a stage-ready physique, a tactical selection,
-              menopause-stage strength, a 5K under 23 minutes, or simply
-              moving without pain again.
+              The current roster runs the full range: men, women, families,
+              couples, LGBTQ+ and groups training together. From high school
+              youth to senior citizens, beginners through competitive
+              athletes, the goals and aspirations span just as wide: first
+              pull-up, getting back to lifting after surgery, a stage-ready
+              physique, a tactical selection, menopause-stage strength, a 5K
+              under 23 minutes, or simply moving without pain again.
             </p>
           </div>
           <div className="public-card public-card-portrait">
