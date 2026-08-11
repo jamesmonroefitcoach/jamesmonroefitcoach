@@ -1067,17 +1067,22 @@ th.tbl-sticky-last {
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
+/* Runs wider than the 1100px the rest of the page uses, and hands more of
+   the row to the photo, so the shot reads at a decent size. Safe to go
+   wide here because the band has its own paper background, so the extra
+   width looks deliberate rather than misaligned. The source is 2000px, so
+   even at this size it is not being upscaled. */
 .public-band-inner {
-  width: min(1100px, 100% - 2rem);
+  width: min(1320px, 100% - 2rem);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   gap: 2rem;
   align-items: center;
 }
 .public-band-photo {
   width: 100%;
-  max-height: 420px;
+  max-height: 560px;
   overflow: hidden;
   border-radius: 4px;
   border: 1px solid var(--line);
@@ -1090,7 +1095,7 @@ th.tbl-sticky-last {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 420px;
+  max-height: 560px;
   object-fit: contain;
 }
 .public-band-text {
@@ -1113,7 +1118,9 @@ th.tbl-sticky-last {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  .public-band-photo, .public-band-photo img { max-height: 360px; }
+  /* Stacked, so width already limits the photo. A height cap here only
+     letterboxes it against the dark backing, which reads as a flaw. */
+  .public-band-photo, .public-band-photo img { max-height: none; }
 }
 
 /* Services strip */
