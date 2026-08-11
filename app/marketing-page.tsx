@@ -418,8 +418,61 @@ export default async function MarketingPage({
         </div>
       </section>
 
+      {/* ── Before / After ───────────────────────────────────── */}
+      {/* Sits ahead of Location: the results are the persuasive beat, and
+          the gym address is what you want in front of someone once they
+          are already sold. Tint alternates section to section, so this
+          picked up the tint Location gave back. */}
+      <section id="results" className="public-section public-section-tinted">
+        <div className="public-section-inner">
+          <span className="public-eyebrow">Client results</span>
+          <h2 className="public-h2">Real before &amp; afters.</h2>
+          <p className="public-p public-p-meta">
+            Real clients, real arcs. Published with permission.
+          </p>
+          <div className="public-results-stack">
+            {renderedBeforeAfters.map((b, i) => {
+              const beforeSrc = (b as { beforeSrc?: string }).beforeSrc;
+              const afterSrc = (b as { afterSrc?: string }).afterSrc;
+              const fit = (b as { fit?: "cover" | "contain" }).fit;
+              const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
+              const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
+              const weights = (b as { weights?: string }).weights;
+              const tag = (b as { tag?: string }).tag;
+              const beforeZoom = (b as { beforeZoom?: number }).beforeZoom;
+              const beforePosX = (b as { beforePosX?: number }).beforePosX;
+              const beforePosY = (b as { beforePosY?: number }).beforePosY;
+              const afterZoom = (b as { afterZoom?: number }).afterZoom;
+              const afterPosX = (b as { afterPosX?: number }).afterPosX;
+              const afterPosY = (b as { afterPosY?: number }).afterPosY;
+              return (
+                <BeforeAfterToggle
+                  key={i}
+                  label={b.label}
+                  tag={tag}
+                  summary={b.summary}
+                  weights={weights}
+                  index={i}
+                  beforeSrc={beforeSrc}
+                  afterSrc={afterSrc}
+                  fit={fit}
+                  beforeFit={beforeFit}
+                  afterFit={afterFit}
+                  beforeZoom={beforeZoom}
+                  beforePosX={beforePosX}
+                  beforePosY={beforePosY}
+                  afterZoom={afterZoom}
+                  afterPosX={afterPosX}
+                  afterPosY={afterPosY}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* ── Location ─────────────────────────────────────────── */}
-      <section id="location" className="public-section public-section-tinted">
+      <section id="location" className="public-section">
         <div className="public-section-inner">
           <span className="public-eyebrow">Where we train</span>
           <h2 className="public-h2">Hyde Park Gym, Austin TX.</h2>
@@ -469,55 +522,6 @@ export default async function MarketingPage({
                 allowFullScreen
               />
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Before / After ───────────────────────────────────── */}
-      <section id="results" className="public-section">
-        <div className="public-section-inner">
-          <span className="public-eyebrow">Client results</span>
-          <h2 className="public-h2">Real before &amp; afters.</h2>
-          <p className="public-p public-p-meta">
-            Real clients, real arcs. Published with permission.
-          </p>
-          <div className="public-results-stack">
-            {renderedBeforeAfters.map((b, i) => {
-              const beforeSrc = (b as { beforeSrc?: string }).beforeSrc;
-              const afterSrc = (b as { afterSrc?: string }).afterSrc;
-              const fit = (b as { fit?: "cover" | "contain" }).fit;
-              const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
-              const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
-              const weights = (b as { weights?: string }).weights;
-              const tag = (b as { tag?: string }).tag;
-              const beforeZoom = (b as { beforeZoom?: number }).beforeZoom;
-              const beforePosX = (b as { beforePosX?: number }).beforePosX;
-              const beforePosY = (b as { beforePosY?: number }).beforePosY;
-              const afterZoom = (b as { afterZoom?: number }).afterZoom;
-              const afterPosX = (b as { afterPosX?: number }).afterPosX;
-              const afterPosY = (b as { afterPosY?: number }).afterPosY;
-              return (
-                <BeforeAfterToggle
-                  key={i}
-                  label={b.label}
-                  tag={tag}
-                  summary={b.summary}
-                  weights={weights}
-                  index={i}
-                  beforeSrc={beforeSrc}
-                  afterSrc={afterSrc}
-                  fit={fit}
-                  beforeFit={beforeFit}
-                  afterFit={afterFit}
-                  beforeZoom={beforeZoom}
-                  beforePosX={beforePosX}
-                  beforePosY={beforePosY}
-                  afterZoom={afterZoom}
-                  afterPosX={afterPosX}
-                  afterPosY={afterPosY}
-                />
-              );
-            })}
           </div>
         </div>
       </section>
@@ -599,8 +603,8 @@ function PublicHeader() {
           <a href="#offerings">Specialties</a>
           <a href="#timeline">Timeline</a>
           <a href="#pricing">Pricing</a>
-          <a href="#location">Location</a>
           <a href="#results">Results</a>
+          <a href="#location">Location</a>
           <Link href="/login" className="public-nav-signin">Sign in</Link>
         </nav>
       </div>
