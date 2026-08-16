@@ -4,7 +4,10 @@
 export const FORM_SECTIONS: { title: string; keys: string[] }[] = [
   {
     title: "General Info",
-    keys: ["Phone", "Birthday"],
+    // Name/Email are only present on answers that came from the public
+    // /intake form; existing clients' Google Form imports don't carry them.
+    // Empty sections are skipped below, so listing them costs nothing.
+    keys: ["Name", "Email", "Phone", "Birthday", "Emergency contact", "Emergency contact phone"],
   },
   {
     title: "Goals & Progress",
@@ -16,6 +19,8 @@ export const FORM_SECTIONS: { title: string; keys: string[] }[] = [
       "Satisfaction with training (1-5)",
       "Exercises to learn / work on",
       "Commitment (1-10)",
+      "Training history",
+      "Event or deadline",
     ],
   },
   {
@@ -32,6 +37,44 @@ export const FORM_SECTIONS: { title: string; keys: string[] }[] = [
       "Current weight (lbs)",
     ],
   },
+  // The three sections below only appear on submissions from the public
+  // /intake form, which adds NASM-style health screening the older Google
+  // Form never asked. Existing clients render exactly as they did before.
+  {
+    title: "Readiness to Exercise",
+    keys: [
+      "Heart condition (doctor advised)",
+      "Chest pain",
+      "Dizziness or loss of consciousness",
+      "Bone or joint problem",
+      "Blood pressure or heart medication",
+      "Chronic condition affecting exercise",
+      "Pregnant or recent birth",
+      "Other reason not to exercise",
+      "Readiness details",
+    ],
+  },
+  {
+    title: "Medical & Injury History",
+    keys: [
+      "Past pain or injury areas",
+      "Surgeries",
+      "Surgery details",
+      "Medical conditions",
+      "Medications / supplements",
+    ],
+  },
+  {
+    title: "Daily Life & Occupation",
+    keys: [
+      "Occupation",
+      "Extended sitting at work",
+      "Repetitive movement at work",
+      "Heeled shoes or boots",
+      "Daily stress (1-5)",
+      "Sports / hobbies",
+    ],
+  },
   {
     title: "Scheduling",
     keys: [
@@ -46,7 +89,7 @@ export const FORM_SECTIONS: { title: string; keys: string[] }[] = [
   },
   {
     title: "Additional Feedback",
-    keys: ["Additional requests / notes", "Questions / feedback"],
+    keys: ["Additional requests / notes", "Questions / feedback", "Questions for James"],
   },
 ];
 

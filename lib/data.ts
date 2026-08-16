@@ -355,6 +355,10 @@ export type Prospect = {
   last_followed_up: string | null;  // date string YYYY-MM-DD
   notes: string | null;
   created_at: string;
+  // Present only on prospects that came in through the public /intake form
+  // (migration 0038). Optional so the demo constants below stay untouched.
+  intake_data?: Record<string, string> | null;
+  intake_received_at?: string | null;
 };
 
 const DEMO_PROSPECTS: Prospect[] = [
@@ -387,14 +391,29 @@ const DEMO_PROSPECTS: Prospect[] = [
 export async function listProspects(coachId?: string): Promise<Prospect[]> {
   if (!hasSupabaseEnv()) return DEMO_PROSPECTS;
   const supabase = createSupabaseAdmin();
-  const query = supabase
-    .from("prospects")
-    .select("id, coach_id, full_name, phone, email, where_met, connection, last_followed_up, notes, created_at")
-    .order("created_at", { ascending: false });
-  if (coachId) query.eq("coach_id", coachId);
-  const { data, error } = await query;
+  const BASE = "id, coach_id, full_name, phone, email, where_met, connection, last_followed_up, notes, created_at";
+
+  const run = async (columns: string) => {
+    const query = supabase
+      .from("prospects")
+      .select(columns)
+      .order("created_at", { ascending: false });
+    if (coachId) query.eq("coach_id", coachId);
+    return query;
+  };
+
+  // Try with the intake columns first. If migration 0038 hasn't been run on
+  // this database yet the select 400s, and falling straight through to
+  // DEMO_PROSPECTS would silently replace James's real prospects with demo
+  // rows — so retry without them before giving up.
+  let { data, error } = await run(`${BASE}, intake_data, intake_received_at`);
+  if (error && /intake_data|intake_received_at/i.test(error.message ?? "")) {
+    console.error("[prospects] intake columns missing — run migration 0038");
+    ({ data, error } = await run(BASE));
+  }
+
   if (error || !data) return DEMO_PROSPECTS;
-  return data as Prospect[];
+  return data as unknown as Prospect[];
 }
 
 // ─── Appointments ─────────────────────────────────────────────────────

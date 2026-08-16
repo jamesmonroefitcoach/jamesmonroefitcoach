@@ -10,6 +10,7 @@ import type { NextSessionStatus } from "./page";
 import { kindLabel } from "@/app/coach/week-banners";
 import TierBoardModal from "./tier-board-modal";
 import QuickView from "./quick-view";
+import IntakeFormDisplay from "@/components/intake-form-display";
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -531,6 +532,7 @@ function ProspectRow({ p, onDelete, onSave }: {
   onSave: (id: string, data: ProspectInput) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [showIntake, setShowIntake] = useState(false);
   const [draft, setDraft] = useState<ProspectInput>({
     full_name: p.full_name ?? "",
     phone: p.phone ?? "",
@@ -601,9 +603,32 @@ function ProspectRow({ p, onDelete, onSave }: {
     );
   }
 
+  // Prospects created by the public /intake form carry their questionnaire
+  // with them; ones James added by hand don't, and show no link.
+  const hasIntake = !!p.intake_data && Object.keys(p.intake_data).length > 0;
+
   return (
+    <>
     <tr>
-      <td className="tbl-sticky-first"><strong>{p.full_name}</strong></td>
+      <td className="tbl-sticky-first">
+        <strong>{p.full_name}</strong>
+        {hasIntake && (
+          <button
+            className="btn btn-ghost"
+            style={{
+              display: "block",
+              fontSize: "0.72rem",
+              padding: "0.1rem 0",
+              marginTop: "0.15rem",
+              color: "var(--rust)",
+              textDecoration: "underline",
+            }}
+            onClick={() => setShowIntake((v) => !v)}
+          >
+            {showIntake ? "Hide answers ▴" : "Form answers ▾"}
+          </button>
+        )}
+      </td>
       <td>
         <div className="meta" style={{ fontSize: "0.82rem" }}>{p.phone ?? "—"}</div>
         <div className="meta" style={{ fontSize: "0.82rem" }}>{p.email ?? "—"}</div>
@@ -646,6 +671,19 @@ function ProspectRow({ p, onDelete, onSave }: {
         </div>
       </td>
     </tr>
+    {showIntake && hasIntake && (
+      <tr>
+        <td colSpan={6} style={{ background: "var(--paper)", padding: "0.85rem 1rem" }}>
+          {p.intake_received_at && (
+            <div className="meta" style={{ fontSize: "0.74rem", marginBottom: "0.4rem" }}>
+              Submitted {fmtDate(p.intake_received_at)}
+            </div>
+          )}
+          <IntakeFormDisplay formData={p.intake_data ?? null} defaultOpen />
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 
