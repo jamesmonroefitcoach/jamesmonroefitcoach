@@ -5,10 +5,11 @@ import { usePathname } from "next/navigation";
 export default function ProgrammingTabs() {
   const path = usePathname() ?? "";
   const isLibrary   = path.startsWith("/coach/programming/library");
+  const isWeekPlan  = path.startsWith("/coach/programming/week-plan");
   // Programs is the single home now — the build workspace lives "under" it,
   // reached via Build New + and per-program Edit, so /build/* keeps the
   // Programs tab highlighted (there's no separate Build Program tab).
-  const isView      = !isLibrary;
+  const isView      = !isLibrary && !isWeekPlan;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -44,6 +45,7 @@ export default function ProgrammingTabs() {
       >
         <Link href="/coach/programming" style={tabStyle(isView)}>Programs</Link>
         <Link href="/coach/programming/library/exercise-library" style={tabStyle(isLibrary)}>Library</Link>
+        <Link href="/coach/programming/week-plan" style={tabStyle(isWeekPlan)}>Week Plan</Link>
       </nav>
     </div>
   );
