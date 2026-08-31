@@ -8,10 +8,11 @@ export default function ProgrammingTabs() {
   const isWeekPlan  = path.startsWith("/coach/programming/week-plan");
   const isVocab     = path.startsWith("/coach/programming/vocabulary");
   const isPeriod    = path.startsWith("/coach/programming/periodization");
+  const isCues      = path.startsWith("/coach/programming/cues");
   // Programs is the single home now — the build workspace lives "under" it,
   // reached via Build New + and per-program Edit, so /build/* keeps the
   // Programs tab highlighted (there's no separate Build Program tab).
-  const isView      = !isLibrary && !isWeekPlan && !isVocab && !isPeriod;
+  const isView      = !isLibrary && !isWeekPlan && !isVocab && !isPeriod && !isCues;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: "0.55rem 1.4rem",
@@ -50,6 +51,7 @@ export default function ProgrammingTabs() {
         <Link href="/coach/programming/week-plan" style={tabStyle(isWeekPlan)}>Week Plan</Link>
         <Link href="/coach/programming/vocabulary" style={tabStyle(isVocab)}>Vocabulary</Link>
         <Link href="/coach/programming/periodization" style={tabStyle(isPeriod)}>Periodization</Link>
+        <Link href="/coach/programming/cues" style={tabStyle(isCues)}>Cues</Link>
       </nav>
     </div>
   );
