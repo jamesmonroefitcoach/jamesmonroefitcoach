@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monroe Fit Coach · Periodized Training</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:    #f5efe4;
+    --paper: #ffffff;
+    --ink:   #171311;
+    --muted: #7a6f63;
+    --line:  #d8cdb8;
+    --rust:  #a83d2b;
+    --bar:   #efe7d7;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", "Helvetica Neue", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── toolbar (screen only) ─────────────────────────────────── */
+  .toolbar {
+    width: min(8.5in, 100% - 1rem);
+    margin: 1.25rem auto 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .toolbar .spacer { flex: 1 1 auto; }
+  .btn {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.42rem 0.85rem;
+    border: 1px solid var(--ink);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--bar); }
+  .btn-primary { background: var(--rust); border-color: var(--rust); color: #fff; }
+  .btn-primary:hover { background: #8f3324; }
+  .hint {
+    font-size: 0.72rem;
+    color: var(--muted);
+    width: min(8.5in, 100% - 1rem);
+    margin: 0 auto 0.9rem;
+  }
+
+  /* ─── sheet ─────────────────────────────────────────────────── */
+  .sheet {
+    width: min(8.5in, 100% - 1rem);
+    margin: 0 auto 2rem;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 0.5in;
+    box-shadow: 0 12px 40px rgba(23,19,17,0.10);
+  }
+
+  .masthead {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 0.4rem;
+  }
+  .wordmark {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    font-size: 1.02rem;
+    line-height: 1.1;
+  }
+  .wordmark span { color: var(--rust); }
+  .doctype {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.66rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .head-fields {
+    display: grid;
+    grid-template-columns: 2fr 1.4fr;
+    gap: 0.9rem;
+    margin: 0.5rem 0 0.5rem;
+  }
+  .field { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+  .field-label {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.56rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .field input {
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 0.94rem;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--ink);
+    padding: 0.06rem 0.12rem;
+    width: 100%;
+    min-width: 0;
+  }
+  .field input:focus { outline: none; border-bottom-color: var(--rust); background: #fbf7ef; }
+
+  /* ─── section furniture ─────────────────────────────────────── */
+  .sec { margin-top: 0.6rem; }
+  .sec-head {
+    background: var(--bar);
+    border-bottom: 1px solid var(--line);
+    padding: 0.14rem 0.32rem;
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.66rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+  p.body, li.body {
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 0.82rem;
+    line-height: 1.42;
+    margin: 0 0 0.4rem;
+  }
+  .sec ul { margin: 0 0 0.4rem; padding-left: 1.05rem; }
+  .sec li { margin-bottom: 0.16rem; }
+  .lead-in { font-weight: 600; font-family: "Inter", sans-serif; font-size: 0.78rem; }
+  sup.ref { font-size: 0.62em; color: var(--rust); font-weight: 700; padding-left: 0.05em; }
+
+  /* ─── the dials table ───────────────────────────────────────── */
+  table.dials {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  table.dials th, table.dials td {
+    border: 1px solid var(--line);
+    padding: 0.22rem 0.3rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.dials thead th {
+    background: var(--bar);
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.58rem;
+    font-weight: 700;
+  }
+  table.dials tbody th {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.62rem;
+    font-weight: 700;
+    width: 1.05in;
+  }
+  table.dials td .note { display: block; color: var(--muted); font-size: 0.64rem; font-style: italic; }
+
+  /* ─── effort scale ──────────────────────────────────────────── */
+  table.scale {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  table.scale th, table.scale td {
+    border: 1px solid var(--line);
+    padding: 0.18rem 0.3rem;
+    text-align: left;
+  }
+  table.scale thead th {
+    background: var(--bar);
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.58rem;
+    font-weight: 700;
+  }
+  table.scale td:first-child {
+    font-family: "Oswald", sans-serif;
+    font-weight: 700;
+    white-space: nowrap;
+    width: 0.9in;
+  }
+
+  /* ─── example blocks ────────────────────────────────────────── */
+  .models { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+  .model {
+    border: 1px solid var(--line);
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .model-head {
+    background: var(--bar);
+    border-bottom: 1px solid var(--line);
+    padding: 0.12rem 0.3rem;
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.58rem;
+    font-weight: 700;
+  }
+  .model-body { padding: 0.26rem 0.34rem; }
+  .model-body p {
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 0.74rem;
+    line-height: 1.36;
+    margin: 0 0 0.28rem;
+  }
+  table.block {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.68rem;
+  }
+  table.block th, table.block td {
+    border-bottom: 1px solid var(--line);
+    padding: 0.1rem 0.16rem;
+    text-align: left;
+  }
+  table.block th {
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.54rem;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  table.block tr:last-child td { border-bottom: none; }
+
+  /* ─── sources ───────────────────────────────────────────────── */
+  ol.sources {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.62rem;
+    line-height: 1.34;
+    color: var(--muted);
+  }
+  ol.sources li { margin-bottom: 0.1rem; }
+
+  .band { margin-top: 0.45rem; }
+  .band-box { border: 1px solid var(--line); }
+  .band-head {
+    background: var(--bar);
+    border-bottom: 1px solid var(--line);
+    padding: 0.16rem 0.34rem;
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.56rem;
+    font-weight: 600;
+  }
+  .band-box textarea {
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 0.84rem;
+    line-height: 1.4;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    padding: 0.22rem 0.34rem;
+    width: 100%;
+    min-height: 0.7in;
+    resize: none;
+    overflow: hidden;
+  }
+  .band-box textarea:focus { outline: none; background: #fbf7ef; }
+
+  .footline {
+    margin-top: 0.45rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: 0.6rem;
+    color: var(--muted);
+    font-family: "Oswald", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  /* ─── phone ─────────────────────────────────────────────────── */
+  @media screen and (max-width: 720px) {
+    .sheet { padding: 0.3in 0.28in; }
+    .head-fields { grid-template-columns: 1fr; gap: 0.5rem; }
+    .models { grid-template-columns: 1fr; }
+    .footline { flex-direction: column; gap: 0.15rem; }
+    /* The dials table restacks into one card per goal. A side-scrolling
+       table would technically fit, but it hides columns off the edge. */
+    table.dials, table.dials tbody, table.dials tr, table.dials th, table.dials td { display: block; width: auto; }
+    table.dials thead { display: none; }
+    table.dials tbody tr { border: 1px solid var(--line); margin-bottom: 0.4rem; }
+    table.dials tbody th {
+      width: auto;
+      background: var(--bar);
+      border: none;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.68rem;
+    }
+    table.dials tbody td {
+      border: none;
+      border-bottom: 1px dotted var(--line);
+      padding: 0.22rem 0.36rem;
+      font-size: 0.78rem;
+    }
+    table.dials tbody tr td:last-child { border-bottom: none; }
+    table.dials tbody td::before {
+      content: attr(data-label);
+      display: block;
+      font-family: "Oswald", sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.54rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+  }
+
+  /* ─── print ─────────────────────────────────────────────────── */
+  @media print {
+    @page { size: letter portrait; margin: 0.4in; }
+    html, body { background: #fff; }
+    .toolbar, .hint { display: none !important; }
+    .sheet {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      border: none;
+      box-shadow: none;
+    }
+    input, textarea { background: transparent !important; }
+    .sec-head, .band-head, .model-head,
+    table.dials thead th, table.scale thead th {
+      background: #e7ddc9 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .table-scroll { overflow: visible !important; }
+    .sec, .model, table.scale { break-inside: avoid; page-break-inside: avoid; }
+    .page-two { break-before: page; page-break-before: always; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="doctype">Periodized Training</span>
+  <span class="spacer"></span>
+  <button class="btn" type="button" id="clear-btn">Clear</button>
+  <button class="btn btn-primary" type="button" id="pdf-btn">Save PDF</button>
+</div>
+<div class="hint">
+  Two pages. Page one is the dials: load, reps, sets, rest, effort. Page two is how those dials get
+  moved over a training block, plus the sources every number came from. Hit Save PDF and choose
+  "Save as PDF" as the destination.
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="masthead">
+    <div class="wordmark">Monroe<span>Fit</span>Coach</div>
+    <div class="doctype">Periodized Training</div>
+  </div>
+
+  <div class="head-fields">
+    <label class="field">
+      <span class="field-label">Client</span>
+      <input type="text" id="f_client" autocomplete="off" />
+    </label>
+    <label class="field">
+      <span class="field-label">Date</span>
+      <input type="text" id="f_date" autocomplete="off" />
+    </label>
+  </div>
+
+  <!-- ─── the dials ─────────────────────────────────────────── -->
+  <div class="sec">
+    <div class="sec-head">The five dials</div>
+    <p class="body">
+      Every set you do is described by five numbers: how heavy, how many reps, how many sets, how
+      long you rest, and how hard you push. Change the goal and you change the numbers. Nothing
+      below is a rule for its own sake, it is the range the research keeps landing on.
+    </p>
+    <div class="table-scroll">
+      <table class="dials">
+        <thead>
+          <tr>
+            <th>Goal</th>
+            <th>Load</th>
+            <th>Reps</th>
+            <th>Sets</th>
+            <th>Rest</th>
+            <th>Effort left in the tank</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Strength</th>
+            <td data-label="Load">80% of your best single or heavier<sup class="ref">1</sup></td>
+            <td data-label="Reps">1 to 6</td>
+            <td data-label="Sets">2 to 3 per lift, done early in the session<sup class="ref">1</sup></td>
+            <td data-label="Rest">2 to 5 min<sup class="ref">2</sup></td>
+            <td data-label="Effort left">1 to 2 reps<span class="note">heavy work is a skill, not a grind</span></td>
+          </tr>
+          <tr>
+            <th>Size</th>
+            <td data-label="Load">30% to 85%<span class="note">light loads build size too, as long as the set gets hard<sup class="ref">3</sup></span></td>
+            <td data-label="Reps">6 to 20</td>
+            <td data-label="Sets">about 10 hard sets per muscle per week, more keeps adding a little<sup class="ref">1,4</sup></td>
+            <td data-label="Rest">90 sec to 3 min<sup class="ref">5</sup></td>
+            <td data-label="Effort left">0 to 3 reps<span class="note">stopping 1 to 3 short gets nearly all of it<sup class="ref">6</sup></span></td>
+          </tr>
+          <tr>
+            <th>Endurance</th>
+            <td data-label="Load">50% or lighter</td>
+            <td data-label="Reps">15 to 30</td>
+            <td data-label="Sets">2 to 3 per lift</td>
+            <td data-label="Rest">30 to 60 sec</td>
+            <td data-label="Effort left">1 to 3 reps</td>
+          </tr>
+          <tr>
+            <th>Power</th>
+            <td data-label="Load">30% to 70%, moved as fast as you can<sup class="ref">1</sup></td>
+            <td data-label="Reps">1 to 5</td>
+            <td data-label="Sets">3 to 5 per lift</td>
+            <td data-label="Rest">2 to 5 min</td>
+            <td data-label="Effort left">plenty<span class="note">stop the set the moment bar speed drops</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="body" style="margin-top:0.35rem">
+      <span class="lead-in">Frequency.</span> Every major muscle group gets trained at least twice a
+      week. Hitting that consistently matters more than which split you pick or how clever the plan
+      looks.<sup class="ref">1</sup>
+    </p>
+  </div>
+
+  <!-- ─── effort scale ──────────────────────────────────────── -->
+  <div class="sec">
+    <div class="sec-head">Reading your own effort</div>
+    <p class="body">
+      "Reps in reserve" is how many more you honestly could have done when you racked it. It is the
+      dial that keeps a hard week hard and an easy week easy, so learn to call it out loud.
+    </p>
+    <table class="scale">
+      <thead>
+        <tr><th>Reps left</th><th>What it feels like</th><th>Where it belongs</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>0 left</td><td>The bar stopped moving. Nothing left.</td><td>Rarely. Last set of an accessory lift at most.</td></tr>
+        <tr><td>1 to 2 left</td><td>Hard. Form is holding, speed has dropped.</td><td>Most working sets. This is the target.</td></tr>
+        <tr><td>3 to 4 left</td><td>Solid work, clearly more in the tank.</td><td>Heavy skill work and the first sets of a block.</td></tr>
+        <tr><td>5 or more</td><td>Comfortable. Practice, not a challenge.</td><td>Warm ups, technique days, deload weeks.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─── progression ───────────────────────────────────────── -->
+  <div class="sec">
+    <div class="sec-head">How the weight goes up</div>
+    <ul>
+      <li class="body"><span class="lead-in">Beat the target, then add.</span> When you can hit one
+        or two reps past the top of the range on your last set, add 2% to 10% to the bar next
+        time.<sup class="ref">2</sup> Small jumps on small lifts, bigger jumps on squats and hinges.</li>
+      <li class="body"><span class="lead-in">Add sets before you add days.</span> More weekly sets
+        is the volume lever that actually moves size.<sup class="ref">4</sup> Add a set or two per
+        muscle every week or two, do not double the workload overnight.</li>
+      <li class="body"><span class="lead-in">Back off on purpose.</span> If your top set drops for
+        two sessions running, take a light week: same lifts, about half the sets, keep 4 or more
+        reps in reserve. You come back stronger rather than stalling for a month.</li>
+      <li class="body"><span class="lead-in">Range of motion is part of the load.</span> Full range
+        through the whole rep beats a heavier partial for both strength and size.<sup class="ref">1</sup></li>
+    </ul>
+  </div>
+
+  <!-- ═══ PAGE TWO ══════════════════════════════════════════════ -->
+  <div class="sec page-two">
+    <div class="sec-head">Periodization: moving the dials over time</div>
+    <p class="body">
+      Periodization just means the plan changes on purpose instead of by accident. You cannot push
+      every dial to the ceiling every week, so you pick what leads and let the rest sit back, then
+      swap. The three shapes below are the ones with real evidence behind them.
+    </p>
+
+    <div class="models">
+      <div class="model">
+        <div class="model-head">Linear · 12 weeks</div>
+        <div class="model-body">
+          <p>Volume starts high and light, then walks down as the weight walks up. Best for a
+            beginner or anyone pointed at one date.</p>
+          <table class="block">
+            <thead><tr><th>Weeks</th><th>Sets × reps</th><th>Load</th></tr></thead>
+            <tbody>
+              <tr><td>1 to 4</td><td>4 × 12</td><td>65%</td></tr>
+              <tr><td>5 to 8</td><td>4 × 8</td><td>75%</td></tr>
+              <tr><td>9 to 11</td><td>4 × 5</td><td>85%</td></tr>
+              <tr><td>12</td><td>2 × 5 easy</td><td>60%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="model">
+        <div class="model-head">Undulating · one week</div>
+        <div class="model-body">
+          <p>The rep range changes every session instead of every month. Suits an experienced
+            lifter, and suits anyone whose week is unpredictable.</p>
+          <table class="block">
+            <thead><tr><th>Day</th><th>Sets × reps</th><th>Load</th></tr></thead>
+            <tbody>
+              <tr><td>Heavy</td><td>4 × 4</td><td>85%</td></tr>
+              <tr><td>Moderate</td><td>4 × 8</td><td>75%</td></tr>
+              <tr><td>Light</td><td>3 × 15</td><td>60%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="model">
+        <div class="model-head">Block · 4 week wave</div>
+        <div class="model-body">
+          <p>Three weeks of building, one week of backing off, then start the next wave a little
+            heavier than the last one. The simplest way to keep progress from flattening.</p>
+          <table class="block">
+            <thead><tr><th>Week</th><th>Sets per muscle</th><th>Reps left</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>10</td><td>3</td></tr>
+              <tr><td>2</td><td>12</td><td>2</td></tr>
+              <tr><td>3</td><td>14</td><td>1</td></tr>
+              <tr><td>4 (deload)</td><td>6</td><td>4 or more</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="model">
+        <div class="model-head">What the evidence actually says</div>
+        <div class="model-body">
+          <p>Worth being straight about, because the internet is not.</p>
+          <ul style="margin:0;padding-left:0.9rem">
+            <li class="body" style="font-size:0.72rem">A planned program beats an unplanned one for
+              maximal strength, even when the total work is identical.<sup class="ref">7</sup></li>
+            <li class="body" style="font-size:0.72rem">Linear and undulating come out about even.
+              Trained lifters get a small edge from undulating, beginners do not.<sup class="ref">7,8</sup></li>
+            <li class="body" style="font-size:0.72rem">For size, the model barely matters. Total
+              hard sets and steady progression do.<sup class="ref">9</sup></li>
+            <li class="body" style="font-size:0.72rem">ACSM's 2026 review of 137 reviews found
+              complex periodization did not reliably change results for healthy adults. The program
+              you will actually keep doing wins.<sup class="ref">1</sup></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head">Putting it together</div>
+    <ul>
+      <li class="body">Pick the goal that leads for the next 8 to 12 weeks. The others stay in
+        maintenance, they do not disappear.</li>
+      <li class="body">Set the dials from the table on page one, hit every muscle twice a week, and
+        write down what you lifted. The log is the plan.</li>
+      <li class="body">Progress the weight when you beat the range, add sets slowly, and take the
+        light week before your body takes it for you.</li>
+      <li class="body">Twelve honest weeks of a simple plan beats four perfect weeks of a
+        complicated one, every time.</li>
+    </ul>
+  </div>
+
+  <div class="band">
+    <div class="band-box">
+      <div class="band-head">Notes</div>
+      <textarea id="f_notes"></textarea>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-head">Sources</div>
+    <ol class="sources">
+      <li>Phillips SM, et al. American College of Sports Medicine Position Stand. Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews. Med Sci Sports Exerc. 2026. PMID 41843416.</li>
+      <li>American College of Sports Medicine Position Stand. Progression Models in Resistance Training for Healthy Adults. Med Sci Sports Exerc. 2009;41(3):687-708. PMID 19204579.</li>
+      <li>Schoenfeld BJ, Grgic J, Ogborn D, Krieger JW. Strength and Hypertrophy Adaptations Between Low- vs. High-Load Resistance Training. J Strength Cond Res. 2017;31(12):3508-3523. PMID 28834797.</li>
+      <li>Schoenfeld BJ, Ogborn D, Krieger JW. Dose-response relationship between weekly resistance training volume and increases in muscle mass. J Sports Sci. 2017;35(11):1073-1082. PMID 27433992.</li>
+      <li>Give it a rest: a systematic review with Bayesian meta-analysis on the effect of inter-set rest interval duration on muscle hypertrophy. Front Sports Act Living. 2024;6:1429789.</li>
+      <li>Refalo MC, et al. Exploring the Dose-Response Relationship Between Estimated Resistance Training Proximity to Failure, Strength Gain, and Muscle Hypertrophy. Sports Med. 2024. PMID 38970765.</li>
+      <li>Moesgaard L, Beck MM, Christiansen L, Aagaard P, Lundbye-Jensen J. Effects of Periodization on Strength and Muscle Hypertrophy in Volume-Equated Resistance Training Programs. Sports Med. 2022;52(7):1647-1666. PMID 35044672.</li>
+      <li>Harries SK, Lubans DR, Callister R. Systematic Review and Meta-analysis of Linear and Undulating Periodized Resistance Training Programs on Muscular Strength. J Strength Cond Res. 2015;29(4):1113-1125. PMID 25268290.</li>
+      <li>Grgic J, Mikulic P, Podnar H, Pedisic Z. Effects of linear and daily undulating periodized resistance training programs on measures of muscle hypertrophy. PeerJ. 2017;5:e3695.</li>
+    </ol>
+  </div>
+
+  <div class="footline">
+    <span>James Monroe · Hyde Park Gym</span>
+    <span>monroefitcoach.com</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var KEY = "mfc_periodization_v1";
+
+  function fields() {
+    return document.querySelectorAll("#sheet input, #sheet textarea");
+  }
+
+  var restoring = false;
+
+  function save() {
+    if (restoring) return;
+    var state = {};
+    fields().forEach(function (el) { state[el.id] = el.value; });
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* private mode */ }
+  }
+
+  function restore() {
+    var raw;
+    try { raw = localStorage.getItem(KEY); } catch (e) { return; }
+    if (!raw) return;
+    var state;
+    try { state = JSON.parse(raw); } catch (e) { return; }
+    restoring = true;
+    fields().forEach(function (el) {
+      var v = state[el.id];
+      if (typeof v === "string") el.value = v;
+    });
+    restoring = false;
+  }
+
+  // Grow the notes box so a long note is never clipped out of the PDF.
+  function autoGrow(el) {
+    if (!el || el.tagName !== "TEXTAREA") return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }
+  function growAll() {
+    document.querySelectorAll("#sheet textarea").forEach(autoGrow);
+  }
+
+  document.addEventListener("input", function (e) {
+    if (e.target.closest && e.target.closest("#sheet")) { autoGrow(e.target); save(); }
+  });
+
+  document.getElementById("pdf-btn").addEventListener("click", function () {
+    window.print();
+  });
+
+  document.getElementById("clear-btn").addEventListener("click", function () {
+    var hasContent = false;
+    fields().forEach(function (el) { if ((el.value || "").trim()) hasContent = true; });
+    if (hasContent && !confirm("Clear the name, date and notes?")) return;
+    restoring = true;
+    fields().forEach(function (el) { el.value = ""; });
+    restoring = false;
+    growAll();
+    save();
+  });
+
+  restore();
+  growAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(growAll);
+  window.addEventListener("beforeprint", growAll);
+})();
+</script>
+</body>
+</html>
