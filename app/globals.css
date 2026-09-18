@@ -604,6 +604,82 @@ th.tbl-sticky-last {
   border-color: var(--rust) !important;
 }
 
+/* Section menu: button in the header's upper-left corner that opens a
+   small box of section names (app/marketing-sections.tsx). */
+.public-menu { position: relative; flex: none; }
+.public-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.public-menu-btn:hover,
+.public-menu-btn[aria-expanded="true"] { border-color: var(--ink); }
+.public-menu-list {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 40;
+  min-width: 13.5rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 10px 28px rgba(26, 23, 20, 0.14);
+}
+.public-menu-list a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  font-family: var(--font-heading), "Oswald", sans-serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-decoration: none;
+}
+.public-menu-list a:hover,
+.public-menu-list a:focus-visible { background: var(--paper); color: var(--rust); }
+
+/* Collapsible homepage sections. The heading is a button with an arrow
+   (▾ open, ▸ closed). data-fold="auto" means "not touched yet": open on
+   computers, closed on phones (see the 700px block below). */
+.public-fold-toggle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.public-fold-arrow { flex: none; font-size: 0.7em; color: var(--rust); }
+.public-fold-arrow::before { content: "\25BE"; }
+.public-fold-body { display: contents; }
+.public-section[data-fold="closed"] .public-fold-body { display: none; }
+.public-section[data-fold="closed"] .public-fold-arrow::before { content: "\25B8"; }
+.public-section[data-fold="closed"] .public-h2 { margin-bottom: 0; }
+
 /* Hero */
 .public-hero {
   background:
@@ -1587,6 +1663,12 @@ th.tbl-sticky-last {
   .public-nav a.public-nav-signin { display: inline-flex; }
   .public-hero { padding: 3rem 0 2.6rem; }
   .public-section { padding: 2.6rem 0; }
+  /* Sections start closed on phones until tapped open. */
+  .public-section[data-fold="auto"] .public-fold-body { display: none; }
+  .public-section[data-fold="auto"] .public-fold-arrow::before { content: "\25B8"; }
+  .public-section[data-fold="auto"] .public-h2 { margin-bottom: 0; }
+  /* Land a menu jump below the sticky header, not under it. */
+  .public-section[id] { scroll-margin-top: 3.6rem; }
 }
 
 /* ─────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import BeforeAfterToggle from "@/app/consult/before-after-toggle";
 import Portrait from "@/app/consult/portrait";
 import { listPublicTestimonials } from "@/app/testimonials/actions";
 import { allBeforeUrls, allAfterUrls } from "@/app/testimonials/types";
+import { FoldBody, FoldHeading, FoldSection, SectionMenu } from "./marketing-sections";
 
 // Public flyer / landing page for James Monroe Fit Coach.
 //
@@ -248,58 +249,62 @@ export default async function MarketingPage({
       </section>
 
       {/* ── About ────────────────────────────────────────────── */}
-      <section id="about" className="public-section">
+      <FoldSection id="about" className="public-section">
         <div className="public-section-inner public-two-col">
           <div>
             <span className="public-eyebrow">About</span>
-            <h2 className="public-h2">To move is to live, and to live is to move.</h2>
-            <p className="public-p">
-              Born and raised in Portland, Oregon, James grew up playing
-              sports from soccer to skateboarding. He started weight training
-              at twelve and later took up boxing, Muay Thai kickboxing and
-              yoga. His desire to coach came from having family members and
-              close friends who struggled to build healthy habits and lose
-              weight. After successfully helping them achieve their goals he
-              decided coaching was the right career for him. Over the years
-              he&rsquo;s worked with clients from high school youth to senior
-              citizens, including physique competitors, recreational athletes,
-              and people coming back from injury, helping them lose body fat,
-              gain muscle, and lead more active lives.
-            </p>
-            <p className="public-p">
-              His sessions are concentrated, but also fun and enjoyable.
-              Your goal is his goal. Whether you want to compete, recover,
-              or just feel like yourself again, the plan gets built around
-              you.
-            </p>
-            <p className="public-p">
-              The current roster runs the full range: men, women, families,
-              couples, LGBTQ+ and groups training together. From high school
-              youth to senior citizens, beginners through competitive
-              athletes, the goals and aspirations span just as wide: first
-              pull-up, getting back to lifting after surgery, a stage-ready
-              physique, a tactical selection, menopause-stage strength, a 5K
-              under 23 minutes, or simply moving without pain again.
-            </p>
+            <FoldHeading className="public-h2">To move is to live, and to live is to move.</FoldHeading>
+            <FoldBody>
+              <p className="public-p">
+                Born and raised in Portland, Oregon, James grew up playing
+                sports from soccer to skateboarding. He started weight training
+                at twelve and later took up boxing, Muay Thai kickboxing and
+                yoga. His desire to coach came from having family members and
+                close friends who struggled to build healthy habits and lose
+                weight. After successfully helping them achieve their goals he
+                decided coaching was the right career for him. Over the years
+                he&rsquo;s worked with clients from high school youth to senior
+                citizens, including physique competitors, recreational athletes,
+                and people coming back from injury, helping them lose body fat,
+                gain muscle, and lead more active lives.
+              </p>
+              <p className="public-p">
+                His sessions are concentrated, but also fun and enjoyable.
+                Your goal is his goal. Whether you want to compete, recover,
+                or just feel like yourself again, the plan gets built around
+                you.
+              </p>
+              <p className="public-p">
+                The current roster runs the full range: men, women, families,
+                couples, LGBTQ+ and groups training together. From high school
+                youth to senior citizens, beginners through competitive
+                athletes, the goals and aspirations span just as wide: first
+                pull-up, getting back to lifting after surgery, a stage-ready
+                physique, a tactical selection, menopause-stage strength, a 5K
+                under 23 minutes, or simply moving without pain again.
+              </p>
+            </FoldBody>
           </div>
-          <div className="public-card public-card-portrait">
-            {/* Drop the portrait file at public/james-portrait.jpg and
-                the hatched placeholder is replaced automatically. */}
-            <Portrait
-              src="/james-portrait.jpg"
-              alt="James Monroe"
-              fallback="Drop public/james-portrait.jpg"
-            />
-            <ul className="public-credit-list">
-              <li>NASM Certified Personal Trainer</li>
-              <li>Hyde Park Gym, Austin TX</li>
-              <li>Strength, boxing, Muay Thai, skateboarding, yoga background</li>
-              <li>High school youth to senior citizens, recreational to competitive</li>
-              <li>Off the clock: piano, guitar, running, reading</li>
-            </ul>
-          </div>
+          <FoldBody>
+            <div className="public-card public-card-portrait">
+              {/* Drop the portrait file at public/james-portrait.jpg and
+                  the hatched placeholder is replaced automatically. */}
+              <Portrait
+                src="/james-portrait.jpg"
+                alt="James Monroe"
+                fallback="Drop public/james-portrait.jpg"
+              />
+              <ul className="public-credit-list">
+                <li>NASM Certified Personal Trainer</li>
+                <li>Hyde Park Gym, Austin TX</li>
+                <li>Strength, boxing, Muay Thai, skateboarding, yoga background</li>
+                <li>High school youth to senior citizens, recreational to competitive</li>
+                <li>Off the clock: piano, guitar, running, reading</li>
+              </ul>
+            </div>
+          </FoldBody>
         </div>
-      </section>
+      </FoldSection>
 
       {/* ── Coaching band ────────────────────────────────────── */}
       {/* Photo lives on the left as a real <img> so it renders in its
@@ -323,218 +328,230 @@ export default async function MarketingPage({
       </section>
 
       {/* ── Specialties ─────────────────────────────────────── */}
-      <section id="offerings" className="public-section public-section-tinted">
+      <FoldSection id="offerings" className="public-section public-section-tinted">
         <div className="public-section-inner">
           <span className="public-eyebrow">Specialties</span>
-          <h2 className="public-h2">What James coaches.</h2>
-          <p className="public-p public-p-meta">
-            Six focus areas. Most clients overlap two or three. Pick whichever pulls you in.
-          </p>
-          <div className="public-offerings-grid">
-            {OFFERINGS.map((o) => (
-              <div key={o.title} className="public-offering">
-                <h3 className="public-offering-title">{o.title}</h3>
-                <p className="public-offering-blurb">{o.blurb}</p>
-              </div>
-            ))}
-          </div>
+          <FoldHeading className="public-h2">What James coaches.</FoldHeading>
+          <FoldBody>
+            <p className="public-p public-p-meta">
+              Six focus areas. Most clients overlap two or three. Pick whichever pulls you in.
+            </p>
+            <div className="public-offerings-grid">
+              {OFFERINGS.map((o) => (
+                <div key={o.title} className="public-offering">
+                  <h3 className="public-offering-title">{o.title}</h3>
+                  <p className="public-offering-blurb">{o.blurb}</p>
+                </div>
+              ))}
+            </div>
+          </FoldBody>
         </div>
-      </section>
+      </FoldSection>
 
       {/* ── Services (what's included) ───────────────────────── */}
-      <section id="services" className="public-section">
+      <FoldSection id="services" className="public-section">
         <div className="public-section-inner">
           <span className="public-eyebrow">What&rsquo;s included</span>
-          <h2 className="public-h2">It all comes standard.</h2>
-          <p className="public-p public-p-meta">
-            Every client gets the whole foundation. On the consult we figure
-            out where you actually need the focus.
-          </p>
-          <div className="public-services-grid">
-            {SERVICES.map((s) => (
-              <div key={s.title} className="public-service">
-                <span className="public-service-dot" aria-hidden>✓</span>
-                <div>
-                  <strong className="public-service-title">{s.title}</strong>
-                  <p className="public-service-blurb">{s.blurb}</p>
+          <FoldHeading className="public-h2">It all comes standard.</FoldHeading>
+          <FoldBody>
+            <p className="public-p public-p-meta">
+              Every client gets the whole foundation. On the consult we figure
+              out where you actually need the focus.
+            </p>
+            <div className="public-services-grid">
+              {SERVICES.map((s) => (
+                <div key={s.title} className="public-service">
+                  <span className="public-service-dot" aria-hidden>✓</span>
+                  <div>
+                    <strong className="public-service-title">{s.title}</strong>
+                    <p className="public-service-blurb">{s.blurb}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </FoldBody>
         </div>
-      </section>
+      </FoldSection>
 
       {/* ── Timeline ─────────────────────────────────────────── */}
-      <section id="timeline" className="public-section public-section-tinted">
+      <FoldSection id="timeline" className="public-section public-section-tinted">
         <div className="public-section-inner">
           <span className="public-eyebrow">Timeline &amp; expectations</span>
-          <h2 className="public-h2">How the work unfolds.</h2>
-          <p className="public-p public-p-meta">
-            Every client is unique. The plan gets tailored to your body,
-            history, and schedule. This is how the early arc typically runs.
-          </p>
-          <ol className="public-timeline">
-            {TIMELINE.map((t, i) => (
-              <li key={i} className="public-timeline-item">
-                <span className="public-timeline-mark">{(i + 1).toString().padStart(2, "0")}</span>
-                <div>
-                  <span className="public-timeline-label">{t.label}</span>
-                  <h3 className="public-timeline-title">{t.title}</h3>
-                  <ul className="public-timeline-list">
-                    {t.points.map((p) => (
-                      <li key={p}>{p}</li>
+          <FoldHeading className="public-h2">How the work unfolds.</FoldHeading>
+          <FoldBody>
+            <p className="public-p public-p-meta">
+              Every client is unique. The plan gets tailored to your body,
+              history, and schedule. This is how the early arc typically runs.
+            </p>
+            <ol className="public-timeline">
+              {TIMELINE.map((t, i) => (
+                <li key={i} className="public-timeline-item">
+                  <span className="public-timeline-mark">{(i + 1).toString().padStart(2, "0")}</span>
+                  <div>
+                    <span className="public-timeline-label">{t.label}</span>
+                    <h3 className="public-timeline-title">{t.title}</h3>
+                    <ul className="public-timeline-list">
+                      {t.points.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <p className="public-p public-p-meta" style={{ marginTop: "1.25rem" }}>
+              Where you start depends on your current condition and lifestyle
+              habits, so not everyone begins at Phase 1. The phases are not strictly
+              linear, and you do not move on until the current one is done. The more
+              consistent you are, the faster you move through. Some people advance
+              quickly, others stay in a phase longer, and that is exactly how it
+              should be.
+            </p>
+          </FoldBody>
+        </div>
+      </FoldSection>
+
+      {/* ── Pricing ──────────────────────────────────────────── */}
+      <FoldSection id="pricing" className="public-section">
+        <div className="public-section-inner">
+          <span className="public-eyebrow">Pricing</span>
+          <FoldHeading className="public-h2">Transparency. Always.</FoldHeading>
+          <FoldBody>
+            <div className="public-pricing-grid">
+              {PRICING.map((p) => (
+                <div
+                  key={p.name}
+                  className={`public-price${p.featured ? " is-featured" : ""}`}
+                >
+                  {p.featured && <span className="public-price-tag">Standard rate</span>}
+                  <h3 className="public-price-name">{p.name}</h3>
+                  <div className="public-price-row">
+                    <span className="public-price-amount">{p.price}</span>
+                    <span className="public-price-cadence">{p.cadence}</span>
+                  </div>
+                  <ul className="public-price-list">
+                    {p.bullets.map((b, i) => (
+                      <li key={i}>{b}</li>
                     ))}
                   </ul>
                 </div>
-              </li>
-            ))}
-          </ol>
-          <p className="public-p public-p-meta" style={{ marginTop: "1.25rem" }}>
-            Where you start depends on your current condition and lifestyle
-            habits, so not everyone begins at Phase 1. The phases are not strictly
-            linear, and you do not move on until the current one is done. The more
-            consistent you are, the faster you move through. Some people advance
-            quickly, others stay in a phase longer, and that is exactly how it
-            should be.
-          </p>
+              ))}
+            </div>
+          </FoldBody>
         </div>
-      </section>
-
-      {/* ── Pricing ──────────────────────────────────────────── */}
-      <section id="pricing" className="public-section">
-        <div className="public-section-inner">
-          <span className="public-eyebrow">Pricing</span>
-          <h2 className="public-h2">Transparency. Always.</h2>
-          <div className="public-pricing-grid">
-            {PRICING.map((p) => (
-              <div
-                key={p.name}
-                className={`public-price${p.featured ? " is-featured" : ""}`}
-              >
-                {p.featured && <span className="public-price-tag">Standard rate</span>}
-                <h3 className="public-price-name">{p.name}</h3>
-                <div className="public-price-row">
-                  <span className="public-price-amount">{p.price}</span>
-                  <span className="public-price-cadence">{p.cadence}</span>
-                </div>
-                <ul className="public-price-list">
-                  {p.bullets.map((b, i) => (
-                    <li key={i}>{b}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      </FoldSection>
 
       {/* ── Before / After ───────────────────────────────────── */}
       {/* Sits ahead of Location: the results are the persuasive beat, and
           the gym address is what you want in front of someone once they
           are already sold. Tint alternates section to section, so this
           picked up the tint Location gave back. */}
-      <section id="results" className="public-section public-section-tinted">
+      <FoldSection id="results" className="public-section public-section-tinted">
         <div className="public-section-inner">
           <span className="public-eyebrow">Client results</span>
-          <h2 className="public-h2">Real before &amp; afters.</h2>
-          <p className="public-p public-p-meta">
-            Real clients, real arcs. Published with permission.
-          </p>
-          <div className="public-results-stack">
-            {renderedBeforeAfters.map((b, i) => {
-              const beforeSrc = (b as { beforeSrc?: string }).beforeSrc;
-              const afterSrc = (b as { afterSrc?: string }).afterSrc;
-              const fit = (b as { fit?: "cover" | "contain" }).fit;
-              const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
-              const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
-              const weights = (b as { weights?: string }).weights;
-              const tag = (b as { tag?: string }).tag;
-              const beforeZoom = (b as { beforeZoom?: number }).beforeZoom;
-              const beforePosX = (b as { beforePosX?: number }).beforePosX;
-              const beforePosY = (b as { beforePosY?: number }).beforePosY;
-              const afterZoom = (b as { afterZoom?: number }).afterZoom;
-              const afterPosX = (b as { afterPosX?: number }).afterPosX;
-              const afterPosY = (b as { afterPosY?: number }).afterPosY;
-              return (
-                <BeforeAfterToggle
-                  key={i}
-                  label={b.label}
-                  tag={tag}
-                  summary={b.summary}
-                  weights={weights}
-                  index={i}
-                  beforeSrc={beforeSrc}
-                  afterSrc={afterSrc}
-                  fit={fit}
-                  beforeFit={beforeFit}
-                  afterFit={afterFit}
-                  beforeZoom={beforeZoom}
-                  beforePosX={beforePosX}
-                  beforePosY={beforePosY}
-                  afterZoom={afterZoom}
-                  afterPosX={afterPosX}
-                  afterPosY={afterPosY}
-                />
-              );
-            })}
-          </div>
+          <FoldHeading className="public-h2">Real before &amp; afters.</FoldHeading>
+          <FoldBody>
+            <p className="public-p public-p-meta">
+              Real clients, real arcs. Published with permission.
+            </p>
+            <div className="public-results-stack">
+              {renderedBeforeAfters.map((b, i) => {
+                const beforeSrc = (b as { beforeSrc?: string }).beforeSrc;
+                const afterSrc = (b as { afterSrc?: string }).afterSrc;
+                const fit = (b as { fit?: "cover" | "contain" }).fit;
+                const beforeFit = (b as { beforeFit?: "cover" | "contain" }).beforeFit;
+                const afterFit = (b as { afterFit?: "cover" | "contain" }).afterFit;
+                const weights = (b as { weights?: string }).weights;
+                const tag = (b as { tag?: string }).tag;
+                const beforeZoom = (b as { beforeZoom?: number }).beforeZoom;
+                const beforePosX = (b as { beforePosX?: number }).beforePosX;
+                const beforePosY = (b as { beforePosY?: number }).beforePosY;
+                const afterZoom = (b as { afterZoom?: number }).afterZoom;
+                const afterPosX = (b as { afterPosX?: number }).afterPosX;
+                const afterPosY = (b as { afterPosY?: number }).afterPosY;
+                return (
+                  <BeforeAfterToggle
+                    key={i}
+                    label={b.label}
+                    tag={tag}
+                    summary={b.summary}
+                    weights={weights}
+                    index={i}
+                    beforeSrc={beforeSrc}
+                    afterSrc={afterSrc}
+                    fit={fit}
+                    beforeFit={beforeFit}
+                    afterFit={afterFit}
+                    beforeZoom={beforeZoom}
+                    beforePosX={beforePosX}
+                    beforePosY={beforePosY}
+                    afterZoom={afterZoom}
+                    afterPosX={afterPosX}
+                    afterPosY={afterPosY}
+                  />
+                );
+              })}
+            </div>
+          </FoldBody>
         </div>
-      </section>
+      </FoldSection>
 
       {/* ── Location ─────────────────────────────────────────── */}
-      <section id="location" className="public-section">
+      <FoldSection id="location" className="public-section">
         <div className="public-section-inner">
           <span className="public-eyebrow">Where we train</span>
-          <h2 className="public-h2">Hyde Park Gym, Austin TX.</h2>
-          <p className="public-p public-p-meta">
-            Old-school iron house in central Austin.
-          </p>
+          <FoldHeading className="public-h2">Hyde Park Gym, Austin TX.</FoldHeading>
+          <FoldBody>
+            <p className="public-p public-p-meta">
+              Old-school iron house in central Austin.
+            </p>
 
-          <div className="public-location-grid">
-            <div className="public-location-meta">
-              <div className="public-location-block">
-                <span className="public-location-label">Address</span>
-                <a
-                  href="https://maps.google.com/?q=Hyde+Park+Gym+Austin+TX"
-                  target="_blank"
-                  rel="noopener"
-                  className="public-location-link"
-                >
-                  4125 Guadalupe St<br />
-                  Austin, TX 78751
-                </a>
+            <div className="public-location-grid">
+              <div className="public-location-meta">
+                <div className="public-location-block">
+                  <span className="public-location-label">Address</span>
+                  <a
+                    href="https://maps.google.com/?q=Hyde+Park+Gym+Austin+TX"
+                    target="_blank"
+                    rel="noopener"
+                    className="public-location-link"
+                  >
+                    4125 Guadalupe St<br />
+                    Austin, TX 78751
+                  </a>
+                </div>
+                <div className="public-location-block">
+                  <span className="public-location-label">Gym website</span>
+                  <a
+                    href="https://hydeparkgym.com"
+                    target="_blank"
+                    rel="noopener"
+                    className="public-location-link"
+                  >
+                    hydeparkgym.com ↗
+                  </a>
+                </div>
+                <p className="public-p" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
+                  Free parking on-site. <strong>Free 7-day trial</strong> available so you can try the room before
+                  signing up. Gym membership is <strong>$79/month</strong> (no commitment, no initiation fee),
+                  <strong> $15</strong> for a single-visit day pass, or <strong>$90</strong> for a
+                  10-visit punch card good for 6 months.
+                </p>
               </div>
-              <div className="public-location-block">
-                <span className="public-location-label">Gym website</span>
-                <a
-                  href="https://hydeparkgym.com"
-                  target="_blank"
-                  rel="noopener"
-                  className="public-location-link"
-                >
-                  hydeparkgym.com ↗
-                </a>
-              </div>
-              <p className="public-p" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
-                Free parking on-site. <strong>Free 7-day trial</strong> available so you can try the room before
-                signing up. Gym membership is <strong>$79/month</strong> (no commitment, no initiation fee),
-                <strong> $15</strong> for a single-visit day pass, or <strong>$90</strong> for a
-                10-visit punch card good for 6 months.
-              </p>
-            </div>
 
-            <div className="public-location-map">
-              <iframe
-                title="Hyde Park Gym map"
-                src="https://www.google.com/maps?q=Hyde+Park+Gym+Austin+TX&output=embed"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                allowFullScreen
-              />
+              <div className="public-location-map">
+                <iframe
+                  title="Hyde Park Gym map"
+                  src="https://www.google.com/maps?q=Hyde+Park+Gym+Austin+TX&output=embed"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  allowFullScreen
+                />
+              </div>
             </div>
-          </div>
+          </FoldBody>
         </div>
-      </section>
+      </FoldSection>
 
       {/* ── Consult CTA ──────────────────────────────────────── */}
       <section id="start" className="public-section public-section-tinted">
@@ -604,17 +621,12 @@ function PublicHeader() {
   return (
     <header className="public-header">
       <div className="public-header-inner">
+        <SectionMenu />
         <Link href="/" className="public-brand">
           <span className="public-brand-mark">MFC</span>
           <span className="public-brand-text">Monroe Fit Coach</span>
         </Link>
         <nav className="public-nav">
-          <a href="#about">About</a>
-          <a href="#offerings">Specialties</a>
-          <a href="#timeline">Timeline</a>
-          <a href="#pricing">Pricing</a>
-          <a href="#results">Results</a>
-          <a href="#location">Location</a>
           <Link href="/login" className="public-nav-signin">Sign in</Link>
         </nav>
       </div>
