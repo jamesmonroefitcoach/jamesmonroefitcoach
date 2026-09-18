@@ -158,6 +158,16 @@ const BEFORE_AFTER: { label: string; tag?: string; summary: string; weights?: st
   },
 ];
 
+// Public site shows client last names as an initial only ("Sarah Johnson"
+// → "Sarah J."). Display-only: the stored name stays full so James still
+// sees it on his coach screens. Single names and "Sarah J." pass through.
+function lastInitial(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name.trim();
+  const last = parts.pop()!;
+  return `${parts.join(" ")} ${last.charAt(0).toUpperCase()}.`;
+}
+
 export default async function MarketingPage({
   hideHeader = false,
 }: {
@@ -182,7 +192,7 @@ export default async function MarketingPage({
   // along with their own before/after pair in the results grid.
   const renderedBeforeAfters = approvedBeforeAfters.length > 0
     ? approvedBeforeAfters.map(({ t, before, after }) => ({
-        label: t.display_name || t.submitted_name,
+        label: lastInitial(t.display_name || t.submitted_name),
         tag: t.meta_line ?? undefined,
         summary: t.body.trim(),
         beforeSrc: before,
